@@ -1,0 +1,36 @@
+export const countryCodes = [
+    { code: 'US', dial_code: '+1', name: 'United States' },
+    { code: 'IN', dial_code: '+91', name: 'India' },
+    { code: 'GB', dial_code: '+44', name: 'United Kingdom' },
+    { code: 'CA', dial_code: '+1', name: 'Canada' },
+    { code: 'AU', dial_code: '+61', name: 'Australia' },
+    { code: 'DE', dial_code: '+49', name: 'Germany' },
+    { code: 'FR', dial_code: '+33', name: 'France' },
+    { code: 'IT', dial_code: '+39', name: 'Italy' },
+    { code: 'ES', dial_code: '+34', name: 'Spain' },
+    { code: 'BR', dial_code: '+55', name: 'Brazil' },
+    { code: 'MX', dial_code: '+52', name: 'Mexico' },
+    { code: 'JP', dial_code: '+81', name: 'Japan' },
+    { code: 'CN', dial_code: '+86', name: 'China' },
+    { code: 'AE', dial_code: '+971', name: 'United Arab Emirates' },
+    { code: 'SA', dial_code: '+966', name: 'Saudi Arabia' },
+    { code: 'SG', dial_code: '+65', name: 'Singapore' },
+    { code: 'ZA', dial_code: '+27', name: 'South Africa' },
+    { code: 'NG', dial_code: '+234', name: 'Nigeria' },
+    { code: 'KE', dial_code: '+254', name: 'Kenya' },
+    { code: 'ID', dial_code: '+62', name: 'Indonesia' },
+    { code: 'MY', dial_code: '+60', name: 'Malaysia' },
+    { code: 'TH', dial_code: '+66', name: 'Thailand' },
+    { code: 'VN', dial_code: '+84', name: 'Vietnam' },
+    { code: 'PH', dial_code: '+63', name: 'Philippines' },
+    { code: 'KR', dial_code: '+82', name: 'South Korea' },
+    { code: 'RU', dial_code: '+7', name: 'Russia' },
+    { code: 'TR', dial_code: '+90', name: 'Turkey' },
+    { code: 'EG', dial_code: '+20', name: 'Egypt' },
+    { code: 'PK', dial_code: '+92', name: 'Pakistan' },
+    { code: 'BD', dial_code: '+880', name: 'Bangladesh' },
+];
+
+export const getCountryCode = (dialCode: string) => {
+    return countryCodes.find((c) => c.dial_code === dialCode);
+};

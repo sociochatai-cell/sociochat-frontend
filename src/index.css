@@ -1,0 +1,205 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   SocioChat.ai Design System
+   Theme: Skeuomorphism + Green Gradient
+   ============================================ */
+
+@layer base {
+  :root {
+    --background: 120 20% 99%;
+    --foreground: 150 15% 10%;
+    --card: 120 15% 98%;
+    --card-foreground: 150 15% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 15% 10%;
+    --primary: 145 70% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 120 10% 94%;
+    --secondary-foreground: 150 15% 15%;
+    --muted: 120 12% 93%;
+    --muted-foreground: 150 5% 42%;
+    --accent: 48 100% 50%;
+    --accent-foreground: 150 15% 10%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 120 10% 88%;
+    --input: 120 10% 88%;
+    --ring: 145 70% 42%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 150 20% 6%;
+    --foreground: 120 10% 95%;
+    --card: 150 18% 9%;
+    --card-foreground: 120 10% 95%;
+    --popover: 150 18% 9%;
+    --popover-foreground: 120 10% 95%;
+    --primary: 145 70% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 12% 15%;
+    --secondary-foreground: 120 10% 90%;
+    --muted: 150 12% 15%;
+    --muted-foreground: 120 5% 55%;
+    --accent: 48 100% 50%;
+    --accent-foreground: 150 15% 10%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 150 12% 18%;
+    --input: 150 12% 18%;
+    --ring: 145 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ============================================
+   Skeuomorphism Utilities
+   ============================================ */
+
+@layer components {
+
+  /* Glossy card with raised 3D effect */
+  .skeu-card {
+    @apply bg-white/80 backdrop-blur-sm rounded-xl;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.06),
+      0 4px 16px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+  }
+
+  .skeu-card:hover {
+    box-shadow:
+      0 2px 6px rgba(0, 0, 0, 0.08),
+      0 8px 24px rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  }
+
+  /* Pressed/inset button style */
+  .skeu-button {
+    @apply rounded-lg font-medium transition-all duration-150;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.12),
+      0 2px 6px rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+  }
+
+  .skeu-button:active {
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+    transform: translateY(1px);
+  }
+
+  /* Green gradient brand button */
+  .skeu-button-primary {
+    @apply skeu-button text-white;
+    background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+    box-shadow:
+      0 2px 6px rgba(37, 211, 102, 0.3),
+      0 4px 12px rgba(37, 211, 102, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  .skeu-button-primary:hover {
+    background: linear-gradient(135deg, #2ee074 0%, #15a08f 100%);
+    box-shadow:
+      0 4px 12px rgba(37, 211, 102, 0.35),
+      0 8px 24px rgba(37, 211, 102, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  }
+
+  /* Inset input field */
+  .skeu-input {
+    @apply rounded-lg px-3 py-2;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.7);
+  }
+
+  .skeu-input:focus {
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.04), 0 0 0 3px rgba(37, 211, 102, 0.15);
+    border-color: #25D366;
+    outline: none;
+  }
+
+  /* Sidebar item */
+  .skeu-sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer;
+    color: #555;
+  }
+
+  .skeu-sidebar-item:hover {
+    background: rgba(37, 211, 102, 0.08);
+    color: #128C7E;
+  }
+
+  .skeu-sidebar-item.active {
+    background: linear-gradient(135deg, rgba(37, 211, 102, 0.12) 0%, rgba(18, 140, 126, 0.08) 100%);
+    color: #128C7E;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 3px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(37, 211, 102, 0.15);
+  }
+
+  /* Badge */
+  .skeu-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* ============================================
+   Scrollbar Styling
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+@layer utilities {
+  .primary-gradient {
+    @apply bg-gradient-to-r from-[#25D366] to-[#128C7E];
+  }
+
+  .accent-gradient {
+    @apply bg-gradient-to-r from-accent-light to-accent;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
