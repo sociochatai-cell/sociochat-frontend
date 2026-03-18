@@ -25,7 +25,13 @@ interface ConnectWhatsAppButtonProps {
 declare global {
     interface Window {
         FB: {
-            init: (params: { appId: string; autoLogAppEvents: boolean; xfbml: boolean; version: string }) => void;
+            init: (params: {
+                appId: string;
+                autoLogAppEvents?: boolean;
+                cookie?: boolean;
+                xfbml: boolean;
+                version: string;
+            }) => void;
             login: (callback: (response: FBLoginResponse) => void, options: Record<string, any>) => void;
         };
         fbAsyncInit: () => void;
