@@ -8,6 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Loader2, MessageCircle, Smartphone } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { API_BASE_URL } from "@/config";
+import {
+  ONBOARDING_STATUS_LABELS,
+  type OnboardingStatus,
+  isOnboardingComplete,
+  isOnboardingPending,
+  needsReconnect,
+  userMessageForStatus,
+} from '../constants/onboardingStatus';
 
 // Facebook App ID and Config ID from environment (SocioChat App)
 const FB_APP_ID = import.meta.env.VITE_FB_APP_ID || '1616370899364211';
@@ -19,6 +27,8 @@ interface ConnectWhatsAppButtonProps {
     onConnected?: () => void;
     /** Enable coexistence mode — connects existing WhatsApp Business App */
     coexistenceMode?: boolean;
+    /** 'reconnect' shows Reconnect WhatsApp label for failed/reconnect-required states */
+    variant?: 'connect' | 'reconnect';
 }
 
 // Declare FB types
@@ -41,12 +51,47 @@ interface FBLoginResponse {
 }
 
 // Session info captured from Embedded Signup postMessage
+interface ConnectExchangeResult {
+    success?: boolean;
+    onboarding_status?: OnboardingStatus;
+    onboarding_error?: string;
+    user_message?: string;
+    error?: string;
+    mps_limit?: number;
+    health?: {
+        user_message?: string;
+        status?: string;
+    };
+}
+
 interface EmbeddedSignupSessionData {
     phone_number_id?: string;
     waba_id?: string;
 }
 
-export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMode = false }: ConnectWhatsAppButtonProps) {
+async function pollUntilActive(workspaceId: string, maxAttempts = 10): Promise<boolean> {
+    for (let i = 0; i < maxAttempts; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+            const res = await fetch(
+                `${API_BASE_URL}/api/whatsapp/health?workspace_id=${encodeURIComponent(workspaceId)}`
+            );
+            if (!res.ok) continue;
+            const health = await res.json();
+            if (health.status === 'ACTIVE') return true;
+        } catch {
+            // retry
+        }
+    }
+    return false;
+}
+
+export function ConnectWhatsAppButton({
+    workspaceId,
+    onConnected,
+    coexistenceMode = false,
+    variant = 'connect',
+}: ConnectWhatsAppButtonProps) {
     const [loading, setLoading] = useState(false);
     const [fbReady, setFbReady] = useState(false);
     const sessionDataRef = useRef<EmbeddedSignupSessionData>({});
@@ -179,8 +224,15 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
                     }),
                 })
                     .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
+                    .then(async (data: ConnectExchangeResult) => {
+                        const obStatus = data.onboarding_status;
+                        const userMsg =
+                            data.user_message
+                            || data.health?.user_message
+                            || userMessageForStatus(obStatus, data.onboarding_error)
+                            || data.error;
+
+                        if (data.success && (!obStatus || isOnboardingComplete(obStatus))) {
                             toast({
                                 title: 'Success!',
                                 description: coexistenceMode
@@ -190,15 +242,39 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
                             onConnected?.();
                             const redirectPath = coexistenceMode ? '/dashboard/coexistence' : '/dashboard';
                             setTimeout(() => { window.location.href = redirectPath; }, 500);
-                        } else {
-                            throw new Error(data.error || 'Failed to connect account');
+                            return;
                         }
+
+                        if (obStatus && isOnboardingPending(obStatus)) {
+                            toast({
+                                title: ONBOARDING_STATUS_LABELS[obStatus],
+                                description: userMsg || 'Setup is in progress. We will retry automatically.',
+                            });
+                            const becameActive = await pollUntilActive(workspaceId);
+                            if (becameActive) {
+                                toast({ title: 'Connected Successfully', description: 'WhatsApp setup completed.' });
+                                onConnected?.();
+                                window.location.href = coexistenceMode ? '/dashboard/coexistence' : '/dashboard';
+                            } else {
+                                onConnected?.();
+                            }
+                            return;
+                        }
+
+                        const failTitle = obStatus && needsReconnect(obStatus)
+                            ? ONBOARDING_STATUS_LABELS[obStatus]
+                            : obStatus
+                                ? ONBOARDING_STATUS_LABELS[obStatus]
+                                : 'Connection Failed';
+                        throw new Error(`${failTitle}: ${userMsg || 'Failed to connect account'}`);
                     })
                     .catch((err: any) => {
                         console.error('[whatsapp] Token exchange error:', err);
+                        const msg = err.message || 'Failed to exchange token';
+                        const isReconnect = msg.includes('Reconnect Required') || msg.includes('Setup Failed');
                         toast({
-                            title: 'Connection Failed',
-                            description: err.message || 'Failed to exchange token',
+                            title: isReconnect ? msg.split(':')[0] : 'Connection Failed',
+                            description: msg.includes(':') ? msg.split(':').slice(1).join(':').trim() : msg,
                             variant: 'destructive',
                         });
                     })
@@ -239,7 +315,9 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
                 ...(coexistenceMode && { featureType: 'whatsapp_business_app_onboarding' }),
             }
         });
-    }, [workspaceId, fbReady, onConnected, coexistenceMode]);
+    }, [workspaceId, fbReady, onConnected, coexistenceMode, variant]);
+
+    const isReconnect = variant === 'reconnect';
 
     return (
         <Button
@@ -247,13 +325,21 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
             disabled={loading || !workspaceId}
             className={coexistenceMode
                 ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-[#25D366] hover:bg-[#128C7E] text-white"}
+                : isReconnect
+                    ? "bg-orange-600 hover:bg-orange-700 text-white"
+                    : "bg-[#25D366] hover:bg-[#128C7E] text-white"}
             data-connect-whatsapp="true"
+            data-reconnect-whatsapp={isReconnect ? 'true' : undefined}
         >
             {loading ? (
                 <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Connecting...
+                    {isReconnect ? 'Reconnecting...' : 'Connecting...'}
+                </>
+            ) : isReconnect ? (
+                <>
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Reconnect WhatsApp
                 </>
             ) : coexistenceMode ? (
                 <>

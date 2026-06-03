@@ -214,6 +214,16 @@ export interface HealthResponse {
 export type ConnectionStatus = 'NO_ACCOUNT' | 'CONNECTED' | 'PARTIAL' | 'RELINK_REQUIRED';
 export type RecommendedPath = 'EMBEDDED' | 'MANUAL' | null;
 
+export type OnboardingStatus =
+  | 'PENDING'
+  | 'ASSET_SHARING_PENDING'
+  | 'WABA_NOT_VISIBLE'
+  | 'PHONE_NOT_VISIBLE'
+  | 'SUBSCRIPTION_PENDING'
+  | 'ACTIVE'
+  | 'FAILED'
+  | 'RECONNECT_REQUIRED';
+
 export interface AccountSummary {
   id: number;
   waba_id: string;
@@ -225,6 +235,22 @@ export interface AccountSummary {
   is_test_number: boolean;
   is_active: boolean;
   token_type: string;
+  onboarding_status?: OnboardingStatus | null;
+  onboarding_error?: string | null;
+}
+
+export interface OnboardingHealthResponse {
+  portfolio_visible: boolean;
+  waba_visible: boolean;
+  phone_visible: boolean;
+  app_subscribed: boolean;
+  token_valid: boolean;
+  permissions_valid?: boolean;
+  status: OnboardingStatus | string;
+  onboarding_error?: string | null;
+  user_message?: string;
+  account_id?: number;
+  workspace_id?: string;
 }
 
 export interface ConnectionPathResponse {
@@ -235,7 +261,19 @@ export interface ConnectionPathResponse {
   account_summary: AccountSummary | null;
   can_use_embedded_signup: boolean;
   can_use_manual_link: boolean;
+  onboarding_status?: OnboardingStatus | null;
   error?: string;
+}
+
+export interface ConnectExchangeResponse {
+  success: boolean;
+  onboarding_status?: OnboardingStatus;
+  onboarding_error?: string | null;
+  user_message?: string;
+  health?: OnboardingHealthResponse;
+  account?: Record<string, unknown>;
+  error?: string;
+  error_code?: string;
 }
 
 export interface ManualConnectRequest {
@@ -556,6 +594,15 @@ export async function publishCampaign(campaignId: string): Promise<{ success: bo
  * Determines whether to show Embedded Signup (new number) or
  * Manual Linking (existing account) based on workspace state.
  */
+export async function getOnboardingHealth(workspaceId: string): Promise<OnboardingHealthResponse | null> {
+  const response = await apiClient.get<OnboardingHealthResponse>(
+    `${WHATSAPP_API_BASE}/health`,
+    { workspace_id: workspaceId }
+  );
+  if (!response.ok) return null;
+  return response.data ?? null;
+}
+
 export async function getConnectionPath(workspaceId: string): Promise<ConnectionPathResponse> {
   const response = await apiClient.get<ConnectionPathResponse>(
     `${WHATSAPP_API_BASE}/connection-path`,
@@ -719,6 +766,7 @@ const whatsappApi = {
   publishCampaign,
   // Connection Path (Dual-Path UX)
   getConnectionPath,
+  getOnboardingHealth,
   connectManual,
   validateToken,
   // Notification Settings

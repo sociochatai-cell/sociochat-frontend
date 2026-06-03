@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getWhatsAppAccounts } from '../api';
 import { WhatsAppAccountCard } from '../components/WhatsAppAccountCard';
+import { OnboardingProgressPanel } from '../components/OnboardingProgressPanel';
+import { isAccountFullyConnected } from '../constants/onboardingStatus';
 import { SettingsLoadingScreen } from '../components/SettingsLoadingScreen';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AgentsManager from '@/agent_frontend/components/AgentsManager';
@@ -78,6 +80,8 @@ interface WhatsAppAccount {
   messaging_limit: number | null;
   token_type: string;
   is_active: boolean;
+  onboarding_status?: string | null;
+  onboarding_error?: string | null;
   is_coexistence?: boolean;
   mps_limit?: number;
   created_at: string;
@@ -591,8 +595,9 @@ export function WhatsAppSettings() {
   };
 
   const account = accounts[0]; // Primary account
-  // Show dashboard if we have ANY account, even if inactive (so user can re-link)
-  const isConnected = accounts.length > 0;
+  const hasAccount = accounts.length > 0;
+  const isFullyConnected = isAccountFullyConnected(account);
+  const isOnboardingInProgress = hasAccount && !isFullyConnected;
   const workspaceName = workspaces.find(w => String(w.id) === String(workspaceId))?.name;
 
   // Store active account ID when accounts are loaded
@@ -745,7 +750,7 @@ export function WhatsAppSettings() {
         {/* ============================================================ */}
         {/* NOT CONNECTED STATE */}
         {/* ============================================================ */}
-        {!loading && !loadingWorkspaces && !isConnected && (
+        {!loading && !loadingWorkspaces && !hasAccount && (
           <Card className="border-0 shadow-xl bg-white overflow-hidden">
             <div className="h-1.5 bg-gradient-to-r from-[#25D366] via-[#128C7E] to-[#25D366]" />
             <CardContent className="py-16 px-8 text-center">
@@ -831,9 +836,34 @@ export function WhatsAppSettings() {
         )}
 
         {/* ============================================================ */}
+        {/* ONBOARDING IN PROGRESS */}
+        {/* ============================================================ */}
+        {!loading && !loadingWorkspaces && isOnboardingInProgress && account && workspaceId && (
+          <div className="space-y-6">
+            <OnboardingProgressPanel
+              workspaceId={workspaceId}
+              account={account}
+              onUpdate={() => fetchAccounts(true)}
+            />
+            <WhatsAppAccountCard
+              account={account}
+              onUpdate={() => fetchAccounts(true)}
+              onSync={handleSync}
+              isSyncing={syncing}
+              onPopupTrigger={handlePopupTrigger}
+              onRelink={() => {
+                document.querySelector('[data-reconnect-whatsapp]')?.scrollIntoView({ behavior: 'smooth' });
+                (document.querySelector('[data-reconnect-whatsapp]') as HTMLButtonElement)?.click()
+                  || (document.querySelector('[data-connect-whatsapp]') as HTMLButtonElement)?.click();
+              }}
+            />
+          </div>
+        )}
+
+        {/* ============================================================ */}
         {/* CONNECTED STATE */}
         {/* ============================================================ */}
-        {!loading && !loadingWorkspaces && isConnected && account && (
+        {!loading && !loadingWorkspaces && isFullyConnected && account && (
           <div className="space-y-6">
             {/* Account Status Card */}
 

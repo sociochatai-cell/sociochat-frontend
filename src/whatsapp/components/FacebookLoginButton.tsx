@@ -1,17 +1,19 @@
-// Facebook OAuth Login Button Component
-// =====================================
-// Simple Facebook OAuth login to authenticate and get access token
-// Use this when you already have a WABA but need to authenticate
-
+// Facebook OAuth Login Button — onboarding-aware (Phase 8 / 12)
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { API_BASE_URL } from "@/config";
+import {
+  ONBOARDING_STATUS_LABELS,
+  type OnboardingStatus,
+  isOnboardingComplete,
+  isOnboardingPending,
+  userMessageForStatus,
+} from '../constants/onboardingStatus';
 
-// Facebook App ID from environment (SocioChat App)
 const FB_APP_ID = import.meta.env.VITE_FB_APP_ID || '1616370899364211';
-const FB_SDK_VERSION = 'v25.0'; // SDK init version — must match Meta app dashboard
+const FB_SDK_VERSION = 'v25.0';
 
 interface FacebookLoginButtonProps {
     workspaceId: string;
@@ -32,17 +34,24 @@ interface FBOAuthResponse {
     status: 'connected' | 'not_authorized' | 'unknown';
 }
 
-// Type for FB SDK - use any to avoid conflicts with other FB declarations
+interface FacebookLoginResult {
+    success?: boolean;
+    connected?: boolean;
+    onboarding_status?: OnboardingStatus;
+    user_message?: string;
+    message?: string;
+    error?: string;
+    access_token?: string;
+    account?: { display_phone_number?: string; phone_number_id?: string };
+}
+
 type FacebookSDK = {
     init: (params: { appId: string; cookie: boolean; xfbml: boolean; version: string }) => void;
     login: (callback: (response: FBOAuthResponse) => void, options: { scope: string }) => void;
     getLoginStatus: (callback: (response: FBOAuthResponse) => void) => void;
 };
 
-// Get FB from window - cast to avoid type conflicts
-const getFB = (): FacebookSDK | undefined => {
-    return (window as any).FB;
-};
+const getFB = (): FacebookSDK | undefined => (window as any).FB;
 
 const setFbAsyncInit = (callback: () => void) => {
     (window as any).fbAsyncInit = callback;
@@ -60,38 +69,31 @@ export function FacebookLoginButton({
     const [loading, setLoading] = useState(false);
     const [fbReady, setFbReady] = useState(false);
 
-    // Load Facebook SDK
     useEffect(() => {
-        // Check if SDK is already loaded
         const fb = getFB();
         if (fb) {
             setFbReady(true);
             return;
         }
 
-        // Save any existing fbAsyncInit (another component may have set it)
         const existingInit = (window as any).fbAsyncInit;
 
-        // Define the callback for when SDK loads
         setFbAsyncInit(() => {
-            const fb = getFB();
-            if (fb) {
-                fb.init({
+            const fbInstance = getFB();
+            if (fbInstance) {
+                fbInstance.init({
                     appId: FB_APP_ID,
                     cookie: true,
                     xfbml: true,
                     version: FB_SDK_VERSION
                 });
                 setFbReady(true);
-                console.log('[facebook] Facebook SDK initialized (FacebookLoginButton)');
-                // Chain any previously-registered init
                 if (existingInit && typeof existingInit === 'function') {
                     existingInit();
                 }
             }
         });
 
-        // Load the SDK script if not already loaded
         if (!document.getElementById('facebook-jssdk')) {
             const script = document.createElement('script');
             script.id = 'facebook-jssdk';
@@ -103,7 +105,6 @@ export function FacebookLoginButton({
         }
     }, []);
 
-    // Poll for FB SDK in case another component initialized it
     useEffect(() => {
         if (fbReady) return;
         const interval = setInterval(() => {
@@ -117,11 +118,7 @@ export function FacebookLoginButton({
 
     const handleFacebookLogin = useCallback(() => {
         if (!workspaceId) {
-            toast({
-                title: 'Error',
-                description: 'No workspace selected',
-                variant: 'destructive',
-            });
+            toast({ title: 'Error', description: 'No workspace selected', variant: 'destructive' });
             return;
         }
 
@@ -136,58 +133,71 @@ export function FacebookLoginButton({
         }
 
         setLoading(true);
-        console.log('[facebook] Starting Facebook OAuth login');
 
-        // Simple Facebook Login with required scopes for WhatsApp Business
         fb.login(
             function (response: FBOAuthResponse) {
-                console.log('[facebook] FB.login response:', response);
-
                 if (response.status === 'connected' && response.authResponse?.accessToken) {
                     const accessToken = response.authResponse.accessToken;
 
-                    // Send to backend to exchange for long-lived token and auto-connect WABA
-                    fetch(
-                        `${API_BASE_URL}/api/whatsapp/oauth/facebook-login`,
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({
-                                access_token: accessToken,
-                                workspace_id: workspaceId,
-                            }),
-                        }
-                    )
+                    fetch(`${API_BASE_URL}/api/whatsapp/oauth/facebook-login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            access_token: accessToken,
+                            workspace_id: workspaceId,
+                        }),
+                    })
                         .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                if (data.connected) {
-                                    // WABA was auto-discovered and connected!
-                                    toast({
-                                        title: '✓ WhatsApp Connected!',
-                                        description: `Connected: ${data.account?.display_phone_number || data.account?.phone_number_id}`,
-                                    });
-                                    // Redirect to dashboard after connection
-                                    setTimeout(() => {
-                                        window.location.href = '/dashboard';
-                                    }, 1000);
-                                } else {
-                                    // Authenticated but no WABA found - need manual linking
-                                    toast({
-                                        title: 'Logged in successfully!',
-                                        description: data.message || 'Please enter your WABA details manually.',
-                                    });
-                                    // Store token for manual connect form
-                                    localStorage.setItem('fb_access_token', data.access_token);
-                                    onSuccess?.(data.access_token || accessToken);
-                                }
-                            } else {
-                                throw new Error(data.error || 'Login failed');
+                        .then((data: FacebookLoginResult) => {
+                            const obStatus = data.onboarding_status;
+                            const userMsg =
+                                data.user_message
+                                || userMessageForStatus(obStatus, data.error)
+                                || data.message
+                                || data.error;
+
+                            if (data.success && data.connected && (!obStatus || isOnboardingComplete(obStatus))) {
+                                toast({
+                                    title: 'Connected Successfully',
+                                    description: `Connected: ${data.account?.display_phone_number || data.account?.phone_number_id || 'WhatsApp Business'}`,
+                                });
+                                setTimeout(() => { window.location.href = '/dashboard'; }, 1000);
+                                return;
                             }
+
+                            if (obStatus && isOnboardingPending(obStatus)) {
+                                toast({
+                                    title: ONBOARDING_STATUS_LABELS[obStatus],
+                                    description: userMsg || 'Setup is in progress.',
+                                });
+                                onSuccess?.(data.access_token || accessToken);
+                                return;
+                            }
+
+                            if (!data.success && data.access_token) {
+                                toast({
+                                    title: obStatus ? ONBOARDING_STATUS_LABELS[obStatus] : 'Manual setup required',
+                                    description: userMsg || 'Please enter your WABA details manually.',
+                                });
+                                localStorage.setItem('fb_access_token', data.access_token);
+                                onSuccess?.(data.access_token);
+                                return;
+                            }
+
+                            if (data.success && !data.connected && data.access_token) {
+                                toast({
+                                    title: 'Logged in successfully',
+                                    description: userMsg || 'Please enter your WABA details manually.',
+                                });
+                                localStorage.setItem('fb_access_token', data.access_token);
+                                onSuccess?.(data.access_token);
+                                return;
+                            }
+
+                            throw new Error(userMsg || data.error || 'Login failed');
                         })
-                        .catch((err: any) => {
-                            console.error('[facebook] OAuth error:', err);
+                        .catch((err: Error) => {
                             toast({
                                 title: 'Login Failed',
                                 description: err.message || 'Failed to authenticate with Facebook',
@@ -195,12 +205,8 @@ export function FacebookLoginButton({
                             });
                             onError?.(err.message);
                         })
-                        .finally(() => {
-                            setLoading(false);
-                        });
+                        .finally(() => setLoading(false));
                 } else {
-                    // User cancelled or error
-                    console.log('[facebook] User cancelled or not authorized');
                     toast({
                         title: 'Cancelled',
                         description: 'Facebook login was cancelled',
@@ -210,7 +216,6 @@ export function FacebookLoginButton({
                 }
             },
             {
-                // WhatsApp Business required scopes
                 scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,whatsapp_business_manage_events'
             }
         );

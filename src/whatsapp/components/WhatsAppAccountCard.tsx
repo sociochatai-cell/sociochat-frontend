@@ -29,7 +29,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Phone, Building2, Trash2, Loader2, Unlink, Link, Settings2, Info, Pencil, BarChart3, RefreshCw, AlertTriangle } from 'lucide-react';
+import { ConnectionStatusBadge } from './ConnectionStatusBadge';
 import { toast } from '@/hooks/use-toast';
 import { API_BASE_URL } from "@/config";
 
@@ -46,6 +46,8 @@ interface WhatsAppAccount {
   messaging_limit: number | null;
   token_type: string;
   is_active: boolean;
+  onboarding_status?: string | null;
+  onboarding_error?: string | null;
   created_at: string;
 }
 
@@ -54,6 +56,7 @@ interface WhatsAppAccountCardProps {
   onUpdate?: () => void;
   onSync?: () => void;
   isSyncing?: boolean;
+  onRelink?: () => void;
   onPopupTrigger?: (
     variant: 'connect' | 'unlink' | 'delete' | 'error',
     title: string,
@@ -69,6 +72,7 @@ export function WhatsAppAccountCard({
   onUpdate,
   onSync,
   isSyncing = false,
+  onRelink,
   onPopupTrigger
 }: WhatsAppAccountCardProps) {
   const navigate = useNavigate();
@@ -132,13 +136,21 @@ export function WhatsAppAccountCard({
 
   const handleRelink = () => {
     setDropdownOpen(false);
+    if (onRelink) {
+      onRelink();
+      return;
+    }
+    const reconnectBtn = document.querySelector('[data-reconnect-whatsapp]') as HTMLButtonElement;
     const connectButton = document.querySelector('[data-connect-whatsapp]') as HTMLButtonElement;
-    if (connectButton) {
+    if (reconnectBtn) {
+      reconnectBtn.scrollIntoView({ behavior: 'smooth' });
+      reconnectBtn.click();
+    } else if (connectButton) {
       connectButton.click();
     } else {
       toast({
         title: 'Re-link Account',
-        description: 'Use the "Connect WhatsApp" button above to reconnect this account.',
+        description: 'Use the "Reconnect WhatsApp" button above to reconnect this account.',
       });
     }
   };
@@ -219,61 +231,13 @@ export function WhatsAppAccountCard({
     }
   };
 
-  // Status Badge with Tooltip
-  const StatusBadge = () => {
-    const isActive = account.is_active;
-
-    return (
-      <TooltipProvider>
-        <Tooltip delayDuration={200}>
-          <TooltipTrigger asChild>
-            <div className="cursor-help">
-              <Badge
-                variant={isActive ? 'default' : 'destructive'}
-                className={`
-                  relative overflow-hidden transition-all duration-300
-                  ${isActive
-                    ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white border-0 shadow-sm shadow-green-500/20'
-                    : 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white border-0 shadow-sm shadow-red-500/20'
-                  }
-                `}
-              >
-                <span className="flex items-center gap-1.5">
-                  {isActive && (
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-                    </span>
-                  )}
-                  {isActive ? 'Active' : 'Inactive'}
-                </span>
-              </Badge>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent
-            side="top"
-            className="max-w-xs bg-popover/95 backdrop-blur-sm border shadow-xl animate-in fade-in-0 zoom-in-95 duration-200 p-3"
-            sideOffset={8}
-          >
-            <div className="flex items-start gap-2">
-              <Info className={`w-4 h-4 mt-0.5 shrink-0 ${isActive ? 'text-green-500' : 'text-red-500'}`} />
-              <div>
-                <p className="font-medium text-sm mb-1">
-                  {isActive ? 'Account is Active' : 'Account is Inactive'}
-                </p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {isActive
-                    ? 'You can send and receive messages, view conversations, and interact with your customers in real-time.'
-                    : 'This account is disconnected. You won\'t receive new messages or updates. Use the Manage button to re-link and restore full functionality.'
-                  }
-                </p>
-              </div>
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  };
+  const StatusBadge = () => (
+    <ConnectionStatusBadge
+      isActive={account.is_active}
+      tokenType={account.token_type}
+      onboardingStatus={account.onboarding_status}
+    />
+  );
 
   return (
     <>

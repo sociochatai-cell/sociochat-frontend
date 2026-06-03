@@ -32,8 +32,10 @@ import {
 import whatsappApi, {
     type ConnectionPathResponse,
     type ConnectionStatus,
-    type AccountSummary
+    type AccountSummary,
+    type OnboardingStatus,
 } from '../api/whatsappApi';
+import { ONBOARDING_STATUS_LABELS, userMessageForStatus, needsReconnect } from '@/whatsapp/constants/onboardingStatus';
 import { ExistingAccountConnect } from './ExistingAccountConnect';
 import { FacebookLoginButton } from '@/whatsapp/components/FacebookLoginButton';
 import { ConnectWhatsAppButton } from '@/whatsapp/components/ConnectWhatsAppButton';
@@ -52,7 +54,20 @@ interface WhatsAppConnectionRouterProps {
 // Status Badge Component
 // ============================================================
 
-const StatusBadge: React.FC<{ status: ConnectionStatus }> = ({ status }) => {
+const StatusBadge: React.FC<{ status: ConnectionStatus; onboardingStatus?: OnboardingStatus | null }> = ({
+    status,
+    onboardingStatus,
+}) => {
+    if (onboardingStatus && onboardingStatus !== 'ACTIVE') {
+        const label = ONBOARDING_STATUS_LABELS[onboardingStatus] ?? onboardingStatus;
+        if (onboardingStatus === 'RECONNECT_REQUIRED' || onboardingStatus === 'FAILED') {
+            return <Badge className="bg-orange-100 text-orange-800">{label}</Badge>;
+        }
+        if (onboardingStatus === 'PENDING' || onboardingStatus === 'SUBSCRIPTION_PENDING') {
+            return <Badge className="bg-blue-100 text-blue-800">{label}</Badge>;
+        }
+        return <Badge className="bg-yellow-100 text-yellow-800">{label}</Badge>;
+    }
     switch (status) {
         case 'CONNECTED':
             return <Badge className="bg-green-100 text-green-800">Connected</Badge>;
@@ -156,6 +171,51 @@ const ConnectedAccountView: React.FC<{
                     Settings
                 </Button>
             </div>
+        </div>
+    );
+};
+
+// ============================================================
+// Reconnect Required View (Phase 11)
+// ============================================================
+
+const ReconnectRequiredView: React.FC<{
+    workspaceId: string;
+    onboardingStatus?: OnboardingStatus | null;
+    reason?: string;
+    onSuccess: () => void;
+    onManualReconnect: () => void;
+}> = ({ workspaceId, onboardingStatus, reason, onSuccess, onManualReconnect }) => {
+    const message =
+        reason
+        || userMessageForStatus(onboardingStatus);
+
+    return (
+        <div className="space-y-6">
+            <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>
+                    {onboardingStatus === 'FAILED' ? 'Setup Failed' : 'Reconnect Required'}
+                </AlertTitle>
+                <AlertDescription>{message}</AlertDescription>
+            </Alert>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+                <ConnectWhatsAppButton
+                    workspaceId={workspaceId}
+                    variant="reconnect"
+                    onConnected={onSuccess}
+                />
+                <Button variant="outline" onClick={onManualReconnect}>
+                    <Link2 className="w-4 h-4 mr-2" />
+                    Manual reconnect
+                </Button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+                Reconnecting will open Meta Embedded Signup so you can grant permissions and share
+                your WhatsApp Business assets with SocioChat.
+            </p>
         </div>
     );
 };
@@ -609,6 +669,12 @@ export const WhatsAppConnectionRouter: React.FC<WhatsAppConnectionRouterProps> =
     }
 
     const status = connectionData?.status || 'NO_ACCOUNT';
+    const onboardingStatus = connectionData?.onboarding_status
+        ?? connectionData?.account_summary?.onboarding_status;
+
+    const showReconnectFlow =
+        needsReconnect(onboardingStatus)
+        || status === 'RELINK_REQUIRED';
 
     // ============================================================
     // Render Based on Status
@@ -621,17 +687,17 @@ export const WhatsAppConnectionRouter: React.FC<WhatsAppConnectionRouterProps> =
                         <MessageCircle className="w-6 h-6 text-green-500" />
                         <CardTitle>WhatsApp Business</CardTitle>
                     </div>
-                    <StatusBadge status={status} />
+                    <StatusBadge status={status} onboardingStatus={onboardingStatus} />
                 </div>
                 <CardDescription>
-                    {status === 'CONNECTED'
-                        ? 'Your WhatsApp Business is connected and ready'
-                        : status === 'PARTIAL'
-                            ? 'Complete your WhatsApp setup to start messaging'
-                            : status === 'RELINK_REQUIRED'
-                                ? 'Your connection expired — reconnect to continue'
-                                : 'Connect WhatsApp to chat with customers directly'
-                    }
+                    {connectionData?.reason
+                        ?? (status === 'CONNECTED'
+                            ? 'Your WhatsApp Business is connected and ready'
+                            : showReconnectFlow
+                                ? userMessageForStatus(onboardingStatus)
+                                : status === 'PARTIAL'
+                                    ? 'Complete your WhatsApp setup to start messaging'
+                                    : 'Connect WhatsApp to chat with customers directly')}
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -647,6 +713,14 @@ export const WhatsAppConnectionRouter: React.FC<WhatsAppConnectionRouterProps> =
                         onSuccess={handleConnectionSuccess}
                         onCancel={() => setShowManualForm(false)}
                         showCancelButton={true}
+                    />
+                ) : showReconnectFlow ? (
+                    <ReconnectRequiredView
+                        workspaceId={workspaceId}
+                        onboardingStatus={onboardingStatus}
+                        reason={connectionData?.reason}
+                        onSuccess={handleConnectionSuccess}
+                        onManualReconnect={() => setShowManualForm(true)}
                     />
                 ) : (
                     <EmbeddedSignupView
