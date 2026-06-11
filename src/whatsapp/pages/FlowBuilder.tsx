@@ -608,7 +608,10 @@ function ScreenEditor({
                         <Layout className="w-4 h-4 text-primary" />
                         <Input
                             value={screen.id}
-                            onChange={(e) => onChange({ ...screen, id: e.target.value.toUpperCase().replace(/\s/g, '_') })}
+                            onChange={(e) => onChange({
+                                ...screen,
+                                id: e.target.value.toUpperCase().replace(/[^A-Z_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'SCREEN'
+                            })}
                             className="w-32 h-7 text-sm font-mono"
                             placeholder="SCREEN_ID"
                         />

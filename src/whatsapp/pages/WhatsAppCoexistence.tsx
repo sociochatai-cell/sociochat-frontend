@@ -108,11 +108,8 @@ interface CoexistenceError {
 // Helper Functions
 // ============================================================
 
-// Coexistence is only on dev backend — use VITE_COEXISTENCE_API_BASE (dev tunnel)
-const COEXISTENCE_API_BASE = (import.meta.env.VITE_COEXISTENCE_API_BASE || '').toString().replace(/\/$/, '');
-
 async function coexistenceApi(path: string, options?: RequestInit) {
-  const url = `${COEXISTENCE_API_BASE}/api/whatsapp/coexistence${path}`;
+  const url = `${API_BASE}/api/whatsapp/coexistence${path}`;
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -312,7 +309,7 @@ function NotConnectedView({
         }
       },
       {
-        config_id: import.meta.env.VITE_WHATSAPP_CONFIG_ID || '1210552324305744',
+        config_id: import.meta.env.VITE_WHATSAPP_CONFIG_ID || '1684758789571645',
         response_type: 'code',
         override_default_response_type: true,
         extras: {

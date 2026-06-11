@@ -12,8 +12,18 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RefreshCw, Plus, Database, Upload, ArrowLeft, Trash2, FileSpreadsheet, Users, Link2, Edit, CloudDownload, Settings, MessageCircle } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
+import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').toString().replace(/\/$/, '');
+
+const datasetFetchInit = (extra: RequestInit = {}): RequestInit => ({
+    credentials: 'include',
+    ...extra,
+    headers: {
+        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+        ...(extra.headers || {}),
+    },
+});
 
 interface Dataset {
     id: number;
@@ -42,9 +52,7 @@ interface PreviewData {
 
 export default function WhatsAppDatasets() {
     const { toast } = useToast();
-    const [workspaceId] = useState<string | null>(
-        localStorage.getItem('sv_whatsapp_workspace_id') || localStorage.getItem('sv_selected_workspace_id')
-    );
+    const [workspaceId, setWorkspaceId] = useState<string | null>(getWorkspaceId());
 
     const [datasets, setDatasets] = useState<Dataset[]>([]);
     const [loading, setLoading] = useState(false);
@@ -61,6 +69,7 @@ export default function WhatsAppDatasets() {
     const [csvPreview, setCsvPreview] = useState<PreviewData | null>(null);
     const [csvColumnMapping, setCsvColumnMapping] = useState<Record<string, string>>({});
     const csvInputRef = useRef<HTMLInputElement>(null);
+    const uploadInputRef = useRef<HTMLInputElement>(null);
 
     // Google Sheets Import State
     const [sheetUrl, setSheetUrl] = useState("");
@@ -117,6 +126,13 @@ export default function WhatsAppDatasets() {
 
 
     useEffect(() => {
+        const resolvedWorkspaceId = getWorkspaceId();
+        if (resolvedWorkspaceId && resolvedWorkspaceId !== workspaceId) {
+            setWorkspaceId(resolvedWorkspaceId);
+        }
+    }, [workspaceId]);
+
+    useEffect(() => {
         if (!workspaceId) return;
         fetchDatasets();
     }, [workspaceId]);
@@ -138,16 +154,30 @@ export default function WhatsAppDatasets() {
     }, [createTab, crmWorkspaceId]);
 
     const fetchDatasets = async () => {
+        if (!workspaceId) {
+            toast({
+                title: 'No workspace selected',
+                description: 'Select a workspace from the dashboard before managing datasets.',
+                variant: 'destructive',
+            });
+            return;
+        }
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
+            const res = await fetch(
+                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
+                datasetFetchInit()
+            );
             const data = await res.json();
             if (data.success) {
                 setDatasets(data.data);
+            } else {
+                toast({ title: 'Error', description: data.error || 'Failed to load datasets', variant: 'destructive' });
             }
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error(e);
+            toast({ title: 'Error', description: 'Failed to load datasets', variant: 'destructive' });
+        }
         finally { setLoading(false); }
     };
 
@@ -157,14 +187,14 @@ export default function WhatsAppDatasets() {
         if (!newName) return;
         setCreating(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ name: newName, description: newDesc })
-            });
+            const res = await fetch(
+                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
+                datasetFetchInit({
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName, description: newDesc }),
+                })
+            );
             const data = await res.json();
             if (data.success) {
                 toast({ title: "Dataset Created", description: "You can now add data manually or import." });
@@ -173,7 +203,10 @@ export default function WhatsAppDatasets() {
             } else {
                 toast({ title: "Error", description: data.error, variant: "destructive" });
             }
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error(e);
+            toast({ title: "Error", description: "Failed to create dataset", variant: "destructive" });
+        }
         finally { setCreating(false); }
     };
 
@@ -183,11 +216,10 @@ export default function WhatsAppDatasets() {
         formData.append('file', file);
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/csv/preview`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: formData
-            });
+            const res = await fetch(
+                `${API_BASE}/api/whatsapp/csv/preview`,
+                datasetFetchInit({ method: 'POST', body: formData })
+            );
             const data = await res.json();
             if (data.success) {
                 setCsvPreview(data);
@@ -208,11 +240,14 @@ export default function WhatsAppDatasets() {
         setCreating(true);
         try {
             // First create the dataset
-            const createRes = await fetch(`${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ name: newName, description: newDesc })
-            });
+            const createRes = await fetch(
+                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
+                datasetFetchInit({
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName, description: newDesc }),
+                })
+            );
             const createData = await createRes.json();
             if (!createData.success) throw new Error(createData.error);
 
@@ -222,11 +257,10 @@ export default function WhatsAppDatasets() {
             formData.append('column_mapping', JSON.stringify(csvColumnMapping));
             formData.append('replace', 'true');
 
-            const uploadRes = await fetch(`${API_BASE}/api/whatsapp/datasets/${createData.data.id}/upload-mapped`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: formData
-            });
+            const uploadRes = await fetch(
+                `${API_BASE}/api/whatsapp/datasets/${createData.data.id}/upload-mapped`,
+                datasetFetchInit({ method: 'POST', body: formData })
+            );
             const uploadData = await uploadRes.json();
             if (uploadData.success) {
                 toast({ title: "Dataset Created", description: `Imported ${uploadData.rows_added} rows from CSV.` });
@@ -272,11 +306,14 @@ export default function WhatsAppDatasets() {
         setCreating(true);
         try {
             // Create dataset
-            const createRes = await fetch(`${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ name: newName, description: newDesc })
-            });
+            const createRes = await fetch(
+                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
+                datasetFetchInit({
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName, description: newDesc }),
+                })
+            );
             const createData = await createRes.json();
             if (!createData.success) throw new Error(createData.error);
 
@@ -331,11 +368,14 @@ export default function WhatsAppDatasets() {
         setCreating(true);
         try {
             // Create dataset
-            const createRes = await fetch(`${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ name: newName, description: newDesc })
-            });
+            const createRes = await fetch(
+                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
+                datasetFetchInit({
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName, description: newDesc }),
+                })
+            );
             const createData = await createRes.json();
             if (!createData.success) throw new Error(createData.error);
 
@@ -386,11 +426,14 @@ export default function WhatsAppDatasets() {
         setCreating(true);
         try {
             // Create dataset
-            const createRes = await fetch(`${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ name: newName, description: newDesc })
-            });
+            const createRes = await fetch(
+                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
+                datasetFetchInit({
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName, description: newDesc }),
+                })
+            );
             const createData = await createRes.json();
             if (!createData.success) throw new Error(createData.error);
 
@@ -418,11 +461,14 @@ export default function WhatsAppDatasets() {
         setCreating(true);
         try {
             // Create dataset
-            const createRes = await fetch(`${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ name: newName, description: newDesc })
-            });
+            const createRes = await fetch(
+                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
+                datasetFetchInit({
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName, description: newDesc }),
+                })
+            );
             const createData = await createRes.json();
             if (!createData.success) throw new Error(createData.error);
 
@@ -534,9 +580,10 @@ export default function WhatsAppDatasets() {
     const loadDatasetDetails = async (id: number) => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/datasets/${id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
+            const res = await fetch(
+                `${API_BASE}/api/whatsapp/datasets/${id}`,
+                datasetFetchInit()
+            );
             const data = await res.json();
             if (data.success) {
                 setDatasetDetails(data.data);
@@ -550,9 +597,10 @@ export default function WhatsAppDatasets() {
 
     const loadRows = async (datasetId: number, page: number) => {
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/datasets/${datasetId}/rows?page=${page}&limit=50`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
+            const res = await fetch(
+                `${API_BASE}/api/whatsapp/datasets/${datasetId}/rows?page=${page}&limit=50`,
+                datasetFetchInit()
+            );
             const data = await res.json();
             if (data.success) {
                 setAllRows(data.data);
@@ -629,11 +677,14 @@ export default function WhatsAppDatasets() {
     const handleAddColumn = async () => {
         if (!selectedDataset || !newColumnName.trim()) return;
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/columns`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ column_name: newColumnName.trim() })
-            });
+            const res = await fetch(
+                `${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/columns`,
+                datasetFetchInit({
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ column_name: newColumnName.trim() }),
+                })
+            );
             const data = await res.json();
             if (data.success) {
                 toast({ title: "Column Added", description: `Added column "${newColumnName}"` });
@@ -651,10 +702,10 @@ export default function WhatsAppDatasets() {
         if (!selectedDataset) return;
         if (!confirm(`Remove column "${columnName}"? This will delete data from all rows.`)) return;
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/columns/${encodeURIComponent(columnName)}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
+            const res = await fetch(
+                `${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/columns/${encodeURIComponent(columnName)}`,
+                datasetFetchInit({ method: 'DELETE' })
+            );
             const data = await res.json();
             if (data.success) {
                 toast({ title: "Column Removed" });
@@ -707,11 +758,10 @@ export default function WhatsAppDatasets() {
         formData.append('file', file);
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/upload?replace=true`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: formData
-            });
+            const res = await fetch(
+                `${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/upload?replace=true`,
+                datasetFetchInit({ method: 'POST', body: formData })
+            );
             const data = await res.json();
             if (data.success) {
                 toast({ title: "Upload Successful", description: `Added ${data.rows_added} rows.` });
@@ -894,17 +944,23 @@ export default function WhatsAppDatasets() {
                                 )}
 
                                 {/* Upload CSV */}
-                                <Button variant="outline" size="sm" className="relative" disabled={uploading}>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={uploading}
+                                    onClick={() => uploadInputRef.current?.click()}
+                                >
                                     <Upload className="mr-1 h-4 w-4" />
                                     {uploading ? "Uploading..." : "Upload CSV"}
-                                    <input
-                                        type="file"
-                                        accept=".csv"
-                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                        onChange={handleFileUpload}
-                                        disabled={uploading}
-                                    />
                                 </Button>
+                                <input
+                                    ref={uploadInputRef}
+                                    type="file"
+                                    accept=".csv"
+                                    className="hidden"
+                                    onChange={handleFileUpload}
+                                    disabled={uploading}
+                                />
                             </div>
                         </div>
                         <CardDescription>

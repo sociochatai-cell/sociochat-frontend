@@ -6,7 +6,7 @@ import {
     MessageSquare, LayoutTemplate, Bot, BarChart3,
     Settings, Users, Database, Send, Workflow, Zap,
     Inbox, LogOut, Link2, User, ChevronRight,
-    Bell, Search, ChevronDown, Home,
+    ChevronDown, Home,
     ChevronsLeft, ChevronsRight, Smartphone,
 } from 'lucide-react';
 import {
@@ -23,11 +23,15 @@ import { API_BASE_URL } from '@/config';
    ══════════════════════════════════════════════ */
 const NAV_ITEMS = [
     { label: 'Dashboard', path: '/dashboard', icon: Home, exact: true },
+    { label: 'Hub', path: '/dashboard/hub', icon: LayoutTemplate },
     { label: 'Inbox', path: '/dashboard/inbox', icon: Inbox },
+    { label: 'Bulk Send', path: '/dashboard/bulk', icon: Send },
     { label: 'Templates', path: '/dashboard/templates', icon: LayoutTemplate },
     { label: 'Automation', path: '/dashboard/automation', icon: Bot },
     { label: 'Drip Campaigns', path: '/dashboard/drip', icon: Zap },
     { label: 'Interactive Flows', path: '/dashboard/interactive-automation', icon: Workflow },
+    { label: 'Flows', path: '/dashboard/flows', icon: Workflow },
+    { label: 'Catalog', path: '/dashboard/catalog', icon: Link2 },
     { label: 'Contacts', path: '/dashboard/contacts', icon: Users },
     { label: 'Datasets', path: '/dashboard/datasets', icon: Database },
     { label: 'Tracking', path: '/dashboard/tracking', icon: BarChart3 },
@@ -373,6 +377,20 @@ function Header() {
     };
 
     const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const [now, setNow] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => setNow(new Date()), 30_000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const dateTimeLabel = now.toLocaleString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
 
     return (
         <header
@@ -386,13 +404,9 @@ function Header() {
             <Breadcrumb />
 
             <div className="flex items-center gap-2">
-                <button className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 transition-all">
-                    <Search className="w-4 h-4" />
-                </button>
-                <button className="relative p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 transition-all">
-                    <Bell className="w-4 h-4" />
-                    <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-emerald-500 rounded-full ring-2 ring-white" />
-                </button>
+                <span className="hidden md:inline text-xs text-slate-500 tabular-nums mr-1">
+                    {dateTimeLabel}
+                </span>
 
                 <div className="w-px h-6 bg-slate-200 mx-1" />
 

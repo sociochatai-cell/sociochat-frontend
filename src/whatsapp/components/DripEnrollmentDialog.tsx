@@ -795,6 +795,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
       const formData = new FormData();
       formData.append('file', csvFile);
       formData.append('column_mapping', JSON.stringify(columnMapping));
+      formData.append('phone_column', columnMapping['phone'] || '');
       formData.append('fallback_values', JSON.stringify(csvFallbackValues));
 
       const res = await fetch(`${API_BASE_URL}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaign.id}/import-contacts`, {
@@ -836,7 +837,6 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
         credentials: 'include',
         body: JSON.stringify({
           dataset_id: selectedDatasetId,
-          workspace_id: accountId,
           phone_column: datasetColumnMapping['phone'] || 'phone',
           name_column: datasetColumnMapping['name'] || 'name',
           column_mapping: datasetColumnMapping,

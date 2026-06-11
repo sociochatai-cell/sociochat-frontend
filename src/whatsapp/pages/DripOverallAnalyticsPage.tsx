@@ -6,11 +6,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Users, Send, Eye, CheckCircle, BarChart as BarChartIcon, MessageCircle, TrendingUp, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { API_BASE_URL } from '@/config';
+import { API_ENDPOINT } from '@/config';
+import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
-const API_BASE = API_BASE_URL;
+const API_BASE = API_ENDPOINT;
 
 interface SummaryStats {
     total_campaigns: number;
@@ -44,9 +45,12 @@ const DripOverallAnalyticsPage = () => {
     const navigate = useNavigate();
 
     // Use workspace ID from localStorage
-    const [workspaceId] = useState<string | null>(
-        localStorage.getItem('sv_whatsapp_workspace_id') || localStorage.getItem('sv_selected_workspace_id')
-    );
+    const [workspaceId, setWorkspaceId] = useState<string | null>(getWorkspaceId());
+
+    useEffect(() => {
+        const id = getWorkspaceId();
+        if (id) setWorkspaceId(id);
+    }, []);
 
     const [stats, setStats] = useState<SummaryStats | null>(null);
     const [campaigns, setCampaigns] = useState<CampaignPerformance[]>([]);
@@ -57,7 +61,10 @@ const DripOverallAnalyticsPage = () => {
         if (!workspaceId) return;
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/drip-campaigns/analytics/overview?workspace_id=${workspaceId}`);
+            const res = await fetch(
+                `${API_BASE}/whatsapp/drip-campaigns/analytics/overview?workspace_id=${workspaceId}`,
+                { credentials: 'include' }
+            );
             if (!res.ok) throw new Error('Failed to fetch analytics');
             const data = await res.json();
             setStats(data.summary);
@@ -96,7 +103,7 @@ const DripOverallAnalyticsPage = () => {
                     </h1>
                     <p className="text-muted-foreground">Comprehensive performance overview across all drip campaigns</p>
                 </div>
-                <Button variant="outline" onClick={() => navigate('/dashboard/automations')}>
+                <Button variant="outline" onClick={() => navigate('/dashboard/drip')}>
                     Back to Drip Campaigns
                 </Button>
             </div>

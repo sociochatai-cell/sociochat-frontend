@@ -327,6 +327,13 @@ export async function uploadChatMedia(
     });
 
     const data = await res.json();
+    if (data.success && !data.public_url && data.url) {
+      data.public_url = data.url;
+    }
+    if (!res.ok && !data.error) {
+      data.success = false;
+      data.error = data.message || `Upload failed (${res.status})`;
+    }
     return data;
   } catch (error) {
     console.error('Error uploading media:', error);
@@ -484,4 +491,47 @@ export async function getWhatsAppAccounts(
   }
 
   return response.data || { success: false, accounts: [], count: 0 };
+}
+
+// ============================================================
+// Trust, verification, and operational health
+// ============================================================
+
+export async function getVerificationStatus(accountId: number, workspaceId?: string) {
+  const params = workspaceId ? `?workspace_id=${workspaceId}` : '';
+  const response = await waRequest<any>(
+    `${BASE_PATH}/accounts/${accountId}/verification-status${params}`,
+    '',
+    { method: 'GET' }
+  );
+  return response.ok ? response.data : null;
+}
+
+export async function getOperationalMetrics(accountId: number, workspaceId?: string) {
+  const params = workspaceId ? `?workspace_id=${workspaceId}` : '';
+  const response = await waRequest<any>(
+    `${BASE_PATH}/accounts/${accountId}/operational-metrics${params}`,
+    '',
+    { method: 'GET' }
+  );
+  return response.ok ? response.data : null;
+}
+
+export async function retryWebhook(accountId: number, workspaceId?: string, operatorSecret?: string) {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (operatorSecret) {
+    headers['Authorization'] = `Bearer ${operatorSecret}`;
+    headers['X-Operator-Secret'] = operatorSecret;
+  }
+  try {
+    const res = await fetch(`${API_ENDPOINT}/whatsapp/accounts/${accountId}/webhook/retry`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({ workspace_id: workspaceId, operator_secret: operatorSecret }),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, error: 'Network error' };
+  }
 }

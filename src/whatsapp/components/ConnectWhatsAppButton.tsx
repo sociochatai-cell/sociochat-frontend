@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, MessageCircle, Smartphone } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { API_BASE_URL } from "@/config";
+import { clearCache } from '@/whatsapp/hooks/useDataCache';
 
 // Facebook App ID and Config ID from environment (SocioChat App)
 const FB_APP_ID = import.meta.env.VITE_FB_APP_ID || '1616370899364211';
@@ -42,14 +43,52 @@ interface FBLoginResponse {
     authResponse?: {
         code?: string;
         accessToken?: string;
+        signedRequest?: string;
     };
     status: string;
 }
 
-// Session info captured from Embedded Signup postMessage
 interface EmbeddedSignupSessionData {
     phone_number_id?: string;
     waba_id?: string;
+}
+
+function extractEmbeddedSignupCode(authResponse?: FBLoginResponse['authResponse']): string | null {
+    if (!authResponse) return null;
+    const direct = (authResponse.code || '').trim();
+    if (direct) return direct;
+
+    const signed = (authResponse.signedRequest || '').trim();
+    if (!signed) return null;
+
+    try {
+        const payloadPart = signed.split('.')[1];
+        if (!payloadPart) return null;
+        const b64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+        const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+        const json = JSON.parse(atob(b64 + pad)) as { code?: string };
+        return (json.code || '').trim() || null;
+    } catch {
+        return null;
+    }
+}
+
+function waitForEmbeddedSignupAssets(
+    getAssets: () => EmbeddedSignupSessionData,
+    timeoutMs = 15000,
+): Promise<EmbeddedSignupSessionData> {
+    return new Promise((resolve) => {
+        const start = Date.now();
+        const tick = () => {
+            const current = getAssets();
+            if ((current.waba_id && current.phone_number_id) || Date.now() - start >= timeoutMs) {
+                resolve(current);
+                return;
+            }
+            window.setTimeout(tick, 300);
+        };
+        tick();
+    });
 }
 
 export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMode = false }: ConnectWhatsAppButtonProps) {
@@ -111,19 +150,26 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
     // Listen for Embedded Signup session info via postMessage
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
-            if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") {
+            if (typeof event.origin !== 'string' || !event.origin.endsWith('facebook.com')) {
                 return;
             }
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'WA_EMBEDDED_SIGNUP') {
-                    if (data.event === 'FINISH') {
-                        const { phone_number_id, waba_id } = data.data;
-                        console.log('[whatsapp] Embedded Signup FINISH — phone:', phone_number_id, 'waba:', waba_id);
-                        sessionDataRef.current = { phone_number_id, waba_id };
-                    } else if (data.event === 'CANCEL') {
+                    const eventName = data.event;
+                    if (
+                        eventName === 'FINISH' ||
+                        eventName === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'
+                    ) {
+                        const { phone_number_id, waba_id } = data.data || {};
+                        console.log('[whatsapp] Embedded Signup complete — phone:', phone_number_id, 'waba:', waba_id);
+                        sessionDataRef.current = {
+                            phone_number_id: phone_number_id ? String(phone_number_id) : undefined,
+                            waba_id: waba_id ? String(waba_id) : undefined,
+                        };
+                    } else if (eventName === 'CANCEL') {
                         console.warn('[whatsapp] Embedded Signup cancelled at step:', data.data?.current_step);
-                    } else if (data.event === 'ERROR') {
+                    } else if (eventName === 'ERROR') {
                         console.error('[whatsapp] Embedded Signup error:', data.data?.error_message);
                     }
                 }
@@ -169,49 +215,8 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
         const fbLoginCallback = (response: FBLoginResponse) => {
             console.log('[whatsapp] FB.login response:', response);
 
-            if (response.authResponse?.code) {
-                // Include WABA and phone IDs from session info if available
-                const { phone_number_id, waba_id } = sessionDataRef.current;
-
-                fetch(exchangeEndpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        code: response.authResponse.code,
-                        workspace_id: workspaceId,
-                        // Pass session info so backend doesn't need to discover via API
-                        ...(waba_id && { waba_id }),
-                        ...(phone_number_id && { phone_number_id }),
-                    }),
-                })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            toast({
-                                title: 'Success!',
-                                description: coexistenceMode
-                                    ? `WhatsApp Business App connected in coexistence mode (${data.mps_limit || 5} MPS)`
-                                    : 'WhatsApp account connected successfully!',
-                            });
-                            onConnected?.();
-                            const redirectPath = coexistenceMode ? '/dashboard/coexistence' : '/dashboard';
-                            setTimeout(() => { window.location.href = redirectPath; }, 500);
-                        } else {
-                            throw new Error(data.error || 'Failed to connect account');
-                        }
-                    })
-                    .catch((err: any) => {
-                        console.error('[whatsapp] Token exchange error:', err);
-                        toast({
-                            title: 'Connection Failed',
-                            description: err.message || 'Failed to exchange token',
-                            variant: 'destructive',
-                        });
-                    })
-                    .finally(() => {
-                        setLoading(false);
-                    });
-            } else {
+            const authCode = extractEmbeddedSignupCode(response.authResponse);
+            if (!authCode) {
                 console.log('[whatsapp] User cancelled or no auth code');
                 toast({
                     title: 'Cancelled',
@@ -219,7 +224,58 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
                     variant: 'destructive',
                 });
                 setLoading(false);
+                return;
             }
+
+            void (async () => {
+                const assets = await waitForEmbeddedSignupAssets(() => sessionDataRef.current);
+
+                try {
+                    const res = await fetch(exchangeEndpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            code: authCode,
+                            workspace_id: workspaceId,
+                            ...(assets.waba_id && { waba_id: assets.waba_id }),
+                            ...(assets.phone_number_id && { phone_number_id: assets.phone_number_id }),
+                        }),
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        clearCache('whatsapp_connection_');
+                        toast({
+                            title: 'Success!',
+                            description: coexistenceMode
+                                ? `WhatsApp Business App connected in coexistence mode (${data.account?.mps_limit || 20} MPS)`
+                                : 'WhatsApp account connected successfully!',
+                        });
+                        if (data.webhook_subscribed === false) {
+                            toast({
+                                title: 'Webhook Not Subscribed',
+                                description: `Your account was connected, but webhook subscription failed${data.webhook_error ? `: ${data.webhook_error}` : ''}. Incoming messages won't be received until the webhook is subscribed.`,
+                                variant: 'destructive',
+                            });
+                        }
+                        onConnected?.();
+                        const redirectPath = coexistenceMode ? '/dashboard/coexistence' : '/dashboard/hub';
+                        setTimeout(() => { window.location.href = redirectPath; }, 500);
+                    } else {
+                        throw new Error(data.error || 'Failed to connect account');
+                    }
+                } catch (err: unknown) {
+                    console.error('[whatsapp] Token exchange error:', err);
+                    toast({
+                        title: 'Connection Failed',
+                        description: err instanceof Error ? err.message : 'Failed to exchange token',
+                        variant: 'destructive',
+                    });
+                } finally {
+                    setLoading(false);
+                }
+            })();
         };
 
         // Launch Embedded Signup with Facebook Login (v3 ES format)
@@ -229,6 +285,10 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
             override_default_response_type: true,
             extras: {
                 version: 'v3',
+                // sessionInfoVersion makes Meta post WA_EMBEDDED_SIGNUP with
+                // waba_id + phone_number_id — required because the ES token
+                // can't discover the WABA via /me (no business_management).
+                sessionInfoVersion: '3',
                 setup: {
                     business: {
                         id: null, name: null, email: null,
@@ -242,7 +302,9 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
                     solutionID: null,
                     whatsAppBusinessAccount: { ids: null },
                 },
-                ...(coexistenceMode && { featureType: 'whatsapp_business_app_onboarding' }),
+                ...(coexistenceMode && {
+                    featureType: 'whatsapp_business_app_onboarding',
+                }),
             }
         });
     }, [workspaceId, fbReady, onConnected, coexistenceMode]);

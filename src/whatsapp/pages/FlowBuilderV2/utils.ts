@@ -26,13 +26,32 @@ export const generateId = (): string => {
   return `${Date.now().toString(36)}_${idCounter.toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 };
 
-export const generateScreenId = (title: string): string => {
-  // Convert title to uppercase snake_case, max 20 chars
-  return title
+const alphaSuffix = (index: number): string => {
+  let suffix = '';
+  let n = Math.max(0, Math.floor(index));
+  while (true) {
+    const remainder = n % 26;
+    suffix = String.fromCharCode(65 + remainder) + suffix;
+    n = Math.floor(n / 26);
+    if (n === 0) break;
+    n -= 1;
+  }
+  return suffix;
+};
+
+const toMetaSafeScreenId = (source: string, fallbackLabel: string): string => {
+  const candidate = (source || fallbackLabel || '')
     .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_|_$/g, '')
-    .slice(0, 20) || `SCREEN_${generateId().slice(0, 8)}`;
+    .replace(/[^A-Z_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+
+  const base = candidate || 'SCREEN';
+  return base === 'SUCCESS' ? 'SCREEN_SUCCESS' : base;
+};
+
+export const generateScreenId = (title: string): string => {
+  return toMetaSafeScreenId(title, 'SCREEN').slice(0, 20);
 };
 
 // =============================================================================
@@ -107,17 +126,79 @@ export const createDefaultStep = (isFirst: boolean = false, isFinal: boolean = f
 // VISUAL → META JSON TRANSFORM
 // =============================================================================
 
-export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowJSON => {
+const toMetaSafeFieldName = (fieldId: string, fieldLabel: string, index: number): string => {
+  const fromLabel = (fieldLabel || '')
+    .toLowerCase()
+    .replace(/[^a-z_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+
+  if (fromLabel && /^[a-z_]/.test(fromLabel)) {
+    return fromLabel;
+  }
+
+  const fromId = (fieldId || '')
+    .toLowerCase()
+    .replace(/[^a-z_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+
+  if (fromId && /^[a-z_]/.test(fromId)) {
+    return fromId;
+  }
+
+  return `field_${String.fromCharCode(97 + (index % 26))}`;
+};
+
+export interface MetaFlowExport {
+  flowJson: MetaFlowJSON;
+  entryScreenId: string;
+}
+
+export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
+  const stepIdToScreenId: Record<string, string> = {};
+  const usedScreenIds = new Set<string>();
+  const baseCounts: Record<string, number> = {};
+
+  state.steps.forEach((step, index) => {
+    const base = toMetaSafeScreenId(step.id, step.title || `STEP_${index + 1}`);
+    let next = base;
+    let attempt = baseCounts[base] ?? 0;
+    while (usedScreenIds.has(next)) {
+      next = `${base}_${alphaSuffix(attempt)}`;
+      attempt += 1;
+    }
+    baseCounts[base] = attempt;
+    usedScreenIds.add(next);
+    stepIdToScreenId[step.id] = next;
+  });
+
+  const fieldNameMap = new Map<string, string>();
+  const usedFieldNames = new Set<string>();
+  let fieldCounter = 0;
+
+  state.steps.forEach(step => {
+    step.fields.forEach(field => {
+      if (!field.id || fieldNameMap.has(field.id)) return;
+      let metaName = toMetaSafeFieldName(field.id, field.label, fieldCounter);
+      while (usedFieldNames.has(metaName)) {
+        fieldCounter++;
+        metaName = `${toMetaSafeFieldName(field.id, field.label, fieldCounter)}_${String.fromCharCode(97 + (fieldCounter % 26))}`;
+      }
+      usedFieldNames.add(metaName);
+      fieldNameMap.set(field.id, metaName);
+      fieldCounter++;
+    });
+  });
+
   const screens: MetaScreen[] = state.steps.map((step, index) => {
     const children: MetaComponent[] = [];
 
-    // Add title as TextHeading
     children.push({
       type: 'TextHeading',
       text: step.title
     });
 
-    // Add message as TextBody (if exists)
     if (step.message && step.message.trim()) {
       children.push({
         type: 'TextBody',
@@ -125,14 +206,12 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowJSON => {
       });
     }
 
-    // Convert fields to Meta components
     step.fields.forEach(field => {
-      children.push(fieldToMetaComponent(field));
+      children.push(fieldToMetaComponent(field, fieldNameMap));
     });
 
-    // Add Footer (button) for non-terminal screens
     if (!step.isFinal) {
-      const nextStep = step.button.goesToStepId 
+      const nextStep = step.button.goesToStepId
         ? state.steps.find(s => s.id === step.button.goesToStepId)
         : state.steps[index + 1];
 
@@ -143,16 +222,27 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowJSON => {
           name: 'navigate',
           next: {
             type: 'screen',
-            name: nextStep?.id || state.steps[index + 1]?.id || 'COMPLETE'
+            name: (nextStep?.id && stepIdToScreenId[nextStep.id])
+              || (state.steps[index + 1]?.id && stepIdToScreenId[state.steps[index + 1].id])
+              || 'COMPLETE'
           }
+        }
+      });
+    } else {
+      children.push({
+        type: 'Footer',
+        label: step.button.label || 'Done',
+        'on-click-action': {
+          name: 'complete',
+          payload: {}
         }
       });
     }
 
     return {
-      id: step.id,
+      id: stepIdToScreenId[step.id] || 'SCREEN',
       title: step.title,
-      terminal: step.isFinal,
+      ...(step.isFinal && { terminal: true }),
       ...(step.isFinal && { success: true }),
       layout: {
         type: 'SingleColumnLayout',
@@ -161,31 +251,44 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowJSON => {
     };
   });
 
-  // Auto-generate routing model
   const routing_model: Record<string, string[]> = {};
   state.steps.forEach((step, index) => {
+    const currentScreenId = stepIdToScreenId[step.id] || toMetaSafeScreenId(step.id, step.title || `STEP_${index + 1}`);
     if (step.isFinal) {
-      routing_model[step.id] = [];
+      routing_model[currentScreenId] = [];
     } else {
       const nextId = step.button.goesToStepId || state.steps[index + 1]?.id;
-      routing_model[step.id] = nextId ? [nextId] : [];
+      routing_model[currentScreenId] = nextId && stepIdToScreenId[nextId] ? [stepIdToScreenId[nextId]] : [];
     }
   });
 
+  const entryScreenId = state.steps[0]?.id
+    ? (stepIdToScreenId[state.steps[0].id] || 'WELCOME')
+    : 'WELCOME';
+
   return {
-    version: '5.0',
-    data_api_version: '3.0',
-    screens,
-    routing_model
+    flowJson: {
+      version: '7.3',
+      screens,
+      routing_model
+    },
+    entryScreenId
   };
 };
 
-const fieldToMetaComponent = (field: Field): MetaComponent => {
+const fieldToMetaComponent = (field: Field, fieldNameMap: Map<string, string>): MetaComponent => {
+  const metaName = fieldNameMap.get(field.id) || field.id;
   const baseProps = {
-    name: field.id,
+    name: metaName,
     label: field.label,
     required: field.required
   };
+
+  const safeDataSource = (options: string[] | undefined) =>
+    (options || []).map((opt, i) => ({
+      id: `opt_${String.fromCharCode(97 + (i % 26))}${i >= 26 ? String.fromCharCode(97 + Math.floor(i / 26)) : ''}`,
+      title: opt
+    }));
 
   switch (field.type) {
     case 'text':
@@ -202,19 +305,19 @@ const fieldToMetaComponent = (field: Field): MetaComponent => {
       return {
         type: 'Dropdown',
         ...baseProps,
-        'data-source': field.options?.map((opt, i) => ({ id: `opt_${i}`, title: opt })) || []
+        'data-source': safeDataSource(field.options)
       };
     case 'radio':
       return {
         type: 'RadioButtonsGroup',
         ...baseProps,
-        'data-source': field.options?.map((opt, i) => ({ id: `opt_${i}`, title: opt })) || []
+        'data-source': safeDataSource(field.options)
       };
     case 'checkbox':
       return {
         type: 'CheckboxGroup',
         ...baseProps,
-        'data-source': field.options?.map((opt, i) => ({ id: `opt_${i}`, title: opt })) || []
+        'data-source': safeDataSource(field.options)
       };
     case 'date':
       return { type: 'DatePicker', ...baseProps };

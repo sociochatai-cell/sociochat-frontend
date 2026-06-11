@@ -35,7 +35,7 @@ import {
   Info,
   ArrowLeft,
 } from 'lucide-react';
-import { API_BASE_URL } from '@/config';
+import { buildApiUrl } from '@/config';
 import { getWorkspaceId } from '../utils/workspaceContext';
 import { toast } from '@/hooks/use-toast';
 
@@ -52,10 +52,12 @@ interface Catalog {
 
 function catalogApi(path: string, options?: RequestInit) {
   const workspaceId = getWorkspaceId();
-  const url = new URL(`${API_BASE_URL}/api/whatsapp${path}`);
-  if (workspaceId) url.searchParams.set('workspace_id', workspaceId);
+  let url = buildApiUrl(`/api/whatsapp${path}`);
+  if (workspaceId) {
+    url += `${url.includes('?') ? '&' : '?'}workspace_id=${encodeURIComponent(workspaceId)}`;
+  }
 
-  return fetch(url.toString(), {
+  return fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -178,13 +180,40 @@ export function WhatsAppCatalog() {
         method: 'POST',
         body: JSON.stringify({ name: createName.trim(), description: createDescription.trim() }),
       });
-      if (ok) {
-        toast({ title: 'Catalog created', description: `New catalog ID: ${data.catalog_id}` });
+      if (ok && data.catalog_id) {
+        toast({
+          title: 'Catalog created',
+          description: `Catalog "${createName.trim()}" created. Connecting to WhatsApp...`,
+        });
         setCreateName('');
         setCreateDescription('');
+
+        const connectRes = await catalogApi('/catalogs/connect', {
+          method: 'POST',
+          body: JSON.stringify({ catalog_id: data.catalog_id }),
+        });
+
+        if (connectRes.ok) {
+          toast({
+            title: 'Catalog connected',
+            description: 'Your new catalog is linked to your WhatsApp account.',
+          });
+        } else {
+          toast({
+            title: 'Created but not connected',
+            description: connectRes.data.error || 'Connect it manually from the Connect Existing tab.',
+            variant: 'destructive',
+          });
+        }
+
         await Promise.all([fetchConnected(), fetchAvailable()]);
       } else {
-        toast({ title: 'Create failed', description: data.error, variant: 'destructive' });
+        if (data.needs_business_id) setNeedsBusinessId(true);
+        toast({
+          title: 'Create failed',
+          description: data.error || 'Could not create catalog',
+          variant: 'destructive',
+        });
       }
     } catch {
       toast({ title: 'Network error', variant: 'destructive' });

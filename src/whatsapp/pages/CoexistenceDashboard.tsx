@@ -48,6 +48,8 @@ import {
   type HistorySyncLog,
 } from '../api/coexistenceApi';
 import { API_BASE_URL } from '@/config';
+import { getWorkspaceId } from '../utils/workspaceContext';
+import { ConnectWhatsAppButton } from '../components/ConnectWhatsAppButton';
 
 // ── Helpers ──
 
@@ -129,8 +131,10 @@ export function CoexistenceDashboard({ accountId: propAccountId }: CoexistenceDa
   // Load coexistence accounts
   useEffect(() => {
     async function loadAccounts() {
+      const workspaceId = getWorkspaceId();
       try {
-        const res = await fetch(`${API_BASE_URL}/api/whatsapp/accounts`, {
+        const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+        const res = await fetch(`${API_BASE_URL}/api/whatsapp/accounts${qs}`, {
           credentials: 'include',
         });
         const data = await res.json();
@@ -233,6 +237,7 @@ export function CoexistenceDashboard({ accountId: propAccountId }: CoexistenceDa
 
   // ── No Coexistence Accounts ──
   if (!loading && accounts.length === 0) {
+    const workspaceId = getWorkspaceId() || '';
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4 p-8">
         <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -243,13 +248,11 @@ export function CoexistenceDashboard({ accountId: propAccountId }: CoexistenceDa
           Connect your existing WhatsApp Business App to use it alongside SocioChat's Cloud API.
           Keep your phone active while automating messages.
         </p>
-        <Button
-          onClick={() => navigate('/dashboard/settings')}
-          className="bg-emerald-600 hover:bg-emerald-700"
-        >
-          <Smartphone className="w-4 h-4 mr-2" />
-          Connect Existing Account
-        </Button>
+        <ConnectWhatsAppButton
+          workspaceId={workspaceId}
+          coexistenceMode
+          onConnected={() => window.location.reload()}
+        />
       </div>
     );
   }

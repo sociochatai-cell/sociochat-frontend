@@ -448,9 +448,8 @@ export function FlowBuilderV2() {
     try {
       setSaving(true);
 
-      // Convert visual model to Meta JSON
-      const flowJson = visualToMetaJSON(state);
-      const entryScreenId = state.steps[0]?.id || 'WELCOME';
+      // Convert visual model to Meta JSON (screen IDs sanitized for Meta)
+      const { flowJson, entryScreenId } = visualToMetaJSON(state);
 
       const payload = {
         account_id: accountId,

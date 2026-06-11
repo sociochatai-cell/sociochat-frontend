@@ -93,17 +93,26 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
             const data = await response.json();
             console.log('Upload response:', data);
 
-            if (data.success && data.media_handle) {
+            const mediaHandle = data.media_handle || data.handle;
+            const publicUrl = data.public_url || data.url;
+
+            if (data.success && (mediaHandle || publicUrl)) {
                 setUploadProgress(100);
                 onChange({
                     ...header,
                     type: 'image',
-                    imageUrl: previewUrl,
-                    mediaHandle: data.media_handle,
+                    imageUrl: publicUrl || previewUrl,
+                    mediaHandle: mediaHandle || header.mediaHandle,
                 });
-                setUploadError(null);
+                setUploadError(
+                    mediaHandle
+                        ? null
+                        : accountId
+                          ? 'Image uploaded to storage, but Meta media handle is missing. Reconnect WhatsApp and retry.'
+                          : null
+                );
             } else {
-                setUploadError(data.error || 'Upload failed. Please try again.');
+                setUploadError(data.error || data.message || 'Upload failed. Please try again.');
             }
         } catch (err) {
             console.error('Upload error:', err);
@@ -150,17 +159,26 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
             const data = await response.json();
             console.log('URL upload response:', data);
 
-            if (data.success && data.media_handle) {
+            const mediaHandle = data.media_handle || data.handle;
+            const publicUrl = data.public_url || data.url || urlInput;
+
+            if (data.success && (mediaHandle || publicUrl)) {
                 setUploadProgress(100);
                 onChange({
                     ...header,
                     type: 'image',
-                    imageUrl: urlInput,
-                    mediaHandle: data.media_handle,
+                    imageUrl: publicUrl,
+                    mediaHandle: mediaHandle || header.mediaHandle,
                 });
-                setUploadError(null);
+                setUploadError(
+                    mediaHandle
+                        ? null
+                        : accountId
+                          ? 'Image stored, but Meta media handle is missing. Reconnect WhatsApp and retry.'
+                          : null
+                );
             } else {
-                setUploadError(data.error || 'Failed to upload from URL');
+                setUploadError(data.error || data.message || 'Failed to upload from URL');
             }
         } catch (err) {
             console.error('URL upload error:', err);

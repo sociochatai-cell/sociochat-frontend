@@ -352,7 +352,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
                     workspace_id: workspaceId,
                     url: urlToCrawl,
                     max_pages: maxPages,
-                    use_playwright: true, // Always use AI Browser for better extraction
+                    use_playwright: false,
                 }),
             });
 

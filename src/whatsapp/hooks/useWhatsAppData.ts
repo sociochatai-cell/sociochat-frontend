@@ -67,6 +67,9 @@ export function useWhatsAppConnection(workspaceId: string) {
                         status: 'CONNECTED' as const,
                         account_summary: data.account_summary,
                     };
+                }
+                if (data.status === 'NO_ACCOUNT' || data.reason?.includes('No WhatsApp account')) {
+                    return { status: 'DISCONNECTED' as const };
                 } else if (data.status === 'DISCONNECTED' || data.message?.includes('not linked')) {
                     return { status: 'DISCONNECTED' as const };
                 } else {
@@ -114,7 +117,7 @@ export function useWhatsAppAnalytics(workspaceId: string, period: string = '7') 
             if (!workspaceId) return null;
 
             const res = await fetch(
-                `${API_BASE}/api/whatsapp/analytics/summary?workspace_id=${workspaceId}&period=${period}`,
+                `${API_BASE}/api/whatsapp/analytics/summary?workspace_id=${workspaceId}&days=${period}`,
                 { credentials: 'include' }
             );
             return await res.json();

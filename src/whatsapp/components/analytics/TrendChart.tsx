@@ -25,9 +25,11 @@ interface TrendChartProps {
     data: TrendData[];
     loading?: boolean;
     periodDays?: number;
+    periodLabel?: string;
 }
 
-export function TrendChart({ data, loading, periodDays = 7 }: TrendChartProps) {
+export function TrendChart({ data, loading, periodDays = 7, periodLabel }: TrendChartProps) {
+    const periodText = periodLabel || `the last ${periodDays} days`;
     // Format date for display
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
@@ -84,7 +86,7 @@ export function TrendChart({ data, loading, periodDays = 7 }: TrendChartProps) {
                         📈 Trend Analysis
                     </CardTitle>
                     <CardDescription>
-                        Message activity over the last {periodDays} days
+                        Message activity over {periodText}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-4">
@@ -112,7 +114,7 @@ export function TrendChart({ data, loading, periodDays = 7 }: TrendChartProps) {
                     📈 Trend Analysis
                 </CardTitle>
                 <CardDescription>
-                    Message activity over the last {periodDays} days
+                    Message activity over {periodText}
                 </CardDescription>
             </CardHeader>
             <CardContent className="pt-4">

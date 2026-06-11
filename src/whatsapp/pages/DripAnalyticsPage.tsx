@@ -6,10 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, RefreshCw, Send, CheckCheck, Eye, MessageSquare, StopCircle, Users, BarChart } from 'lucide-react';
 import { toast } from 'sonner';
-import { API_BASE_URL } from '@/config';
+import { API_ENDPOINT } from '@/config';
 import { ResponsiveContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line } from 'recharts';
 
-const API_BASE = API_BASE_URL;
+const API_BASE = API_ENDPOINT;
 
 interface SummaryStats {
     enrollment: {
@@ -69,25 +69,25 @@ export default function DripAnalyticsPage() {
             // (Assuming existing endpoint or using simplified check. For now just fetching analytics)
 
             // 1. Summary
-            const resSummary = await fetch(`${API_BASE}/api/whatsapp/drip-campaigns/${id}/analytics/summary`);
+            const resSummary = await fetch(`${API_BASE}/whatsapp/drip-campaigns/${id}/analytics/summary`, { credentials: 'include' });
             if (resSummary.ok) {
                 setSummary(await resSummary.json());
             }
 
             // 2. Daily
-            const resDaily = await fetch(`${API_BASE}/api/whatsapp/drip-campaigns/${id}/analytics/daily`);
+            const resDaily = await fetch(`${API_BASE}/whatsapp/drip-campaigns/${id}/analytics/daily`, { credentials: 'include' });
             if (resDaily.ok) {
                 setDailyStats(await resDaily.json());
             }
 
             // 3. Funnel
-            const resFunnel = await fetch(`${API_BASE}/api/whatsapp/drip-campaigns/${id}/analytics/funnel`);
+            const resFunnel = await fetch(`${API_BASE}/whatsapp/drip-campaigns/${id}/analytics/funnel`, { credentials: 'include' });
             if (resFunnel.ok) {
                 setFunnel(await resFunnel.json());
             }
 
             // 4. Enrollments (first page)
-            const resEnrollments = await fetch(`${API_BASE}/api/whatsapp/drip-campaigns/${id}/analytics/enrollments?per_page=10`);
+            const resEnrollments = await fetch(`${API_BASE}/whatsapp/drip-campaigns/${id}/analytics/enrollments?per_page=10`, { credentials: 'include' });
             if (resEnrollments.ok) {
                 const data = await resEnrollments.json();
                 setEnrollments(data.enrollments);

@@ -512,6 +512,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
 
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('column_mapping', '{}');
 
         try {
             setUploadingCSV(true);

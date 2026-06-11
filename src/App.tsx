@@ -24,7 +24,6 @@ const DripCampaignsSection = lazy(() => import('./whatsapp/pages/DripCampaignsSe
 const WhatsAppSetupPage = lazy(() => import('./whatsapp_automation/pages/WhatsAppSetupPage'));
 
 // Default exports — import directly
-const WhatsAppAnalytics = lazy(() => import('./whatsapp/pages/WhatsAppAnalytics'));
 const WhatsAppAutomation = lazy(() => import('./whatsapp/pages/WhatsAppAutomation'));
 const WhatsAppContacts = lazy(() => import('./whatsapp/pages/WhatsAppContacts'));
 const WhatsAppDatasets = lazy(() => import('./whatsapp/pages/WhatsAppDatasets'));
@@ -44,6 +43,13 @@ const InteractiveAutomationsList = lazy(() => import('./whatsapp/pages/Interacti
 
 // Coexistence Dashboard
 const CoexistenceDashboard = lazy(() => import('./whatsapp/pages/CoexistenceDashboard').then(m => ({ default: m.CoexistenceDashboard ?? m.default })));
+const BulkMessaging = lazy(() => import('./pages/BulkMessaging'));
+const WhatsAppDashboard = lazy(() => import('./pages/WhatsAppDashboard'));
+const WhatsAppCatalog = lazy(() => import('./whatsapp/pages/WhatsAppCatalog').then(m => ({ default: m.WhatsAppCatalog ?? m.default })));
+const CreateCTWA = lazy(() => import('./whatsapp_automation/pages/CreateCTWA').then(m => ({ default: m.CreateCTWA })));
+const ConversationsInbox = lazy(() => import('./whatsapp_automation/pages/ConversationsInbox'));
+const AdCreatorWizard = lazy(() => import('./ctwa/pages/AdCreatorWizard'));
+const CampaignsListPage = lazy(() => import('./ctwa/pages/CampaignsListPage'));
 
 /* ── Loading fallback ── */
 function PageLoader() {
@@ -77,10 +83,14 @@ export default function App() {
       {/* Dashboard — layout handles its own Suspense + transitions */}
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<DashboardHome />} />
+        <Route path="hub" element={<WhatsAppDashboard />} />
 
         {/* Inbox & Test Console */}
         <Route path="inbox" element={<WhatsAppInbox />} />
+        <Route path="conversations" element={<ConversationsInbox />} />
         <Route path="send" element={<WhatsAppTestConsole />} />
+        <Route path="bulk" element={<BulkMessaging />} />
+        <Route path="bulk/:id" element={<BulkMessaging />} />
 
         {/* Templates — List page first, then builder sub-routes */}
         <Route path="templates" element={<TemplateManager />} />
@@ -112,8 +122,8 @@ export default function App() {
         <Route path="flows/v2/new" element={<FlowBuilderV2 />} />
         <Route path="flows/v1/new" element={<FlowBuilder />} />
 
-        {/* Analytics & Tracking */}
-        <Route path="analytics" element={<WhatsAppAnalytics />} />
+        {/* Analytics (hub) & Tracking */}
+        <Route path="analytics" element={<WhatsAppDashboard />} />
         <Route path="tracking" element={<TrackingAnalytics />} />
 
         {/* Contacts & Datasets */}
@@ -130,8 +140,16 @@ export default function App() {
         {/* Coexistence Dashboard */}
         <Route path="coexistence" element={<CoexistenceDashboard />} />
 
+        {/* Catalog & CTWA */}
+        <Route path="catalog" element={<WhatsAppCatalog />} />
+        <Route path="campaign/create" element={<CreateCTWA />} />
+
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
+
+      {/* CTWA standalone routes */}
+      <Route path="/ctwa/create" element={<Suspense fallback={<PageLoader />}><AdCreatorWizard /></Suspense>} />
+      <Route path="/ctwa/campaigns" element={<Suspense fallback={<PageLoader />}><CampaignsListPage /></Suspense>} />
 
       {/* Global Catch All */}
       <Route path="*" element={<Navigate to="/" replace />} />
