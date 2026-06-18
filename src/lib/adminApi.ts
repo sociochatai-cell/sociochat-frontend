@@ -213,4 +213,22 @@ export const adminApi = {
         });
         return res.json();
     },
+
+    getUserFeatures: async (userId: number) => {
+        const res = await fetch(`${API_BASE_URL}/api/subscription/admin/users/${userId}/features`, {
+            credentials: 'include',
+            headers: adminHeaders(),
+        });
+        return res.json();
+    },
+
+    setUserFeatures: async (userId: number, overrides: Record<string, boolean | null>) => {
+        const res = await fetch(`${API_BASE_URL}/api/subscription/admin/users/${userId}/features`, {
+            method: 'PUT',
+            credentials: 'include',
+            headers: adminHeaders(),
+            body: JSON.stringify({ overrides }),
+        });
+        return res.json();
+    },
 };
