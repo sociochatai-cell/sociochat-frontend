@@ -76,7 +76,7 @@ const AgentChatPanel: React.FC = () => {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 100, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-            className="fixed right-6 top-[15%] bottom-[15%] z-50 w-[400px] flex flex-col rounded-3xl shadow-2xl border border-gray-200 overflow-hidden"
+            className="fixed inset-x-0 bottom-0 top-auto sm:inset-x-auto sm:right-4 sm:top-[12%] sm:bottom-[12%] z-50 w-full sm:w-[min(400px,calc(100vw-2rem))] max-h-[min(85dvh,720px)] sm:max-h-none flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl border border-gray-200 overflow-hidden"
             style={{ background: '#fafbfc' }}
           >
             {/* Header */}

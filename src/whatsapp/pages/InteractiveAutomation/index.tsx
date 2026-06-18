@@ -34,10 +34,19 @@ import { toast } from '@/hooks/use-toast';
 import { API_BASE_URL } from '@/config';
 
 // Local imports
-import { TriggerNode, MessageNode, TemplateNode, EndNode } from './nodes';
+import { TriggerNode, MessageNode, TemplateNode, InputNode, ApiNode, EndNode } from './nodes';
 import { NodeEditor } from './panels';
 import { TemplateSelectPanel } from './panels/TemplateSelectPanel';
 import { FlowToolbar } from './FlowToolbar';
+import {
+    AiFlowGeneratorDialog,
+    draftToAutomationFlow,
+    type GeneratedFlowDraft,
+} from './components/AiFlowGeneratorDialog';
+import {
+    FlowVariablesDialog,
+    type FlowVariablesState,
+} from './components/FlowVariablesDialog';
 import {
     generateId,
     generateButtonId,
@@ -57,6 +66,8 @@ import {
 import {
     createEmptyFlow,
     createDefaultTriggerNode,
+    createDefaultInputNode,
+    createDefaultApiNode,
     EDGE_COLORS,
 } from './constants';
 import type {
@@ -76,6 +87,8 @@ const nodeTypes: NodeTypes = {
     trigger: TriggerNode,
     message: MessageNode,
     template: TemplateNode,
+    input: InputNode,
+    api: ApiNode,
     end: EndNode,
 };
 
@@ -168,6 +181,10 @@ export function InteractiveAutomation() {
     // Template selector modal state
     const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
 
+    // AI generator & flow variables dialog state
+    const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
+    const [isVariablesDialogOpen, setIsVariablesDialogOpen] = useState(false);
+
     // ReactFlow instance ref for viewport access
     const reactFlowInstance = React.useRef<any>(null);
 
@@ -224,6 +241,8 @@ export function InteractiveAutomation() {
                     nodes: data.automation.nodes || [],
                     edges: data.automation.edges || [],
                     trigger: data.automation.trigger || { type: 'any_reply', enabled: true },
+                    variables: data.automation.variables || {},
+                    flowConfig: data.automation.flow_config || data.automation.flowConfig || {},
                     status: data.automation.status || 'draft',
                     createdAt: data.automation.created_at,
                     updatedAt: data.automation.updated_at,
@@ -398,6 +417,61 @@ export function InteractiveAutomation() {
         }, 50);
     }, [flow]);
 
+    // Compute a position near the current viewport center (mirrors existing add-node UX)
+    const getViewportCenterPosition = useCallback((): { x: number; y: number } => {
+        if (reactFlowInstance.current) {
+            const viewport = reactFlowInstance.current.getViewport();
+            const zoom = viewport.zoom || 1;
+            const containerWidth = 800;
+            const containerHeight = 600;
+            return {
+                x: (-viewport.x + containerWidth / 2) / zoom,
+                y: (-viewport.y + containerHeight / 2) / zoom,
+            };
+        }
+        return { x: 300, y: 300 };
+    }, []);
+
+    const handleAddInputNode = useCallback(() => {
+        const position = getViewportCenterPosition();
+        const newNode = createDefaultInputNode(generateId('input'), position);
+        const updatedFlow = { ...flow, nodes: [...flow.nodes, newNode] };
+        setFlow(updatedFlow);
+        setNodes(toReactFlowNodes(updatedFlow.nodes));
+        setIsDirty(true);
+        setSelectedNodeId(newNode.id);
+
+        setTimeout(() => {
+            if (reactFlowInstance.current) {
+                reactFlowInstance.current.setCenter(
+                    newNode.position.x + 160,
+                    newNode.position.y + 110,
+                    { zoom: 1, duration: 500 }
+                );
+            }
+        }, 50);
+    }, [flow, getViewportCenterPosition, setNodes]);
+
+    const handleAddApiNode = useCallback(() => {
+        const position = getViewportCenterPosition();
+        const newNode = createDefaultApiNode(generateId('api'), position);
+        const updatedFlow = { ...flow, nodes: [...flow.nodes, newNode] };
+        setFlow(updatedFlow);
+        setNodes(toReactFlowNodes(updatedFlow.nodes));
+        setIsDirty(true);
+        setSelectedNodeId(newNode.id);
+
+        setTimeout(() => {
+            if (reactFlowInstance.current) {
+                reactFlowInstance.current.setCenter(
+                    newNode.position.x + 160,
+                    newNode.position.y + 120,
+                    { zoom: 1, duration: 500 }
+                );
+            }
+        }, 50);
+    }, [flow, getViewportCenterPosition, setNodes]);
+
     const handleAddTemplateNode = useCallback(() => {
         if (!accountId) {
             toast({
@@ -481,6 +555,61 @@ export function InteractiveAutomation() {
         setIsDirty(true);
         toast({ title: 'Layout applied', description: 'Nodes have been rearranged' });
     }, [flow]);
+
+    // Apply an AI-generated flow draft to the current canvas
+    const handleAiDraftApplied = useCallback(
+        (draft: GeneratedFlowDraft) => {
+            const acct = accountId || flow.accountId || 0;
+            const nextFlow = draftToAutomationFlow(draft, acct, workspaceId, flow.id);
+            const layouted = calculateAutoLayout(nextFlow);
+
+            setFlow(layouted);
+            setNodes(toReactFlowNodes(layouted.nodes));
+            setEdges(toReactFlowEdges(layouted.edges));
+            setSelectedNodeId(null);
+            setIsDirty(true);
+
+            // Prompt for the API token if the draft needs one but none is set
+            if (!layouted.variables?.flow_api_token) {
+                const usesApiToken = JSON.stringify(layouted.nodes).includes('{{flow_api_token}}');
+                if (usesApiToken) setIsVariablesDialogOpen(true);
+            }
+
+            toast({
+                title: 'AI flow applied',
+                description: 'Review the generated nodes, set any flow variables, then save.',
+            });
+        },
+        [accountId, flow.accountId, flow.id, workspaceId, setNodes, setEdges]
+    );
+
+    // Persist flow variables / default values from the Flow Variables dialog
+    const handleFlowVariablesSave = useCallback(
+        (next: FlowVariablesState) => {
+            setFlow((prev) => ({
+                ...prev,
+                variables: next.variables,
+                flowConfig: {
+                    ...prev.flowConfig,
+                    variableDefaults: next.variableDefaults,
+                },
+            }));
+            setIsDirty(true);
+            toast({
+                title: 'Flow variables updated',
+                description: 'Save the flow to persist tokens and defaults.',
+            });
+        },
+        []
+    );
+
+    const flowVariablesState = useMemo(
+        (): FlowVariablesState => ({
+            variables: flow.variables || {},
+            variableDefaults: flow.flowConfig?.variableDefaults || {},
+        }),
+        [flow.variables, flow.flowConfig]
+    );
 
     const handleUpdateNode = useCallback(
         (updates: Partial<FlowNode['data']>) => {
@@ -573,6 +702,8 @@ export function InteractiveAutomation() {
                 nodes: flow.nodes,
                 edges: flow.edges,
                 trigger: trigger,  // Use extracted trigger, not flow.trigger
+                variables: flow.variables || {},
+                flow_config: flow.flowConfig || {},
             };
 
             const url = flow.id
@@ -709,7 +840,11 @@ export function InteractiveAutomation() {
                 onAddMessageNode={handleAddMessageNode}
                 onAddTemplateNode={handleAddTemplateNode}
                 onAddEndNode={handleAddEndNode}
+                onAddInputNode={handleAddInputNode}
+                onAddApiNode={handleAddApiNode}
                 onAutoLayout={handleAutoLayout}
+                onOpenAiGenerator={() => setIsAiDialogOpen(true)}
+                onOpenFlowVariables={() => setIsVariablesDialogOpen(true)}
             />
 
             {/* Main Content */}
@@ -781,6 +916,9 @@ export function InteractiveAutomation() {
                             onRemoveButton={
                                 selectedNode.type === 'message' ? handleRemoveButton : undefined
                             }
+                            flowVariables={flow.variables}
+                            automationId={flow.id}
+                            onOpenFlowVariables={() => setIsVariablesDialogOpen(true)}
                         />
                     </div>
                 )}
@@ -796,6 +934,22 @@ export function InteractiveAutomation() {
                     workspaceId={workspaceId}
                 />
             )}
+
+            {/* AI Flow Generator Dialog */}
+            <AiFlowGeneratorDialog
+                open={isAiDialogOpen}
+                onOpenChange={setIsAiDialogOpen}
+                workspaceId={workspaceId}
+                onGenerated={handleAiDraftApplied}
+            />
+
+            {/* Flow Variables Dialog */}
+            <FlowVariablesDialog
+                open={isVariablesDialogOpen}
+                onOpenChange={setIsVariablesDialogOpen}
+                value={flowVariablesState}
+                onSave={handleFlowVariablesSave}
+            />
         </div>
     );
 }

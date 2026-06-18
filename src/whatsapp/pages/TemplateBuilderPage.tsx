@@ -14,6 +14,7 @@ import {
     validateTemplate,
     buildTemplateApiPayload,
     suggestionToState,
+    templateApiToState,
     TemplateSuggestion,
 } from '../utils/templateUtils';
 import { setStoredAccountId } from '../utils/accountContext';
@@ -82,19 +83,7 @@ export function TemplateBuilderPage() {
                     const data = await res.json();
 
                     if (data.success && data.template) {
-                        const tpl = data.template;
-                        setState({
-                            id: tpl.id,
-                            name: tpl.name || '',
-                            category: tpl.category || 'UTILITY',
-                            language: tpl.language || 'en_US',
-                            status: tpl.status || 'DRAFT',
-                            rejectionReason: tpl.rejection_reason,
-                            header: { type: 'text', text: '' }, // Default to text header
-                            body: tpl.body_text || '',
-                            footer: tpl.footer_text || '',
-                            buttons: [], // TODO: Parse from components
-                        });
+                        setState(templateApiToState(data.template));
                     }
                 }
                 // Pre-fill from suggestion
@@ -212,29 +201,29 @@ export function TemplateBuilderPage() {
     }
 
     return (
-        <div className="h-screen flex flex-col bg-background">
+        <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
             {/* Page Header */}
-            <header className="border-b bg-card px-6 py-3 flex items-center gap-4">
+            <header className="border-b bg-card px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-4 shrink-0 min-w-0">
                 <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => navigate(-1)}
-                    className="gap-2"
+                    className="gap-2 shrink-0"
                 >
                     <ArrowLeft className="w-4 h-4" />
-                    Back
+                    <span className="hidden sm:inline">Back</span>
                 </Button>
-                <div className="h-6 w-px bg-border" />
-                <h1 className="text-lg font-semibold flex items-center gap-2">
-                    <img src={logo} alt="Sociovia" className="w-5 h-5" />
-                    {id ? 'Edit Template' : suggestionId ? 'Create from Suggestion' : 'Create Template'}
+                <div className="h-6 w-px bg-border hidden sm:block" />
+                <h1 className="text-base sm:text-lg font-semibold flex items-center gap-2 truncate min-w-0">
+                    <img src={logo} alt="Sociovia" className="w-5 h-5 shrink-0" />
+                    <span className="truncate">{id ? 'Edit Template' : suggestionId ? 'Create from Suggestion' : 'Create Template'}</span>
                 </h1>
             </header>
 
             {/* Two-panel layout */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
                 {/* Left Panel - Form */}
-                <div className="w-1/2 border-r overflow-hidden">
+                <div className="w-full lg:w-1/2 border-b lg:border-b-0 lg:border-r overflow-hidden min-h-0 flex-1 lg:flex-none">
                     <TemplateForm
                         state={state}
                         onChange={handleChange}
@@ -247,7 +236,7 @@ export function TemplateBuilderPage() {
                 </div>
 
                 {/* Right Panel - Preview */}
-                <div className="w-1/2 bg-muted/30 overflow-hidden">
+                <div className="w-full lg:w-1/2 bg-muted/30 overflow-hidden min-h-[240px] lg:min-h-0 shrink-0 lg:shrink">
                     <TemplateLivePreview state={state} />
                 </div>
             </div>

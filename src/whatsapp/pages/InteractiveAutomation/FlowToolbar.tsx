@@ -17,7 +17,11 @@ import {
     LayoutGrid,
     MessageCircle,
     FileText,
-    Flag
+    Flag,
+    Keyboard,
+    Plug,
+    Sparkles,
+    KeyRound
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +48,11 @@ interface FlowToolbarProps {
     onAddTemplateNode: () => void;
     onAddEndNode: () => void;
     onAutoLayout: () => void;
+    // Optional additive entries (Input / API nodes + AI / Flow Variables)
+    onAddInputNode?: () => void;
+    onAddApiNode?: () => void;
+    onOpenAiGenerator?: () => void;
+    onOpenFlowVariables?: () => void;
 }
 
 export function FlowToolbar({
@@ -60,6 +69,10 @@ export function FlowToolbar({
     onAddTemplateNode,
     onAddEndNode,
     onAutoLayout,
+    onAddInputNode,
+    onAddApiNode,
+    onOpenAiGenerator,
+    onOpenFlowVariables,
 }: FlowToolbarProps) {
     const navigate = useNavigate();
 
@@ -68,30 +81,31 @@ export function FlowToolbar({
     const hasErrors = errorCount > 0;
 
     return (
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 flex-shrink-0">
+        <header className="min-h-14 bg-white border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between px-3 sm:px-4 py-2 sm:py-0 gap-2 flex-shrink-0">
             {/* Left Section */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                 <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => navigate('/dashboard/automation')}
+                    className="shrink-0"
                 >
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back
+                    <ArrowLeft className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Back</span>
                 </Button>
 
                 {/* Flow Name */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                     <Input
                         value={flowName}
                         onChange={(e) => onNameChange(e.target.value)}
-                        className="w-52 h-8 font-medium border-0 hover:bg-gray-100 focus-visible:ring-1"
+                        className="w-full max-w-[10rem] sm:max-w-xs h-8 font-medium border-0 hover:bg-gray-100 focus-visible:ring-1"
                         placeholder="Automation name..."
                     />
                 </div>
 
                 {/* Status Badges */}
-                <div className="flex items-center gap-2">
+                <div className="hidden md:flex items-center gap-2 shrink-0">
                     {flowStatus === 'published' && (
                         <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
                             Published
@@ -109,7 +123,7 @@ export function FlowToolbar({
             </div>
 
             {/* Right Section */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1 sm:mx-0 sm:px-0">
                 {/* Validation Status */}
                 {hasErrors ? (
                     <Badge variant="destructive" className="gap-1">
@@ -145,6 +159,18 @@ export function FlowToolbar({
                             <FileText className="w-4 h-4 mr-2 text-blue-600" />
                             Template Node
                         </DropdownMenuItem>
+                        {onAddInputNode && (
+                            <DropdownMenuItem onClick={onAddInputNode}>
+                                <Keyboard className="w-4 h-4 mr-2 text-sky-600" />
+                                Input Node
+                            </DropdownMenuItem>
+                        )}
+                        {onAddApiNode && (
+                            <DropdownMenuItem onClick={onAddApiNode}>
+                                <Plug className="w-4 h-4 mr-2 text-violet-600" />
+                                API Node
+                            </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={onAddEndNode}>
                             <Flag className="w-4 h-4 mr-2 text-amber-600" />
                             End Node
@@ -152,8 +178,24 @@ export function FlowToolbar({
                     </DropdownMenuContent>
                 </DropdownMenu>
 
+                {/* AI Flow Generator */}
+                {onOpenAiGenerator && (
+                    <Button variant="outline" size="sm" onClick={onOpenAiGenerator} className="shrink-0">
+                        <Sparkles className="w-4 h-4 sm:mr-2 text-violet-600" />
+                        <span className="hidden sm:inline">Do with AI</span>
+                    </Button>
+                )}
+
+                {/* Flow Variables */}
+                {onOpenFlowVariables && (
+                    <Button variant="outline" size="sm" onClick={onOpenFlowVariables} className="shrink-0">
+                        <KeyRound className="w-4 h-4 sm:mr-2 text-violet-600" />
+                        <span className="hidden sm:inline">Variables</span>
+                    </Button>
+                )}
+
                 {/* Auto Layout */}
-                <Button variant="outline" size="sm" onClick={onAutoLayout}>
+                <Button variant="outline" size="sm" onClick={onAutoLayout} className="shrink-0 hidden sm:inline-flex">
                     <LayoutGrid className="w-4 h-4 mr-2" />
                     Auto Layout
                 </Button>
@@ -164,6 +206,7 @@ export function FlowToolbar({
                     size="sm"
                     onClick={onSave}
                     disabled={isSaving || !isDirty}
+                    className="shrink-0"
                 >
                     {isSaving ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -178,7 +221,7 @@ export function FlowToolbar({
                     size="sm"
                     onClick={onPublish}
                     disabled={isPublishing || hasErrors || flowStatus === 'published'}
-                    className="bg-green-600 hover:bg-green-700"
+                    className="bg-green-600 hover:bg-green-700 shrink-0"
                 >
                     {isPublishing ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />

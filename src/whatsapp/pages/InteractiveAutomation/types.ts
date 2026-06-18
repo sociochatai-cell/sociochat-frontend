@@ -15,7 +15,8 @@ export type ButtonActionType =
     | 'call'
     | 'location'
     | 'catalog'
-    | 'product_list';
+    | 'product_list'
+    | 'send_document'; // Send PDF/document when button is clicked
 
 export interface QuickReplyAction {
     type: 'quick_reply';
@@ -47,13 +48,22 @@ export interface ProductListAction {
     productIds?: string[];
 }
 
+// Send document action - sends a file when button is clicked
+export interface SendDocumentAction {
+    type: 'send_document';
+    documentUrl: string; // URL of the document in DigitalOcean Spaces
+    documentFilename?: string; // Display filename
+    documentCaption?: string; // Optional caption text
+}
+
 export type ButtonAction =
     | QuickReplyAction
     | UrlAction
     | CallAction
     | LocationAction
     | CatalogAction
-    | ProductListAction;
+    | ProductListAction
+    | SendDocumentAction;
 
 
 export interface MessageButton {
@@ -66,7 +76,7 @@ export interface MessageButton {
 // NODE TYPES
 // =============================================================================
 
-export type NodeType = 'trigger' | 'message' | 'template' | 'end';
+export type NodeType = 'trigger' | 'message' | 'template' | 'end' | 'input' | 'api';
 
 export interface Position {
     x: number;
@@ -87,6 +97,8 @@ export interface TriggerNode extends BaseNode {
         triggerType: TriggerType;
         templateId?: string; // If trigger is "specific_template"
         keywords?: string[]; // Optional keyword triggers
+        firstMessageOnly?: boolean; // If true, only trigger on first message from customer
+        oneTimeOnly?: boolean; // If true, trigger only once per customer per automation
     };
 }
 
@@ -110,7 +122,98 @@ export interface EndNode extends BaseNode {
     };
 }
 
-export type FlowNode = TriggerNode | MessageNode | TemplateNode | EndNode;
+// =============================================================================
+// INPUT NODE
+// =============================================================================
+
+// Input node - captures free-text user response
+export type ValidationType = 'text' | 'number' | 'email' | 'phone' | 'regex' | 'enum' | 'pincode';
+
+export interface InputNode extends BaseNode {
+    type: 'input';
+    data: {
+        body: string; // The question to ask the user
+        field: string; // The key to store the answer (e.g., 'name', 'age')
+        validationType: ValidationType;
+
+        // Validation constraints
+        minLength?: number;
+        maxLength?: number;
+        minValue?: number;
+        maxValue?: number;
+        regexPattern?: string;
+        enumValues?: string[]; // List of allowed options
+
+        errorMessage?: string; // Custom error message
+
+        targetNodeId: string | null; // Next node after successful input
+    };
+}
+
+// =============================================================================
+// API NODE
+// =============================================================================
+
+export interface ApiKeyValue {
+    key: string;
+    value: string;
+    enabled?: boolean;
+}
+
+export interface FlowConfig {
+    variableDefaults?: Record<string, string>;
+    buttonCaptureRules?: unknown[];
+}
+
+export interface ApiButtonCaptureRule {
+    matchType?: 'uuid' | 'exact' | 'regex' | 'any';
+    field?: string;
+    value?: string;
+    setValue?: string;
+    pattern?: string;
+    valueFrom?: 'button_id';
+}
+
+export interface ApiBranchRule {
+    id: string;
+    path?: string;
+    operator?: 'equals' | 'not_equals' | 'contains' | 'exists' | 'not_exists' | 'gt' | 'lt';
+    value?: string;
+}
+
+export interface ApiNode extends BaseNode {
+    type: 'api';
+    data: {
+        label?: string;
+        method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+        url: string;
+        headers?: ApiKeyValue[];
+        queryParams?: ApiKeyValue[];
+        bodyType?: 'none' | 'json' | 'form';
+        body?: string;
+        timeoutSec?: number;
+        responseFormat?: 'auto' | 'json' | 'text' | 'xml';
+        storeAs?: string;
+        branches?: ApiBranchRule[];
+        output?: {
+            onSuccess?: {
+                mode?: 'auto' | 'text' | 'image' | 'document' | 'buttons' | 'raw';
+                textPath?: string;
+                imagePath?: string;
+                documentPath?: string;
+                captionPath?: string;
+                documentFilenamePath?: string;
+                buttonsPath?: string;
+                fallbackText?: string;
+                text?: string;
+            };
+            onError?: { text?: string };
+        };
+        buttonCapture?: ApiButtonCaptureRule[];
+    };
+}
+
+export type FlowNode = TriggerNode | MessageNode | TemplateNode | EndNode | InputNode | ApiNode;
 
 // Template button definition (from Meta-approved template)
 export interface TemplateButton {
@@ -187,6 +290,8 @@ export interface AutomationFlow {
     nodes: FlowNode[];
     edges: FlowEdge[];
     trigger: TriggerConfig;
+    variables?: Record<string, string>;
+    flowConfig?: FlowConfig;
 
     // Metadata
     status: FlowStatus;
@@ -209,6 +314,7 @@ export interface ValidationIssue {
     severity: ValidationSeverity;
     nodeId?: string;
     buttonId?: string;
+    handleId?: string;
     message: string;
     autoFixable: boolean;
 }
@@ -239,6 +345,8 @@ export interface SaveFlowRequest {
     nodes: FlowNode[];
     edges: FlowEdge[];
     trigger: TriggerConfig;
+    variables?: Record<string, string>;
+    flow_config?: FlowConfig;
 }
 
 export interface SaveFlowResponse {

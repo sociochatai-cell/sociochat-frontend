@@ -3,7 +3,7 @@
 // WhatsApp-style message bubble preview that updates in real-time
 
 import { TemplateState } from '../../utils/templateUtils';
-import { Image, Phone, ExternalLink, FileText } from 'lucide-react';
+import { Image, Phone, ExternalLink, FileText, Video, MapPin, Workflow, Copy, PhoneCall, Store } from 'lucide-react';
 
 interface TemplateLivePreviewProps {
     state: TemplateState;
@@ -107,6 +107,29 @@ export function TemplateLivePreview({ state }: TemplateLivePreviewProps) {
                                 </div>
                             )}
 
+                            {state.header.type === 'video' && (
+                                <div className="bg-gray-200 h-40 flex items-center justify-center relative overflow-hidden">
+                                    <div className="flex flex-col items-center gap-2 text-gray-600">
+                                        <Video className="w-8 h-8" />
+                                        <span className="text-xs">Video header</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {state.header.type === 'document' && (
+                                <div className="bg-gray-100 h-24 flex items-center justify-center gap-2 text-gray-700 border-b border-gray-200/50">
+                                    <FileText className="w-5 h-5" />
+                                    <span className="text-sm font-medium">Document header</span>
+                                </div>
+                            )}
+
+                            {state.header.type === 'location' && (
+                                <div className="bg-gray-100 h-24 flex items-center justify-center gap-2 text-gray-700 border-b border-gray-200/50">
+                                    <MapPin className="w-5 h-5" />
+                                    <span className="text-sm font-medium">Location header</span>
+                                </div>
+                            )}
+
                             {/* Body */}
                             {state.body && (
                                 <div className="px-3 py-2">
@@ -144,7 +167,11 @@ export function TemplateLivePreview({ state }: TemplateLivePreviewProps) {
                                         >
                                             {btn.type === 'url' && <ExternalLink className="w-4 h-4" />}
                                             {btn.type === 'phone' && <Phone className="w-4 h-4" />}
-                                            {btn.text || 'Button'}
+                                            {btn.type === 'flow' && <Workflow className="w-4 h-4" />}
+                                            {btn.type === 'copy_code' && <Copy className="w-4 h-4" />}
+                                            {btn.type === 'voice_call' && <PhoneCall className="w-4 h-4" />}
+                                            {btn.type === 'catalog' && <Store className="w-4 h-4" />}
+                                            {btn.text || (btn.type === 'copy_code' ? 'Copy code' : btn.type === 'catalog' ? 'View catalog' : 'Button')}
                                         </div>
                                     ))}
                                 </div>

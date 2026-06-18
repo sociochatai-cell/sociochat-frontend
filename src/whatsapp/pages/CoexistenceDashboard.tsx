@@ -414,12 +414,12 @@ export function CoexistenceDashboard({ accountId: propAccountId }: CoexistenceDa
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="echoes">Echo Messages</TabsTrigger>
-          <TabsTrigger value="contacts">Contacts</TabsTrigger>
-          <TabsTrigger value="history">History Sync</TabsTrigger>
-          <TabsTrigger value="upgrade">Upgrade</TabsTrigger>
+        <TabsList className="w-full flex overflow-x-auto justify-start h-auto p-1 gap-1">
+          <TabsTrigger value="overview" className="shrink-0">Overview</TabsTrigger>
+          <TabsTrigger value="echoes" className="shrink-0">Echo Messages</TabsTrigger>
+          <TabsTrigger value="contacts" className="shrink-0">Contacts</TabsTrigger>
+          <TabsTrigger value="history" className="shrink-0">History Sync</TabsTrigger>
+          <TabsTrigger value="upgrade" className="shrink-0">Upgrade</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}

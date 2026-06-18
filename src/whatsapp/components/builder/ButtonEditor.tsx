@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TemplateButton, ButtonType, TemplateCategory } from '../../utils/templateUtils';
-import { Plus, Trash2, ExternalLink, Phone, MessageSquare, AlertCircle, Workflow } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Phone, MessageSquare, AlertCircle, Workflow, Copy, PhoneCall, Store } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Flow {
@@ -28,7 +28,7 @@ interface ButtonEditorProps {
 
 export function ButtonEditor({ buttons, category, onChange, error, accountId }: ButtonEditorProps) {
     const isDisabled = category === 'AUTHENTICATION';
-    const maxButtons = 3;
+    const maxButtons = 10;
     const [flows, setFlows] = useState<Flow[]>([]);
     const [loadingFlows, setLoadingFlows] = useState(false);
 
@@ -85,6 +85,9 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
             case 'url': return <ExternalLink className="w-4 h-4" />;
             case 'phone': return <Phone className="w-4 h-4" />;
             case 'flow': return <Workflow className="w-4 h-4" />;
+            case 'copy_code': return <Copy className="w-4 h-4" />;
+            case 'voice_call': return <PhoneCall className="w-4 h-4" />;
+            case 'catalog': return <Store className="w-4 h-4" />;
         }
     };
 
@@ -110,6 +113,20 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
                     {buttons.length}/{maxButtons} buttons
                 </span>
             </div>
+
+            {(buttons.some(b => b.type === 'flow') || buttons.some(b => b.type === 'catalog')) && (
+                <Alert className="bg-blue-50 border-blue-200">
+                    <AlertCircle className="w-4 h-4 text-blue-600" />
+                    <AlertDescription className="text-xs text-blue-800 space-y-1">
+                        {buttons.some(b => b.type === 'flow') && (
+                            <p>Flow button: select a PUBLISHED flow from the same WhatsApp account.</p>
+                        )}
+                        {buttons.some(b => b.type === 'catalog') && (
+                            <p>Catalog button: requires MARKETING category and a product catalog connected to this WABA.</p>
+                        )}
+                    </AlertDescription>
+                </Alert>
+            )}
 
             {buttons.length === 0 ? (
                 <div className="border border-dashed rounded-lg p-4 text-center">
@@ -147,7 +164,22 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
                             <div className="grid grid-cols-[120px_1fr] gap-3">
                                 <Select
                                     value={btn.type}
-                                    onValueChange={(v) => updateButton(idx, { type: v as ButtonType })}
+                                    onValueChange={(v) => {
+                                        const nextType = v as ButtonType;
+                                        updateButton(idx, {
+                                            type: nextType,
+                                            text: nextType === 'copy_code'
+                                                ? ''
+                                                : nextType === 'catalog'
+                                                ? 'View catalog'
+                                                : (btn.text || (nextType === 'voice_call' ? 'Call' : '')),
+                                            url: undefined,
+                                            phone: undefined,
+                                            flow_id: undefined,
+                                            flow_token: undefined,
+                                            copy_code: undefined,
+                                        });
+                                    }}
                                 >
                                     <SelectTrigger className="h-9">
                                         <SelectValue />
@@ -177,6 +209,24 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
                                                 Flow
                                             </div>
                                         </SelectItem>
+                                        <SelectItem value="copy_code">
+                                            <div className="flex items-center gap-2">
+                                                <Copy className="w-4 h-4" />
+                                                Copy Offer Code
+                                            </div>
+                                        </SelectItem>
+                                        <SelectItem value="voice_call">
+                                            <div className="flex items-center gap-2">
+                                                <PhoneCall className="w-4 h-4" />
+                                                Call on WhatsApp
+                                            </div>
+                                        </SelectItem>
+                                        <SelectItem value="catalog">
+                                            <div className="flex items-center gap-2">
+                                                <Store className="w-4 h-4" />
+                                                View Catalog
+                                            </div>
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
 
@@ -186,6 +236,7 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
                                     onChange={(e) => updateButton(idx, { text: e.target.value })}
                                     maxLength={25}
                                     className="h-9"
+                                    disabled={btn.type === 'copy_code'}
                                 />
                             </div>
 
@@ -242,6 +293,28 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
                                         </p>
                                     )}
                                 </div>
+                            )}
+
+                            {btn.type === 'copy_code' && (
+                                <Input
+                                    placeholder="Offer code (alphanumeric, max 15)"
+                                    value={btn.copy_code || ''}
+                                    onChange={(e) => updateButton(idx, { copy_code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })}
+                                    maxLength={15}
+                                    className="h-9"
+                                />
+                            )}
+
+                            {btn.type === 'catalog' && (
+                                <p className="text-xs text-muted-foreground">
+                                    Catalog button opens the product catalog connected to your WABA.
+                                </p>
+                            )}
+
+                            {btn.type === 'voice_call' && (
+                                <p className="text-xs text-muted-foreground">
+                                    This button asks the user to allow WhatsApp calling with your business.
+                                </p>
                             )}
                         </div>
                     ))}

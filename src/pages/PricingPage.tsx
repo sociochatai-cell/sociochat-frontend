@@ -1,5 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Zap, Crown, Building, ArrowRight, Check, Sparkles } from 'lucide-react';
+import { API_BASE_URL } from '@/config';
+import { usePlan } from '@/contexts/PlanContext';
+
+const PLAN_SLUGS: Record<string, string> = {
+    Starter: 'starter',
+    Growth: 'growth',
+    Enterprise: 'enterprise',
+};
 
 const plans = [
     {
@@ -62,20 +70,41 @@ const plans = [
 
 export default function PricingPage() {
     const navigate = useNavigate();
+    const { refreshPlan } = usePlan();
 
-    const handleContinueAsBeta = () => {
-        // Set plan to beta in user storage
+    const selectPlan = async (slug: string) => {
+        const userId = localStorage.getItem('sv_user_id');
+        if (!userId) {
+            navigate('/login');
+            return;
+        }
         try {
-            const userStr = localStorage.getItem('sv_user');
-            if (userStr) {
-                const user = JSON.parse(userStr);
-                user.plan = 'beta';
-                localStorage.setItem('sv_user', JSON.stringify(user));
-                sessionStorage.setItem('sv_user', JSON.stringify(user));
+            const res = await fetch(`${API_BASE_URL}/api/subscription/select-plan`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Id': userId,
+                },
+                body: JSON.stringify({ plan: slug }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                const userStr = localStorage.getItem('sv_user');
+                if (userStr) {
+                    const user = JSON.parse(userStr);
+                    user.plan = slug;
+                    localStorage.setItem('sv_user', JSON.stringify(user));
+                }
+                await refreshPlan();
+                navigate('/dashboard');
             }
-        } catch { }
-        navigate('/dashboard');
+        } catch {
+            navigate('/dashboard');
+        }
     };
+
+    const handleContinueAsBeta = () => selectPlan('beta');
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -137,6 +166,11 @@ export default function PricingPage() {
                                 ))}
                             </ul>
                             <button
+                                onClick={() => {
+                                    const slug = PLAN_SLUGS[plan.name];
+                                    if (slug) selectPlan(slug);
+                                    else if (plan.name === 'Enterprise') selectPlan('enterprise');
+                                }}
                                 className={`w-full py-2.5 px-4 rounded-xl text-sm font-semibold transition-all ${plan.popular
                                     ? 'bg-gradient-to-r from-[#0a6847] to-[#128C7E] text-white shadow-lg shadow-[#25D366]/20 hover:shadow-xl'
                                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'

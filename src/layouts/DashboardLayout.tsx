@@ -6,8 +6,8 @@ import {
     MessageSquare, LayoutTemplate, Bot, BarChart3,
     Settings, Users, Database, Send, Workflow, Zap,
     Inbox, LogOut, Link2, User, ChevronRight,
-    ChevronDown, Home,
-    ChevronsLeft, ChevronsRight, Smartphone,
+    ChevronDown, Home, ClipboardList,
+    ChevronsLeft, ChevronsRight, Smartphone, Menu,
 } from 'lucide-react';
 import {
     motion,
@@ -17,6 +17,12 @@ import {
     AnimatePresence,
 } from 'framer-motion';
 import { API_BASE_URL } from '@/config';
+import { usePlan } from '@/contexts/PlanContext';
+import { ROUTE_FEATURE_MAP } from '@/config/featureGating';
+import { AdminInspectBanner } from '@/components/admin/AdminInspectBanner';
+import { clearAllUserData } from '@/lib/userSession';
+import { useIsMobile } from '@/hooks/useMediaQuery';
+import { MobileNavSheet } from '@/components/layout/MobileNavSheet';
 
 /* ══════════════════════════════════════════════
    NAV ITEMS
@@ -30,7 +36,7 @@ const NAV_ITEMS = [
     { label: 'Automation', path: '/dashboard/automation', icon: Bot },
     { label: 'Drip Campaigns', path: '/dashboard/drip', icon: Zap },
     { label: 'Interactive Flows', path: '/dashboard/interactive-automation', icon: Workflow },
-    { label: 'Flows', path: '/dashboard/flows', icon: Workflow },
+    { label: 'WhatsApp Forms', path: '/dashboard/flows', icon: ClipboardList },
     { label: 'Catalog', path: '/dashboard/catalog', icon: Link2 },
     { label: 'Contacts', path: '/dashboard/contacts', icon: Users },
     { label: 'Datasets', path: '/dashboard/datasets', icon: Database },
@@ -40,24 +46,6 @@ const NAV_ITEMS = [
 
 const SIDEBAR_COLLAPSED_W = 72;
 const SIDEBAR_EXPANDED_W = 240;
-
-/* ══════════════════════════════════════════════
-   UTILITY: clear all user data on logout
-   ══════════════════════════════════════════════ */
-function clearAllUserData() {
-    const lsKeys: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith('sv_') || key.startsWith('sociochat_'))) lsKeys.push(key);
-    }
-    lsKeys.forEach(k => localStorage.removeItem(k));
-    const ssKeys: string[] = [];
-    for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key && (key.startsWith('sv_') || key.startsWith('sociochat_'))) ssKeys.push(key);
-    }
-    ssKeys.forEach(k => sessionStorage.removeItem(k));
-}
 
 /* ══════════════════════════════════════════════
    DOCK ITEM — fish-eye magnification (collapsed)
@@ -182,12 +170,17 @@ function DockItem({
 function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
     const location = useLocation();
     const mouseY = useMotionValue(Infinity);
+    const { isFeatureEnabled } = usePlan();
+    const visibleNav = NAV_ITEMS.filter(item => {
+        const key = ROUTE_FEATURE_MAP[item.path];
+        return !key || isFeatureEnabled(key);
+    });
 
     return (
         <motion.aside
             animate={{ width: expanded ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed left-0 top-0 h-screen z-50 flex flex-col"
+            className="hidden md:flex fixed left-0 top-0 h-screen z-50 flex-col"
             onMouseMove={(e) => !expanded && mouseY.set(e.clientY)}
             onMouseLeave={() => mouseY.set(Infinity)}
             style={{
@@ -225,7 +218,7 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
             {expanded ? (
                 /* ── EXPANDED: standard sidebar with icon + label ── */
                 <nav className="flex-1 overflow-y-auto py-1 px-3 space-y-0.5 no-scrollbar">
-                    {NAV_ITEMS.map(({ label, path, icon: Icon, exact }) => {
+                    {visibleNav.map(({ label, path, icon: Icon, exact }) => {
                         const isActive = exact
                             ? location.pathname === path
                             : location.pathname === path || location.pathname.startsWith(path + '/');
@@ -268,7 +261,7 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
                             overflow: 'visible',
                         }}
                     >
-                        {NAV_ITEMS.map(({ label, path, icon, exact }) => {
+                        {visibleNav.map(({ label, path, icon, exact }) => {
                             const isActive = exact
                                 ? location.pathname === path
                                 : location.pathname === path || location.pathname.startsWith(path + '/');
@@ -323,29 +316,35 @@ function Breadcrumb() {
         label: seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' '),
         path: '/' + segments.slice(0, i + 1).join('/'),
     }));
+    const last = crumbs[crumbs.length - 1];
 
     return (
-        <nav className="flex items-center gap-1 text-sm">
-            {crumbs.map((crumb, i) => (
-                <React.Fragment key={crumb.path}>
-                    {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-300 mx-0.5" />}
-                    {i === crumbs.length - 1 ? (
-                        <span className="font-semibold text-slate-800">{crumb.label}</span>
-                    ) : (
-                        <NavLink to={crumb.path} className="text-slate-400 hover:text-emerald-600 transition-colors font-medium">
-                            {crumb.label}
-                        </NavLink>
-                    )}
-                </React.Fragment>
-            ))}
-        </nav>
+        <>
+            <span className="md:hidden font-semibold text-slate-800 truncate max-w-[140px] sm:max-w-[200px]">
+                {last?.label || 'Dashboard'}
+            </span>
+            <nav className="hidden md:flex items-center gap-1 text-sm min-w-0 overflow-hidden">
+                {crumbs.map((crumb, i) => (
+                    <React.Fragment key={crumb.path}>
+                        {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-300 mx-0.5 shrink-0" />}
+                        {i === crumbs.length - 1 ? (
+                            <span className="font-semibold text-slate-800 truncate">{crumb.label}</span>
+                        ) : (
+                            <NavLink to={crumb.path} className="text-slate-400 hover:text-emerald-600 transition-colors font-medium truncate">
+                                {crumb.label}
+                            </NavLink>
+                        )}
+                    </React.Fragment>
+                ))}
+            </nav>
+        </>
     );
 }
 
 /* ══════════════════════════════════════════════
    HEADER BAR
    ══════════════════════════════════════════════ */
-function Header() {
+function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     const navigate = useNavigate();
     const [userName, setUserName] = useState('User');
     const [userEmail, setUserEmail] = useState('');
@@ -394,14 +393,24 @@ function Header() {
 
     return (
         <header
-            className="sticky top-0 z-40 flex items-center justify-between h-14 px-6"
+            className="sticky top-0 z-40 flex items-center justify-between h-14 px-3 sm:px-6 min-w-0"
             style={{
                 background: 'rgba(255,255,255,0.72)',
                 backdropFilter: 'blur(20px) saturate(1.6)',
                 borderBottom: '1px solid rgba(0,0,0,0.05)',
             }}
         >
-            <Breadcrumb />
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+                <button
+                    type="button"
+                    onClick={onMenuClick}
+                    className="md:hidden flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    aria-label="Open menu"
+                >
+                    <Menu className="h-5 w-5" />
+                </button>
+                <Breadcrumb />
+            </div>
 
             <div className="flex items-center gap-2">
                 <span className="hidden md:inline text-xs text-slate-500 tabular-nums mr-1">
@@ -545,6 +554,8 @@ function AnimatedOutlet() {
    ══════════════════════════════════════════════ */
 export default function DashboardLayout() {
     const [expanded, setExpanded] = useState(false);
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    const isMobile = useIsMobile();
     const navigate = useNavigate();
     const setNavigate = useAgentStore((s) => s.setNavigate);
 
@@ -552,20 +563,29 @@ export default function DashboardLayout() {
         setNavigate(navigate);
     }, [navigate, setNavigate]);
 
+    const sidebarMargin = isMobile ? 0 : (expanded ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W);
+
     return (
-        <div className="flex min-h-screen" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #ecfdf5 100%)' }}>
+        <div className="flex min-h-screen overflow-x-hidden" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #ecfdf5 100%)' }}>
             <Sidebar expanded={expanded} onToggle={() => setExpanded(!expanded)} />
+            <MobileNavSheet
+                open={mobileNavOpen}
+                onOpenChange={setMobileNavOpen}
+                title="SocioChat"
+                items={NAV_ITEMS}
+            />
             <motion.div
-                className="flex-1 flex flex-col min-h-screen"
-                animate={{ marginLeft: expanded ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W }}
+                className="flex-1 flex flex-col min-h-screen min-w-0 w-full"
+                animate={{ marginLeft: sidebarMargin }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             >
-                <Header />
-                <AnimatedOutlet />
+                <AdminInspectBanner />
+                <Header onMenuClick={() => setMobileNavOpen(true)} />
+                <div className="flex-1 min-w-0 overflow-x-hidden px-2 sm:px-0">
+                    <AnimatedOutlet />
+                </div>
             </motion.div>
             <AgentChatPanel />
         </div>
     );
 }
-
-export { clearAllUserData };

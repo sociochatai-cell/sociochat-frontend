@@ -203,3 +203,16 @@
     display: none;
   }
 }
+
+/* Mobile: prevent horizontal page scroll */
+html, body, #root {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}

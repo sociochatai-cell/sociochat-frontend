@@ -348,13 +348,41 @@ export default function WhatsAppDashboard() {
                 }));
                 setWorkspaces(mapped);
 
+                const isWorkspaceConnected = async (wsId: string | number) => {
+                    try {
+                        const connRes = await fetch(
+                            `${API_BASE}/api/whatsapp/connection-path?workspace_id=${wsId}`,
+                            { credentials: 'include' }
+                        );
+                        if (!connRes.ok) return false;
+                        const conn = await connRes.json();
+                        return conn.status === 'CONNECTED' || !!conn.account_summary?.phone_number_id;
+                    } catch {
+                        return false;
+                    }
+                };
+
+                let selected: string | null = null;
                 const storedWs = getWorkspaceId();
-                if (storedWs && mapped.some((w: Workspace) => w.id === Number(storedWs))) {
-                    setSelectedWorkspaceId(storedWs);
-                } else if (mapped.length > 0) {
-                    const firstWsId = String(mapped[0].id);
-                    setSelectedWorkspaceId(firstWsId);
-                    persistWorkspaceId(firstWsId);
+                if (storedWs && mapped.some((w: Workspace) => String(w.id) === String(storedWs))) {
+                    if (await isWorkspaceConnected(storedWs)) {
+                        selected = String(storedWs);
+                    }
+                }
+                if (!selected) {
+                    for (const w of mapped) {
+                        if (await isWorkspaceConnected(w.id)) {
+                            selected = String(w.id);
+                            break;
+                        }
+                    }
+                }
+                if (!selected && mapped.length > 0) {
+                    selected = String(mapped[0].id);
+                }
+                if (selected) {
+                    setSelectedWorkspaceId(selected);
+                    persistWorkspaceId(selected);
                 }
             } catch (err) {
                 console.error('Failed to fetch workspaces:', err);

@@ -14,7 +14,8 @@ import {
     Phone,
     MapPin,
     ShoppingBag,
-    List
+    List,
+    FileText
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { MessageButton, ButtonActionType } from '../types';
@@ -34,6 +35,7 @@ const ButtonIcons: Record<ButtonActionType, React.ElementType> = {
     location: MapPin,
     catalog: ShoppingBag,
     product_list: List,
+    send_document: FileText,
 };
 
 const ButtonColors: Record<ButtonActionType, string> = {
@@ -43,6 +45,7 @@ const ButtonColors: Record<ButtonActionType, string> = {
     location: '#F59E0B', // amber
     catalog: '#EC4899', // pink
     product_list: '#06B6D4', // cyan
+    send_document: '#0EA5E9', // sky
 };
 
 export const MessageNode = memo(({ data, selected }: NodeProps<MessageNodeData>) => {

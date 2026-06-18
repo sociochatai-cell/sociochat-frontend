@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Template } from './TemplateCard';
 import { TemplateStatusBadge } from './TemplateStatusBadge';
-import { Send, Loader2, AlertCircle, MessageSquare, Image as ImageIcon, Link, Upload, X, CheckCircle, ImageOff } from 'lucide-react';
+import { Send, Loader2, AlertCircle, MessageSquare, Image as ImageIcon, Link, Upload, X, CheckCircle, ImageOff, FileText, Video } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { API_BASE_URL } from "@/config";
 
@@ -72,6 +72,9 @@ export function TemplatePreviewModal({
 
     const headerFormat = getHeaderFormat();
     const hasImageHeader = headerFormat === 'IMAGE';
+    const hasVideoHeader = headerFormat === 'VIDEO';
+    const hasDocumentHeader = headerFormat === 'DOCUMENT';
+    const hasMediaHeader = hasImageHeader || hasVideoHeader || hasDocumentHeader;
 
     // Reset state when modal opens/closes or template changes
     useEffect(() => {
@@ -80,7 +83,7 @@ export function TemplatePreviewModal({
             setImagePreviewSrc('');
             setPreviewError(false);
             setVariables({});
-            setUploadMethod('url');
+            setUploadMethod(headerFormat === 'DOCUMENT' ? 'upload' : 'url');
             // Initialize variable mapping from template
             // This maps position (1, 2, 3) to actual variable names (Name, Amount, Date)
             setVariableMapping((template as any).variable_mapping || null);
@@ -124,6 +127,10 @@ export function TemplatePreviewModal({
         setPreviewError(false);
         // Show preview for valid URLs - proxy through backend
         if (url.startsWith('http://') || url.startsWith('https://')) {
+            if (hasVideoHeader) {
+                setImagePreviewSrc(url);
+                return;
+            }
             setImagePreviewSrc(getProxiedUrl(url));
         } else {
             setImagePreviewSrc('');
@@ -132,14 +139,36 @@ export function TemplatePreviewModal({
 
     // Handle file upload
     const handleFileUpload = async (file: File) => {
-        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+        const allowedTypes = hasDocumentHeader
+            ? [
+                'application/pdf',
+                'text/plain',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ]
+            : hasVideoHeader
+                ? ['video/mp4', 'video/quicktime', 'video/3gpp', 'video/avi', 'video/mpeg']
+                : ['image/jpeg', 'image/jpg', 'image/png'];
         if (!allowedTypes.includes(file.type)) {
-            toast({ title: 'Invalid File', description: 'Please upload a JPEG or PNG image', variant: 'destructive' });
+            toast({
+                title: 'Invalid File',
+                description: hasDocumentHeader
+                    ? 'Please upload a valid document file (PDF, DOC, DOCX, TXT)'
+                    : hasVideoHeader
+                        ? 'Please upload a valid video file (MP4, MOV, 3GPP, AVI, MPEG)'
+                        : 'Please upload a JPEG or PNG image',
+                variant: 'destructive',
+            });
             return;
         }
 
-        if (file.size > 5 * 1024 * 1024) {
-            toast({ title: 'File Too Large', description: 'Image must be under 5MB', variant: 'destructive' });
+        const maxBytes = hasDocumentHeader ? (100 * 1024 * 1024) : hasVideoHeader ? (16 * 1024 * 1024) : (5 * 1024 * 1024);
+        if (file.size > maxBytes) {
+            toast({
+                title: 'File Too Large',
+                description: hasDocumentHeader ? 'Document must be under 100MB' : hasVideoHeader ? 'Video must be under 16MB' : 'Image must be under 5MB',
+                variant: 'destructive',
+            });
             return;
         }
 
@@ -147,14 +176,15 @@ export function TemplatePreviewModal({
         setPreviewError(false);
 
         try {
-            // Create base64 preview immediately
-            const base64Preview = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-            setImagePreviewSrc(base64Preview);
+            if (!hasDocumentHeader) {
+                const base64Preview = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                setImagePreviewSrc(base64Preview);
+            }
 
             // Upload to backend to get a public URL
             const formData = new FormData();
@@ -170,7 +200,10 @@ export function TemplatePreviewModal({
 
             if (data.success && data.public_url) {
                 setHeaderImageUrl(data.public_url);
-                toast({ title: 'Image Uploaded', description: 'Ready to send!' });
+                toast({
+                    title: hasDocumentHeader ? 'Document uploaded' : hasVideoHeader ? 'Video uploaded' : 'Image uploaded',
+                    description: 'Ready to send!',
+                });
             } else {
                 toast({
                     title: 'Upload Issue',
@@ -204,8 +237,12 @@ export function TemplatePreviewModal({
             return;
         }
 
-        if (hasImageHeader && !headerImageUrl.trim()) {
-            toast({ title: 'Header Image Required', description: 'Please provide an image', variant: 'destructive' });
+        if (hasMediaHeader && !headerImageUrl.trim()) {
+            toast({
+                title: 'Header Media Required',
+                description: hasDocumentHeader ? 'Please provide a document' : hasVideoHeader ? 'Please provide a video' : 'Please provide an image',
+                variant: 'destructive',
+            });
             return;
         }
 
@@ -253,6 +290,10 @@ export function TemplatePreviewModal({
             if (hasParams) payload.body_params = bodyParams;
             if (hasImageHeader && headerImageUrl.trim()) {
                 payload.header_image_url = headerImageUrl.trim();
+            } else if (hasVideoHeader && headerImageUrl.trim()) {
+                payload.header_video_url = headerImageUrl.trim();
+            } else if (hasDocumentHeader && headerImageUrl.trim()) {
+                payload.header_document_url = headerImageUrl.trim();
             }
 
             const res = await fetch(`${API_BASE}/api/whatsapp/send/template`, {
@@ -304,12 +345,14 @@ export function TemplatePreviewModal({
                     </div>
 
                     {/* Header image section - TABBED INTERFACE */}
-                    {hasImageHeader && (
+                    {hasMediaHeader && (
                         <div className="space-y-3 p-3 bg-gradient-to-r from-blue-50 to-green-50 border border-blue-100 rounded-lg">
                             <div className="flex items-center justify-between">
                                 <Label className="text-sm font-medium flex items-center gap-2">
-                                    <ImageIcon className="w-4 h-4 text-blue-600" />
-                                    Header Image
+                                    {hasDocumentHeader ? <FileText className="w-4 h-4 text-blue-600" /> :
+                                     hasVideoHeader ? <Video className="w-4 h-4 text-blue-600" /> :
+                                     <ImageIcon className="w-4 h-4 text-blue-600" />}
+                                    {hasDocumentHeader ? 'Header Document' : hasVideoHeader ? 'Header Video' : 'Header Image'}
                                     <Badge variant="secondary" className="text-xs">Required</Badge>
                                 </Label>
                                 {headerImageUrl && (
@@ -383,7 +426,11 @@ export function TemplatePreviewModal({
                                             type="file"
                                             ref={fileInputRef}
                                             onChange={handleFileChange}
-                                            accept="image/jpeg,image/jpg,image/png"
+                                            accept={hasDocumentHeader
+                                                ? 'application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                                                : hasVideoHeader
+                                                    ? 'video/mp4,video/quicktime,video/3gpp,video/avi,video/mpeg'
+                                                    : 'image/jpeg,image/jpg,image/png'}
                                             className="hidden"
                                         />
                                         <Button
@@ -401,8 +448,10 @@ export function TemplatePreviewModal({
                                             ) : (
                                                 <>
                                                     <Upload className="w-5 h-5" />
-                                                    <span className="text-xs">Click to select image</span>
-                                                    <span className="text-[10px] text-muted-foreground">JPEG or PNG, max 5MB</span>
+                                                    <span className="text-xs">Click to select {hasDocumentHeader ? 'document' : hasVideoHeader ? 'video' : 'image'}</span>
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                        {hasDocumentHeader ? 'PDF/DOC/DOCX/TXT, max 100MB' : hasVideoHeader ? 'MP4/MOV, max 16MB' : 'JPEG or PNG, max 5MB'}
+                                                    </span>
                                                 </>
                                             )}
                                         </Button>
@@ -461,7 +510,7 @@ export function TemplatePreviewModal({
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                     <Button
                         onClick={handleSend}
-                        disabled={sending || !hasRecipient || (hasImageHeader && !headerImageUrl.trim())}
+                        disabled={sending || !hasRecipient || (hasMediaHeader && !headerImageUrl.trim())}
                         className="bg-[#25D366] hover:bg-[#128C7E] text-white disabled:opacity-50"
                     >
                         {sending ? (

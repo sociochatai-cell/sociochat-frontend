@@ -1,7 +1,7 @@
 // Header Editor Component
 // =======================
-// Configures template header: None, Text, or Image
-// Image supports both file upload and URL input
+// Configures template header: None, Text, Media, or Location
+// Media supports both file upload and URL input
 
 import { useState, useRef } from 'react';
 import { Label } from '@/components/ui/label';
@@ -11,8 +11,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { TemplateHeader, HeaderType } from '../../utils/templateUtils';
-import { Image, Type, X, Upload, Loader2, CheckCircle, AlertCircle, Link } from 'lucide-react';
+import { Image, Type, X, Upload, Loader2, CheckCircle, AlertCircle, Link, Video, FileText, MapPin } from 'lucide-react';
 import { API_BASE_URL } from '@/config';
+
+const TEMPLATE_API = `${API_BASE_URL}/api/whatsapp/templates`;
 
 interface HeaderEditorProps {
     header: TemplateHeader;
@@ -29,28 +31,54 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
     const [uploadMethod, setUploadMethod] = useState<'file' | 'url'>('file');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const isMediaType = header.type === 'image' || header.type === 'video' || header.type === 'document';
+
+    const getMediaRules = () => {
+        if (header.type === 'video') {
+            return {
+                accept: 'video/mp4,video/quicktime,video/3gpp,video/avi,video/mpeg',
+                label: 'MP4/MOV/3GPP/AVI/MPEG',
+                maxSizeBytes: 16 * 1024 * 1024,
+                maxSizeLabel: '16MB',
+            };
+        }
+        if (header.type === 'document') {
+            return {
+                accept: 'application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                label: 'PDF/TXT/DOC/DOCX',
+                maxSizeBytes: 100 * 1024 * 1024,
+                maxSizeLabel: '100MB',
+            };
+        }
+        return {
+            accept: 'image/jpeg,image/jpg,image/png',
+            label: 'JPEG or PNG',
+            maxSizeBytes: 5 * 1024 * 1024,
+            maxSizeLabel: '5MB',
+        };
+    };
+
     const handleTypeChange = (type: HeaderType) => {
         setUploadError(null);
         setUrlInput('');
         onChange({
             type,
             text: type === 'text' ? header.text || '' : undefined,
-            imageUrl: type === 'image' ? header.imageUrl : undefined,
-            mediaHandle: type === 'image' ? header.mediaHandle : undefined,
+            imageUrl: type === 'image' || type === 'video' || type === 'document' ? header.imageUrl : undefined,
+            mediaHandle: type === 'image' || type === 'video' || type === 'document' ? header.mediaHandle : undefined,
         });
     };
 
-    // Upload file to Meta
-    const handleImageUpload = async (file: File) => {
-        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const handleMediaUpload = async (file: File) => {
+        const rules = getMediaRules();
+        const allowedTypes = rules.accept.split(',');
         if (!allowedTypes.includes(file.type)) {
-            setUploadError('Please upload a JPEG or PNG image');
+            setUploadError(`Please upload a supported ${header.type} file (${rules.label})`);
             return;
         }
 
-        const maxSize = 5 * 1024 * 1024;
-        if (file.size > maxSize) {
-            setUploadError('Image too large. Maximum size is 5MB.');
+        if (file.size > rules.maxSizeBytes) {
+            setUploadError(`${header.type[0].toUpperCase() + header.type.slice(1)} too large. Maximum size is ${rules.maxSizeLabel}.`);
             return;
         }
 
@@ -59,7 +87,6 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
         setUploadProgress(10);
 
         try {
-            // Convert file to base64 data URL for preview (more reliable than blob URL)
             const previewUrl = await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result as string);
@@ -67,12 +94,11 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                 reader.readAsDataURL(file);
             });
 
-            // Update preview immediately
             onChange({
                 ...header,
-                type: 'image',
+                type: header.type,
                 imageUrl: previewUrl,
-                mediaHandle: undefined, // Will be set after upload
+                mediaHandle: undefined,
             });
 
             setUploadProgress(30);
@@ -83,7 +109,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                 formData.append('account_id', accountId.toString());
             }
 
-            const response = await fetch(`${API_BASE_URL}/api/whatsapp/media/upload`, {
+            const response = await fetch(`${TEMPLATE_API}/upload_media`, {
                 method: 'POST',
                 credentials: 'include',
                 body: formData,
@@ -91,28 +117,18 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
 
             setUploadProgress(70);
             const data = await response.json();
-            console.log('Upload response:', data);
 
-            const mediaHandle = data.media_handle || data.handle;
-            const publicUrl = data.public_url || data.url;
-
-            if (data.success && (mediaHandle || publicUrl)) {
+            if (data.success && data.handle) {
                 setUploadProgress(100);
                 onChange({
                     ...header,
-                    type: 'image',
-                    imageUrl: publicUrl || previewUrl,
-                    mediaHandle: mediaHandle || header.mediaHandle,
+                    type: header.type,
+                    imageUrl: previewUrl,
+                    mediaHandle: data.handle,
                 });
-                setUploadError(
-                    mediaHandle
-                        ? null
-                        : accountId
-                          ? 'Image uploaded to storage, but Meta media handle is missing. Reconnect WhatsApp and retry.'
-                          : null
-                );
+                setUploadError(null);
             } else {
-                setUploadError(data.error || data.message || 'Upload failed. Please try again.');
+                setUploadError(data.error || 'Upload failed. Please try again.');
             }
         } catch (err) {
             console.error('Upload error:', err);
@@ -123,10 +139,9 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
         }
     };
 
-    // Upload from URL
     const handleUrlUpload = async () => {
         if (!urlInput.trim()) {
-            setUploadError('Please enter an image URL');
+            setUploadError('Please enter a media URL');
             return;
         }
 
@@ -139,46 +154,35 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
         setUploadError(null);
         setUploadProgress(20);
 
-        // Set preview immediately
         onChange({
             ...header,
-            type: 'image',
+            type: header.type,
             imageUrl: urlInput,
             mediaHandle: undefined,
         });
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/whatsapp/media/upload/url`, {
+            const response = await fetch(`${TEMPLATE_API}/upload_media_url`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: urlInput, account_id: accountId }),
+                body: JSON.stringify({ url: urlInput, account_id: accountId, media_type: header.type }),
             });
 
             setUploadProgress(70);
             const data = await response.json();
-            console.log('URL upload response:', data);
 
-            const mediaHandle = data.media_handle || data.handle;
-            const publicUrl = data.public_url || data.url || urlInput;
-
-            if (data.success && (mediaHandle || publicUrl)) {
+            if (data.success && data.handle) {
                 setUploadProgress(100);
                 onChange({
                     ...header,
-                    type: 'image',
-                    imageUrl: publicUrl,
-                    mediaHandle: mediaHandle || header.mediaHandle,
+                    type: header.type,
+                    imageUrl: urlInput,
+                    mediaHandle: data.handle,
                 });
-                setUploadError(
-                    mediaHandle
-                        ? null
-                        : accountId
-                          ? 'Image stored, but Meta media handle is missing. Reconnect WhatsApp and retry.'
-                          : null
-                );
+                setUploadError(null);
             } else {
-                setUploadError(data.error || data.message || 'Failed to upload from URL');
+                setUploadError(data.error || 'Failed to upload from URL');
             }
         } catch (err) {
             console.error('URL upload error:', err);
@@ -192,7 +196,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            handleImageUpload(file);
+            handleMediaUpload(file);
         }
     };
 
@@ -209,6 +213,8 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
         }
     };
 
+    const mediaRules = getMediaRules();
+
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -218,13 +224,13 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                         {header.text?.length || 0}/60 characters
                     </span>
                 )}
-                {header.type === 'image' && header.mediaHandle && (
+                {isMediaType && header.mediaHandle && (
                     <span className="text-xs text-green-600 flex items-center gap-1">
                         <CheckCircle className="w-3 h-3" />
                         Ready for submission
                     </span>
                 )}
-                {header.type === 'image' && header.imageUrl && !header.mediaHandle && !uploading && (
+                {isMediaType && header.imageUrl && !header.mediaHandle && !uploading && (
                     <span className="text-xs text-amber-600 flex items-center gap-1">
                         <AlertCircle className="w-3 h-3" />
                         Upload pending
@@ -235,7 +241,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
             <RadioGroup
                 value={header.type}
                 onValueChange={(v) => handleTypeChange(v as HeaderType)}
-                className="flex gap-4"
+                className="flex flex-wrap gap-4"
             >
                 <div className="flex items-center space-x-2">
                     <RadioGroupItem value="text" id="header-text" />
@@ -249,6 +255,27 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                     <Label htmlFor="header-image" className="flex items-center gap-1.5 cursor-pointer">
                         <Image className="w-4 h-4" />
                         Image
+                    </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="video" id="header-video" />
+                    <Label htmlFor="header-video" className="flex items-center gap-1.5 cursor-pointer">
+                        <Video className="w-4 h-4" />
+                        Video
+                    </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="document" id="header-document" />
+                    <Label htmlFor="header-document" className="flex items-center gap-1.5 cursor-pointer">
+                        <FileText className="w-4 h-4" />
+                        Document
+                    </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="location" id="header-location" />
+                    <Label htmlFor="header-location" className="flex items-center gap-1.5 cursor-pointer">
+                        <MapPin className="w-4 h-4" />
+                        Location
                     </Label>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -270,10 +297,9 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                 />
             )}
 
-            {header.type === 'image' && (
+            {isMediaType && (
                 <div className="space-y-4">
-                    {/* Show preview if we have an image URL */}
-                    {header.imageUrl && (
+                    {header.imageUrl && header.type === 'image' && (
                         <div className="relative rounded-lg overflow-hidden border bg-muted">
                             <img
                                 src={header.imageUrl}
@@ -293,13 +319,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                                 </div>
                             )}
                             <div className="absolute top-2 right-2 flex gap-2">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={clearImage}
-                                    disabled={uploading}
-                                >
+                                <Button type="button" size="sm" variant="secondary" onClick={clearImage} disabled={uploading}>
                                     <X className="w-4 h-4 mr-1" />
                                     Remove
                                 </Button>
@@ -315,7 +335,28 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                         </div>
                     )}
 
-                    {/* Upload options - only show if no image yet */}
+                    {header.imageUrl && header.type === 'video' && (
+                        <div className="relative rounded-lg border bg-muted p-6 text-center">
+                            <Video className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground">Video ready for submission</p>
+                            <Button type="button" size="sm" variant="secondary" className="mt-3" onClick={clearImage} disabled={uploading}>
+                                <X className="w-4 h-4 mr-1" />
+                                Remove
+                            </Button>
+                        </div>
+                    )}
+
+                    {header.imageUrl && header.type === 'document' && (
+                        <div className="relative rounded-lg border bg-muted p-6 text-center">
+                            <FileText className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground">Document ready for submission</p>
+                            <Button type="button" size="sm" variant="secondary" className="mt-3" onClick={clearImage} disabled={uploading}>
+                                <X className="w-4 h-4 mr-1" />
+                                Remove
+                            </Button>
+                        </div>
+                    )}
+
                     {!header.imageUrl && (
                         <Tabs value={uploadMethod} onValueChange={(v) => setUploadMethod(v as 'file' | 'url')}>
                             <TabsList className="grid w-full grid-cols-2">
@@ -334,7 +375,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                                     type="file"
                                     ref={fileInputRef}
                                     onChange={handleFileChange}
-                                    accept="image/jpeg,image/jpg,image/png"
+                                    accept={mediaRules.accept}
                                     className="hidden"
                                 />
                                 <div
@@ -355,9 +396,9 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                                     ) : (
                                         <div className="space-y-2">
                                             <Upload className="w-10 h-10 mx-auto text-muted-foreground" />
-                                            <p className="text-sm font-medium">Click to upload image</p>
+                                            <p className="text-sm font-medium">Click to upload {header.type}</p>
                                             <p className="text-xs text-muted-foreground">
-                                                JPEG or PNG • Max 5MB • Recommended: 1080×566px
+                                                {mediaRules.label} • Max {mediaRules.maxSizeLabel}
                                             </p>
                                         </div>
                                     )}
@@ -367,37 +408,34 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                             <TabsContent value="url" className="mt-4 space-y-3">
                                 <div className="flex gap-2">
                                     <Input
-                                        placeholder="https://example.com/your-image.jpg"
+                                        placeholder="https://example.com/your-file"
                                         value={urlInput}
                                         onChange={(e) => setUrlInput(e.target.value)}
                                         disabled={uploading}
                                     />
-                                    <Button
-                                        type="button"
-                                        onClick={handleUrlUpload}
-                                        disabled={uploading || !urlInput.trim()}
-                                    >
-                                        {uploading ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            'Upload'
-                                        )}
+                                    <Button type="button" onClick={handleUrlUpload} disabled={uploading || !urlInput.trim()}>
+                                        {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Upload'}
                                     </Button>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                    Enter a public HTTPS image URL. The image will be downloaded and uploaded to Meta.
+                                    Enter a public HTTPS URL. The file will be downloaded server-side and uploaded to Meta.
                                 </p>
                             </TabsContent>
                         </Tabs>
                     )}
 
-                    {/* Error message */}
                     {uploadError && (
                         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
                             <AlertCircle className="w-4 h-4 flex-shrink-0" />
                             <span>{uploadError}</span>
                         </div>
                     )}
+                </div>
+            )}
+
+            {header.type === 'location' && (
+                <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                    Location headers do not require media upload. Latitude/longitude is supplied when sending the template.
                 </div>
             )}
 

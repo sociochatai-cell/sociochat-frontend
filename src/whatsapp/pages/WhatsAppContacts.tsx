@@ -123,18 +123,18 @@ export default function WhatsAppContacts() {
     }
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-6 min-w-0 overflow-x-hidden">
             {/* Header */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <User className="h-6 w-6 text-green-600" /> WhatsApp Contacts
+                    <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+                        <User className="h-6 w-6 text-green-600 shrink-0" /> WhatsApp Contacts
                     </h1>
-                    <p className="text-muted-foreground">Manage your unified contact profiles.</p>
+                    <p className="text-muted-foreground text-sm">Manage your unified contact profiles.</p>
                 </div>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                     <DialogTrigger asChild>
-                        <Button className="bg-green-600 hover:bg-green-700 text-white">
+                        <Button className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto">
                             <Plus className="mr-2 h-4 w-4" /> Add Contact
                         </Button>
                     </DialogTrigger>
@@ -166,8 +166,8 @@ export default function WhatsAppContacts() {
             </div>
 
             {/* Filters */}
-            <div className="flex gap-4 items-center">
-                <div className="relative flex-1 max-w-sm">
+            <div className="flex gap-2 sm:gap-4 items-center">
+                <div className="relative flex-1 min-w-0 sm:max-w-sm">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder="Search by name or phone..."
@@ -182,7 +182,8 @@ export default function WhatsAppContacts() {
             </div>
 
             {/* Table */}
-            <Card>
+            <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -305,6 +306,7 @@ export default function WhatsAppContacts() {
                         </TooltipProvider>
                     </TableBody>
                 </Table>
+                </div>
             </Card>
 
             {/* Simple Pagination */}

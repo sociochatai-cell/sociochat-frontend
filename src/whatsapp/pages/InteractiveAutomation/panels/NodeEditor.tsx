@@ -19,7 +19,9 @@ import {
     Zap,
     MessageCircle,
     FileText,
-    CheckCircle
+    CheckCircle,
+    Keyboard,
+    Plug
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,11 +37,15 @@ import type {
     MessageNode,
     TemplateNode as TemplateNodeType,
     EndNode,
+    InputNode as InputNodeType,
+    ApiNode as ApiNodeType,
     MessageButton,
     ButtonActionType,
-    TriggerType
+    TriggerType,
+    ValidationType
 } from '../types';
-import { LIMITS, BUTTON_ACTION_LABELS, TRIGGER_TYPE_LABELS } from '../constants';
+import { LIMITS, BUTTON_ACTION_LABELS, TRIGGER_TYPE_LABELS, VALIDATION_TYPE_LABELS } from '../constants';
+import { ApiNodeEditor } from './ApiNodeEditor';
 
 interface NodeEditorProps {
     node: FlowNode;
@@ -50,6 +56,10 @@ interface NodeEditorProps {
     onAddButton?: () => void;
     onUpdateButton?: (buttonId: string, updates: Partial<MessageButton>) => void;
     onRemoveButton?: (buttonId: string) => void;
+    // API node support
+    flowVariables?: Record<string, string>;
+    automationId?: number;
+    onOpenFlowVariables?: () => void;
 }
 
 const ButtonActionIcons: Record<ButtonActionType, React.ElementType> = {
@@ -59,6 +69,7 @@ const ButtonActionIcons: Record<ButtonActionType, React.ElementType> = {
     location: MapPin,
     catalog: ShoppingBag,
     product_list: List,
+    send_document: FileText,
 };
 
 export function NodeEditor({
@@ -70,11 +81,31 @@ export function NodeEditor({
     onAddButton,
     onUpdateButton,
     onRemoveButton,
+    flowVariables,
+    automationId,
+    onOpenFlowVariables,
 }: NodeEditorProps) {
     // Get available target nodes for quick_reply buttons
     const targetNodes = allNodes.filter(n =>
-        n.id !== node.id && (n.type === 'message' || n.type === 'template' || n.type === 'end')
+        n.id !== node.id && (n.type === 'message' || n.type === 'template' || n.type === 'end' || n.type === 'input' || n.type === 'api')
     );
+
+    // Human-readable label for a node when listed as a navigation target
+    const getNodeOptionLabel = (n: FlowNode): string => {
+        switch (n.type) {
+            case 'end':
+                return `End: ${(n.data as EndNode['data']).message?.slice(0, 20) || 'End node'}`;
+            case 'template':
+                return `Template: ${(n.data as TemplateNodeType['data']).templateName || 'Template'}`;
+            case 'input':
+                return `Input: ${(n.data as InputNodeType['data']).body?.slice(0, 20) || 'Question'}`;
+            case 'api':
+                return `API: ${(n.data as ApiNodeType['data']).label || 'API Call'}`;
+            case 'message':
+            default:
+                return `Message: ${(n.data as MessageNode['data']).body?.slice(0, 20) || 'New message'}...`;
+        }
+    };
 
     const renderTriggerEditor = () => {
         const data = node.data as TriggerNode['data'];
@@ -270,6 +301,194 @@ export function NodeEditor({
         );
     };
 
+    const renderInputEditor = () => {
+        const data = node.data as InputNodeType['data'];
+
+        return (
+            <div className="space-y-4">
+                {/* Question */}
+                <div>
+                    <div className="flex items-center justify-between">
+                        <Label>Question *</Label>
+                        <span className="text-xs text-muted-foreground">
+                            {data.body?.length || 0}/{LIMITS.MAX_BODY_LENGTH}
+                        </span>
+                    </div>
+                    <Textarea
+                        className="mt-1.5 min-h-[80px]"
+                        placeholder="What would you like to ask the customer?"
+                        value={data.body || ''}
+                        maxLength={LIMITS.MAX_BODY_LENGTH}
+                        onChange={(e) => onUpdate({ body: e.target.value })}
+                    />
+                </div>
+
+                {/* Field name */}
+                <div>
+                    <Label>Save answer to field *</Label>
+                    <Input
+                        className="mt-1.5 font-mono text-sm"
+                        placeholder="name"
+                        value={data.field || ''}
+                        onChange={(e) => onUpdate({ field: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Reference this later as <code className="bg-gray-100 px-1 rounded">{`{{${data.field || 'field'}}}`}</code>
+                    </p>
+                </div>
+
+                {/* Validation type */}
+                <div>
+                    <Label>Validation</Label>
+                    <Select
+                        value={data.validationType}
+                        onValueChange={(value: ValidationType) => onUpdate({ validationType: value })}
+                    >
+                        <SelectTrigger className="mt-1.5">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Object.entries(VALIDATION_TYPE_LABELS).map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                    {label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                {/* Constraints by validation type */}
+                {(data.validationType === 'text') && (
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <Label className="text-xs">Min length</Label>
+                            <Input
+                                type="number"
+                                className="mt-1 h-8 text-sm"
+                                value={data.minLength ?? ''}
+                                onChange={(e) => onUpdate({ minLength: e.target.value === '' ? undefined : Number(e.target.value) })}
+                            />
+                        </div>
+                        <div>
+                            <Label className="text-xs">Max length</Label>
+                            <Input
+                                type="number"
+                                className="mt-1 h-8 text-sm"
+                                value={data.maxLength ?? ''}
+                                onChange={(e) => onUpdate({ maxLength: e.target.value === '' ? undefined : Number(e.target.value) })}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {(data.validationType === 'number') && (
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <Label className="text-xs">Min value</Label>
+                            <Input
+                                type="number"
+                                className="mt-1 h-8 text-sm"
+                                value={data.minValue ?? ''}
+                                onChange={(e) => onUpdate({ minValue: e.target.value === '' ? undefined : Number(e.target.value) })}
+                            />
+                        </div>
+                        <div>
+                            <Label className="text-xs">Max value</Label>
+                            <Input
+                                type="number"
+                                className="mt-1 h-8 text-sm"
+                                value={data.maxValue ?? ''}
+                                onChange={(e) => onUpdate({ maxValue: e.target.value === '' ? undefined : Number(e.target.value) })}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {data.validationType === 'regex' && (
+                    <div>
+                        <Label className="text-xs">Regex pattern</Label>
+                        <Input
+                            className="mt-1 h-8 text-sm font-mono"
+                            placeholder="^[A-Za-z]+$"
+                            value={data.regexPattern || ''}
+                            onChange={(e) => onUpdate({ regexPattern: e.target.value })}
+                        />
+                    </div>
+                )}
+
+                {data.validationType === 'enum' && (
+                    <div>
+                        <Label className="text-xs">Allowed values (comma separated)</Label>
+                        <Input
+                            className="mt-1 h-8 text-sm"
+                            placeholder="Small, Medium, Large"
+                            value={data.enumValues?.join(', ') || ''}
+                            onChange={(e) =>
+                                onUpdate({
+                                    enumValues: e.target.value
+                                        .split(',')
+                                        .map((v) => v.trim())
+                                        .filter(Boolean),
+                                })
+                            }
+                        />
+                    </div>
+                )}
+
+                {/* Custom error message */}
+                <div>
+                    <Label>Error message (optional)</Label>
+                    <Input
+                        className="mt-1.5"
+                        placeholder="Please enter a valid value"
+                        value={data.errorMessage || ''}
+                        onChange={(e) => onUpdate({ errorMessage: e.target.value })}
+                    />
+                </div>
+
+                <Separator />
+
+                {/* Next node */}
+                <div>
+                    <Label>Next step</Label>
+                    <Select
+                        value={data.targetNodeId || '_none'}
+                        onValueChange={(value) =>
+                            onUpdate({ targetNodeId: value === '_none' ? null : value })
+                        }
+                    >
+                        <SelectTrigger className="mt-1.5">
+                            <SelectValue placeholder="Select next node..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="_none">Not connected</SelectItem>
+                            {targetNodes.map((n) => (
+                                <SelectItem key={n.id} value={n.id}>
+                                    {getNodeOptionLabel(n)}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Or drag from the node's output handle on the canvas.
+                    </p>
+                </div>
+            </div>
+        );
+    };
+
+    const renderApiEditor = () => {
+        return (
+            <ApiNodeEditor
+                node={node as ApiNodeType}
+                onUpdate={onUpdate}
+                flowVariables={flowVariables}
+                automationId={automationId}
+                onOpenFlowVariables={onOpenFlowVariables}
+            />
+        );
+    };
+
     const renderTemplateEditor = () => {
         const data = node.data as TemplateNodeType['data'];
 
@@ -366,6 +585,8 @@ export function NodeEditor({
             case 'trigger': return <Zap className="w-5 h-5 text-indigo-600" />;
             case 'message': return <MessageCircle className="w-5 h-5 text-green-600" />;
             case 'template': return <FileText className="w-5 h-5 text-blue-600" />;
+            case 'input': return <Keyboard className="w-5 h-5 text-sky-600" />;
+            case 'api': return <Plug className="w-5 h-5 text-violet-600" />;
             case 'end': return <CheckCircle className="w-5 h-5 text-amber-600" />;
             default: return null;
         }
@@ -376,6 +597,8 @@ export function NodeEditor({
             case 'trigger': return 'Trigger Settings';
             case 'message': return 'Message Settings';
             case 'template': return 'Template Settings';
+            case 'input': return 'Input Settings';
+            case 'api': return 'API Call Settings';
             case 'end': return 'End Settings';
             default: return 'Node Settings';
         }
@@ -399,6 +622,8 @@ export function NodeEditor({
                 {node.type === 'trigger' && renderTriggerEditor()}
                 {node.type === 'message' && renderMessageEditor()}
                 {node.type === 'template' && renderTemplateEditor()}
+                {node.type === 'input' && renderInputEditor()}
+                {node.type === 'api' && renderApiEditor()}
                 {node.type === 'end' && renderEndEditor()}
             </div>
 

@@ -199,7 +199,7 @@ function NotConnectedView({
     }
     window.fbAsyncInit = function () {
       window.FB.init({
-        appId: import.meta.env.VITE_FB_APP_ID || '1782321995750055',
+        appId: import.meta.env.VITE_FB_APP_ID || '1616370899364211',
         cookie: true,
         xfbml: true,
         version: 'v23.0',

@@ -8,7 +8,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ConversationList, ConversationThread, TemplatesPanel, InboxLoadingScreen, ContactInfoPanel } from '../components';
 import { Conversation, WhatsAppRealtimeEvent } from '../types';
 import { useWhatsAppRealtime } from '../hooks/useWhatsAppRealtime';
-import { Inbox, LayoutTemplate, Plus, X, PanelRight } from 'lucide-react';
+import { Inbox, LayoutTemplate, Plus, X, PanelRight, ArrowLeft } from 'lucide-react';
 import logo from '@/assets/sociovia_logo.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,7 @@ import {
   stopPolling,
   setPollingActiveConversation,
 } from '../stores/inboxStore';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 
 const API_BASE = API_BASE_URL;
 
@@ -49,6 +50,8 @@ export function WhatsAppInbox() {
   const [newChatPhone, setNewChatPhone] = useState('');
   const [creatingChat, setCreatingChat] = useState(false);
   const [contactPanelOpen, setContactPanelOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const [mobilePane, setMobilePane] = useState<'list' | 'thread'>('list');
 
   // Get base path from current location (agent or dashboard)
   const basePath = location.pathname.startsWith('/agent') ? '/agent' : '/dashboard';
@@ -235,6 +238,7 @@ export function WhatsAppInbox() {
 
   const handleSelectConversation = useCallback(async (conversation: Conversation) => {
     setSelectedConversation(conversation);
+    if (isMobile) setMobilePane('thread');
 
     if (conversation.unread_count > 0) {
       try {
@@ -248,7 +252,7 @@ export function WhatsAppInbox() {
         console.error('Failed to mark conversation as read:', error);
       }
     }
-  }, []);
+  }, [isMobile]);
 
   const handleStartNewChat = async () => {
     const phone = newChatPhone.replace(/\D/g, ''); // Remove non-digits
@@ -276,6 +280,7 @@ export function WhatsAppInbox() {
       if (existingConversation) {
         // Conversation exists, select it
         setSelectedConversation(existingConversation);
+        if (isMobile) setMobilePane('thread');
         toast.success('Opened existing conversation');
       } else {
         // Create a "virtual" conversation for display (it will be created when first message is sent)
@@ -291,6 +296,7 @@ export function WhatsAppInbox() {
           updated_at: new Date().toISOString(),
         } as Conversation);
         toast.success(`Ready to message ${phone}. Send a template to start the conversation.`);
+        if (isMobile) setMobilePane('thread');
       }
 
       setShowNewChat(false);
@@ -339,41 +345,58 @@ export function WhatsAppInbox() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
-      {/* Header with animation */}
-      <div className="border-b bg-gradient-to-r from-background via-background to-primary/5 p-4 relative overflow-hidden">
+    <div className="h-[100dvh] flex flex-col bg-gradient-to-br from-background via-background to-primary/5 overflow-hidden">
+      {/* Header */}
+      <div className="border-b bg-gradient-to-r from-background via-background to-primary/5 p-3 sm:p-4 relative overflow-hidden shrink-0">
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-[shimmer_3s_ease-in-out_infinite]" />
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white border border-primary/20 shadow-lg">
-              <img src={logo} alt="Sociovia" className="w-6 h-6" />
+        <div className="relative z-10 flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {isMobile && mobilePane === 'thread' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0"
+                onClick={() => setMobilePane('list')}
+                aria-label="Back to conversations"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+            )}
+            <div className="p-1.5 sm:p-2 rounded-xl bg-white border border-primary/20 shadow-lg shrink-0">
+              <img src={logo} alt="Sociovia" className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                {account?.verified_name ? <><span className="text-green-600">{account.verified_name}'s</span> Inbox</> : 'WhatsApp Inbox'}
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-2xl font-bold truncate">
+                {isMobile && mobilePane === 'thread' && selectedConversation
+                  ? (selectedConversation.user_name || selectedConversation.user_phone || 'Chat')
+                  : account?.verified_name
+                    ? <><span className="text-green-600">{account.verified_name}'s</span> Inbox</>
+                    : 'WhatsApp Inbox'}
               </h1>
-              <p className="text-sm text-muted-foreground">
-                View conversations and messages. Real-time updates active.
-              </p>
+              {(!isMobile || mobilePane === 'list') && (
+                <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block truncate">
+                  View conversations and messages. Real-time updates active.
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            {/* New Chat Button */}
-            <Button
-              variant="default"
-              className="gap-2"
-              onClick={() => setShowNewChat(true)}
-            >
-              <Plus className="w-4 h-4" />
-              New Chat
-            </Button>
-
-            {/* Contact Panel Toggle */}
-            {selectedConversation && (
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {(!isMobile || mobilePane === 'list') && (
               <Button
-                variant={contactPanelOpen ? "secondary" : "outline"}
+                variant="default"
+                size={isMobile ? 'sm' : 'default'}
+                className="gap-1 sm:gap-2"
+                onClick={() => setShowNewChat(true)}
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">New Chat</span>
+              </Button>
+            )}
+
+            {selectedConversation && (!isMobile || mobilePane === 'thread') && (
+              <Button
+                variant={contactPanelOpen ? 'secondary' : 'outline'}
                 size="icon"
                 onClick={() => setContactPanelOpen(!contactPanelOpen)}
                 className="hover:bg-primary/10"
@@ -386,18 +409,32 @@ export function WhatsAppInbox() {
         </div>
       </div>
 
-      {/* Main content - 3-column layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left panel - Conversations list */}
-        <div className="w-1/3 min-w-[280px] max-w-[400px] border-r bg-gradient-to-b from-background to-muted/20 overflow-hidden shadow-inner">
+      {/* Main content */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Conversations list */}
+        <div
+          className={`
+            border-r bg-gradient-to-b from-background to-muted/20 overflow-hidden shadow-inner min-h-0
+            ${isMobile
+              ? mobilePane === 'list' ? 'flex-1 w-full' : 'hidden'
+              : 'w-1/3 min-w-[240px] max-w-[400px] shrink-0'}
+          `}
+        >
           <ConversationList
             selectedConversationId={selectedConversation?.id || null}
             onSelectConversation={handleSelectConversation}
           />
         </div>
 
-        {/* Middle panel - Message thread */}
-        <div className="flex-1 bg-gradient-to-br from-background via-background to-muted/10 overflow-hidden">
+        {/* Message thread */}
+        <div
+          className={`
+            bg-gradient-to-br from-background via-background to-muted/10 overflow-hidden min-h-0
+            ${isMobile
+              ? mobilePane === 'thread' ? 'flex-1 w-full' : 'hidden'
+              : 'flex-1 min-w-0'}
+          `}
+        >
           <ConversationThread
             conversation={selectedConversation}
             phoneNumberId={account?.phone_number_id}
@@ -409,13 +446,27 @@ export function WhatsAppInbox() {
           />
         </div>
 
-        {/* Right panel - Contact Info (collapsible) */}
-        <ContactInfoPanel
-          conversation={selectedConversation}
-          isOpen={contactPanelOpen}
-          onClose={() => setContactPanelOpen(false)}
-          accountId={account?.id}
-        />
+        {/* Contact Info panel — sheet on mobile, column on desktop */}
+        {isMobile ? (
+          contactPanelOpen && selectedConversation && (
+            <div className="fixed inset-0 z-50 bg-background">
+              <ContactInfoPanel
+                conversation={selectedConversation}
+                isOpen={true}
+                onClose={() => setContactPanelOpen(false)}
+                accountId={account?.id}
+                embedded
+              />
+            </div>
+          )
+        ) : (
+          <ContactInfoPanel
+            conversation={selectedConversation}
+            isOpen={contactPanelOpen}
+            onClose={() => setContactPanelOpen(false)}
+            accountId={account?.id}
+          />
+        )}
       </div>
 
       {/* New Chat Dialog */}

@@ -62,7 +62,11 @@ export function useWhatsAppConnection(workspaceId: string) {
 
                 const data = await res.json();
                 
-                if (data.status === 'CONNECTED') {
+                if (
+                    data.status === 'CONNECTED' ||
+                    (data.account_summary?.phone_number_id &&
+                        ['RELINK_REQUIRED', 'PARTIAL'].includes(data.status))
+                ) {
                     return {
                         status: 'CONNECTED' as const,
                         account_summary: data.account_summary,

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { API_BASE_URL } from '@/config';
-import { clearAllUserData } from '@/layouts/DashboardLayout';
+import { clearAllUserData } from '@/lib/userSession';
 import { MessageCircle, ArrowRight, Eye, EyeOff, Mail } from 'lucide-react';
 
 export default function LoginPage() {

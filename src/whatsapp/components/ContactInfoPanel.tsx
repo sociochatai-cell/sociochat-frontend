@@ -34,6 +34,8 @@ interface ContactInfoPanelProps {
     isOpen: boolean;
     onClose: () => void;
     accountId?: number;
+    /** Full-width layout for mobile sheet overlay */
+    embedded?: boolean;
 }
 
 interface ContactStats {
@@ -48,6 +50,7 @@ export function ContactInfoPanel({
     isOpen,
     onClose,
     accountId,
+    embedded = false,
 }: ContactInfoPanelProps) {
     const [copied, setCopied] = useState(false);
     const [notes, setNotes] = useState('');
@@ -196,16 +199,8 @@ export function ContactInfoPanel({
 
     if (!conversation) return null;
 
-    return (
-        <AnimatePresence>
-            {isOpen && (
-                <motion.div
-                    initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: 320, opacity: 1 }}
-                    exit={{ width: 0, opacity: 0 }}
-                    transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                    className="h-full border-l bg-background flex flex-col overflow-hidden"
-                >
+    const panelContent = (
+        <div className={cn('h-full border-l bg-background flex flex-col overflow-hidden', embedded && 'border-l-0 w-full')}>
                     {/* Header */}
                     <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-transparent flex items-center justify-between">
                         <h3 className="font-semibold">Contact Info</h3>
@@ -374,6 +369,25 @@ export function ContactInfoPanel({
 
 
                     </div>
+        </div>
+    );
+
+    if (embedded) {
+        if (!isOpen) return null;
+        return panelContent;
+    }
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <motion.div
+                    initial={{ width: 0, opacity: 0 }}
+                    animate={{ width: 320, opacity: 1 }}
+                    exit={{ width: 0, opacity: 0 }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                    className="h-full overflow-hidden"
+                >
+                    {panelContent}
                 </motion.div>
             )}
         </AnimatePresence>

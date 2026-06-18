@@ -109,7 +109,7 @@ export default function LandingPage() {
                             The Ultimate WhatsApp Platform
                         </motion.div>
 
-                        <motion.h1 variants={FADE_UP} className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 leading-[1.1]">
+                        <motion.h1 variants={FADE_UP} className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 leading-[1.1] px-2">
                             Solve your WhatsApp <br className="hidden md:block" />
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-[#0a6847]">
                                 messaging chaos.
@@ -294,6 +294,9 @@ export default function LandingPage() {
                     <p className="text-sm text-slate-500">
                         © {new Date().getFullYear()} SocioChat.ai. All rights reserved. Built for WhatsApp Business.
                     </p>
+                    <a href="/admin/login" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">
+                        Admin Portal
+                    </a>
                 </div>
             </footer>
         </div>

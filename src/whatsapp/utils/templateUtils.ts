@@ -8,8 +8,8 @@
 
 export type TemplateCategory = 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
 export type TemplateStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
-export type HeaderType = 'none' | 'text' | 'image';
-export type ButtonType = 'quick_reply' | 'url' | 'phone' | 'flow';
+export type HeaderType = 'none' | 'text' | 'image' | 'video' | 'document' | 'location';
+export type ButtonType = 'quick_reply' | 'url' | 'phone' | 'flow' | 'copy_code' | 'voice_call' | 'catalog';
 
 export interface TemplateButton {
     type: ButtonType;
@@ -18,13 +18,14 @@ export interface TemplateButton {
     phone?: string;
     flow_id?: string;      // Meta Flow ID for flow buttons
     flow_token?: string;   // Initial data token (optional)
+    copy_code?: string;    // Example code for COPY_CODE buttons
 }
 
 export interface TemplateHeader {
     type: HeaderType;
     text?: string;
-    imageUrl?: string;    // Preview URL for the image
-    mediaHandle?: string; // Meta media_handle from Resumable Upload API (required for submission)
+    imageUrl?: string;    // Preview URL for uploaded media (image/video/document)
+    mediaHandle?: string; // Meta media_handle from Resumable Upload API (required for media formats)
 }
 
 export interface TemplateState {
@@ -62,19 +63,22 @@ export interface ValidationResult {
 // Meta API component types
 export interface MetaComponent {
     type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS' | 'body';
-    format?: 'TEXT' | 'IMAGE';
+    format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'LOCATION';
     text?: string;
     example?: {
         body_text?: string[][];
         header_handle?: string[];
+        header_text?: string[];
+        header_text_named_params?: Array<{ param_name: string; example: string }>;
     };
     buttons?: Array<{
-        type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'FLOW';
-        text: string;
+        type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'FLOW' | 'COPY_CODE' | 'VOICE_CALL' | 'CATALOG';
+        text?: string;
         url?: string;
         phone_number?: string;
         flow_id?: string;
         flow_token?: string;
+        example?: string;
     }>;
 }
 
@@ -281,9 +285,9 @@ export function validateTemplate(state: TemplateState): ValidationResult {
                 errors.header = 'Header supports only 1 variable. Found: ' + headerVars.length;
             }
         }
-    } else if (state.header.type === 'image') {
+    } else if (state.header.type === 'image' || state.header.type === 'video' || state.header.type === 'document') {
         if (!state.header.mediaHandle) {
-            errors.header = 'Image header requires uploading an image. Use the upload button to add an image.';
+            errors.header = `${state.header.type[0].toUpperCase() + state.header.type.slice(1)} header requires media upload. Use upload to generate a Meta media handle.`;
         }
     }
 
@@ -389,7 +393,14 @@ export function validateTemplate(state: TemplateState): ValidationResult {
         // Count button types
         const urlButtons = state.buttons.filter(b => b.type === 'url');
         const phoneButtons = state.buttons.filter(b => b.type === 'phone');
-        const quickReplies = state.buttons.filter(b => b.type === 'quick_reply');
+        const flowButtons = state.buttons.filter(b => b.type === 'flow');
+        const copyCodeButtons = state.buttons.filter(b => b.type === 'copy_code');
+        const catalogButtons = state.buttons.filter(b => b.type === 'catalog');
+        const voiceCallButtons = state.buttons.filter(b => b.type === 'voice_call');
+
+        if (catalogButtons.length > 0 && state.category !== 'MARKETING') {
+            errors.buttons = 'Catalog button requires MARKETING category as per Meta template rules.';
+        }
 
         if (urlButtons.length > 2) {
             errors.buttons = 'Maximum 2 URL buttons allowed. Current: ' + urlButtons.length;
@@ -397,18 +408,32 @@ export function validateTemplate(state: TemplateState): ValidationResult {
         if (phoneButtons.length > 1) {
             errors.buttons = 'Maximum 1 phone number button allowed. Current: ' + phoneButtons.length;
         }
+        if (flowButtons.length > 1) {
+            errors.buttons = 'Maximum 1 flow button allowed. Current: ' + flowButtons.length;
+        }
+        if (copyCodeButtons.length > 1) {
+            errors.buttons = 'Maximum 1 copy code button allowed. Current: ' + copyCodeButtons.length;
+        }
+        if (catalogButtons.length > 1) {
+            errors.buttons = 'Maximum 1 catalog button allowed. Current: ' + catalogButtons.length;
+        }
+        if (voiceCallButtons.length > 1) {
+            errors.buttons = 'Maximum 1 call on WhatsApp button allowed. Current: ' + voiceCallButtons.length;
+        }
 
         // Validate individual buttons
         for (let i = 0; i < state.buttons.length; i++) {
             const btn = state.buttons[i];
 
-            if (!btn.text || btn.text.trim().length === 0) {
-                errors.buttons = `Button ${i + 1}: Text is required.`;
-                break;
-            }
-            if (btn.text.length > 25) {
-                errors.buttons = `Button ${i + 1}: Text exceeds 25 characters. Current: ${btn.text.length}`;
-                break;
+            if (btn.type !== 'copy_code') {
+                if (!btn.text || btn.text.trim().length === 0) {
+                    errors.buttons = `Button ${i + 1}: Text is required.`;
+                    break;
+                }
+                if (btn.text.length > 25) {
+                    errors.buttons = `Button ${i + 1}: Text exceeds 25 characters. Current: ${btn.text.length}`;
+                    break;
+                }
             }
 
             if (btn.type === 'url') {
@@ -442,6 +467,21 @@ export function validateTemplate(state: TemplateState): ValidationResult {
             if (btn.type === 'flow' && !btn.flow_id) {
                 errors.buttons = `Button ${i + 1}: Please select a published flow.`;
                 break;
+            }
+
+            if (btn.type === 'copy_code') {
+                if (!btn.copy_code || !btn.copy_code.trim()) {
+                    errors.buttons = `Button ${i + 1}: Copy code value is required.`;
+                    break;
+                }
+                if (!/^[a-zA-Z0-9]+$/.test(btn.copy_code)) {
+                    errors.buttons = `Button ${i + 1}: Copy code must be alphanumeric only.`;
+                    break;
+                }
+                if (btn.copy_code.length > 15) {
+                    errors.buttons = `Button ${i + 1}: Copy code exceeds 15 characters.`;
+                    break;
+                }
             }
         }
     }
@@ -477,14 +517,23 @@ export function buildMetaTemplateComponents(state: TemplateState): MetaComponent
             format: 'TEXT',
             text: state.header.text,
         });
-    } else if (state.header.type === 'image' && state.header.mediaHandle) {
-        // Use mediaHandle obtained from /api/whatsapp/media/upload
+    } else if ((state.header.type === 'image' || state.header.type === 'video' || state.header.type === 'document') && state.header.mediaHandle) {
+        const formatMap: Record<'image' | 'video' | 'document', 'IMAGE' | 'VIDEO' | 'DOCUMENT'> = {
+            image: 'IMAGE',
+            video: 'VIDEO',
+            document: 'DOCUMENT',
+        };
         components.push({
             type: 'HEADER',
-            format: 'IMAGE',
+            format: formatMap[state.header.type],
             example: {
                 header_handle: [state.header.mediaHandle],
             },
+        });
+    } else if (state.header.type === 'location') {
+        components.push({
+            type: 'HEADER',
+            format: 'LOCATION',
         });
     }
 
@@ -494,7 +543,7 @@ export function buildMetaTemplateComponents(state: TemplateState): MetaComponent
 
     // Use lowercase 'body' for named params as per Meta documentation examples
     const bodyComponent: MetaComponent = {
-        type: 'BODY',
+        type: isNumeric || variables.length === 0 ? 'BODY' : 'body',
         text: state.body,
     };
 
@@ -556,14 +605,19 @@ export function buildMetaTemplateComponents(state: TemplateState): MetaComponent
                         case 'url': return 'URL';
                         case 'phone': return 'PHONE_NUMBER';
                         case 'flow': return 'FLOW';
+                        case 'copy_code': return 'COPY_CODE';
+                        case 'voice_call': return 'VOICE_CALL';
+                        case 'catalog': return 'CATALOG';
                     }
                 };
                 return {
                     type: getMetaButtonType(),
-                    text: btn.text,
+                    ...(btn.type !== 'copy_code' ? { text: btn.text || (btn.type === 'catalog' ? 'View catalog' : '') } : {}),
                     ...(btn.type === 'url' && btn.url ? { url: btn.url } : {}),
                     ...(btn.type === 'phone' && btn.phone ? { phone_number: btn.phone } : {}),
                     ...(btn.type === 'flow' && btn.flow_id ? { flow_id: btn.flow_id, flow_token: btn.flow_token || '' } : {}),
+                    ...(btn.type === 'copy_code' ? { example: btn.copy_code || '' } : {}),
+                    ...(btn.type === 'voice_call' && !btn.text ? { text: 'Call' } : {}),
                 };
             }),
         });
@@ -612,6 +666,103 @@ export interface TemplateSuggestion {
     preview: string;
     variables: number;
     description: string;
+}
+
+interface TemplateApiData {
+    id?: number;
+    name?: string;
+    category?: string;
+    language?: string;
+    status?: string;
+    rejection_reason?: string;
+    body_text?: string;
+    footer_text?: string;
+    components?: any[];
+}
+
+/**
+ * Convert template data returned by backend API into editable builder state.
+ */
+export function templateApiToState(template: TemplateApiData): TemplateState {
+    const components = Array.isArray(template.components) ? template.components : [];
+
+    const headerComp = components.find((c: any) => String(c?.type || '').toUpperCase() === 'HEADER');
+    const bodyComp = components.find((c: any) => {
+        const t = String(c?.type || '');
+        return t.toUpperCase() === 'BODY' || t === 'body';
+    });
+    const footerComp = components.find((c: any) => String(c?.type || '').toUpperCase() === 'FOOTER');
+    const buttonsComp = components.find((c: any) => String(c?.type || '').toUpperCase() === 'BUTTONS');
+
+    let header: TemplateHeader = { type: 'none' };
+    if (headerComp) {
+        const format = String(headerComp.format || '').toUpperCase();
+        if (format === 'TEXT') {
+            header = { type: 'text', text: String(headerComp.text || '') };
+        } else if (format === 'IMAGE' || format === 'VIDEO' || format === 'DOCUMENT') {
+            const headerHandle = Array.isArray(headerComp.example?.header_handle)
+                ? String(headerComp.example.header_handle[0] || '')
+                : '';
+            header = {
+                type: format.toLowerCase() as 'image' | 'video' | 'document',
+                mediaHandle: headerHandle || undefined,
+            };
+        } else if (format === 'LOCATION') {
+            header = { type: 'location' };
+        }
+    }
+
+    const rawButtons = Array.isArray(buttonsComp?.buttons) ? buttonsComp.buttons : [];
+    const buttons: TemplateButton[] = rawButtons
+        .map((btn: any): TemplateButton | null => {
+            const metaType = String(btn?.type || '').toUpperCase();
+            const text = String(btn?.text || '');
+
+            switch (metaType) {
+                case 'QUICK_REPLY':
+                    return { type: 'quick_reply', text };
+                case 'URL':
+                    return { type: 'url', text, url: String(btn?.url || '') };
+                case 'PHONE_NUMBER':
+                    return { type: 'phone', text, phone: String(btn?.phone_number || '') };
+                case 'FLOW':
+                    return {
+                        type: 'flow',
+                        text,
+                        flow_id: String(btn?.flow_id || ''),
+                        flow_token: String(btn?.flow_token || ''),
+                    };
+                case 'COPY_CODE':
+                    return { type: 'copy_code', text: text || 'Copy Code', copy_code: String(btn?.example || '') };
+                case 'VOICE_CALL':
+                    return { type: 'voice_call', text: text || 'Call on WhatsApp' };
+                case 'CATALOG':
+                    return { type: 'catalog', text: text || 'View Catalog' };
+                default:
+                    return null;
+            }
+        })
+        .filter(Boolean) as TemplateButton[];
+
+    const status = String(template.status || 'DRAFT').toUpperCase();
+    const normalizedStatus: TemplateStatus =
+        status === 'PENDING' || status === 'APPROVED' || status === 'REJECTED'
+            ? (status as TemplateStatus)
+            : 'DRAFT';
+
+    return {
+        ...defaultTemplateState,
+        id: template.id,
+        name: String(template.name || ''),
+        category: (String(template.category || 'UTILITY').toUpperCase() as TemplateCategory),
+        language: String(template.language || 'en_US'),
+        status: normalizedStatus,
+        rejectionReason: template.rejection_reason,
+        header,
+        body: String(bodyComp?.text || template.body_text || ''),
+        footer: String(footerComp?.text || template.footer_text || ''),
+        buttons,
+    };
 }
 
 /**

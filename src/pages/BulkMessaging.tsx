@@ -337,6 +337,96 @@ const matchesRecipientSegmentClient = (
 
 const normalizePhoneForMatch = (value?: string | null): string => (value || '').replace(/\D/g, '');
 
+/** Parse one CSV line respecting quoted fields (commas/semicolons inside quotes). */
+function parseCsvLine(line: string, delimiter: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                if (line[i + 1] === '"') {
+                    current += '"';
+                    i++;
+                } else {
+                    inQuotes = false;
+                }
+            } else {
+                current += ch;
+            }
+        } else if (ch === '"') {
+            inQuotes = true;
+        } else if (ch === delimiter) {
+            result.push(current.trim());
+            current = '';
+        } else {
+            current += ch;
+        }
+    }
+
+    result.push(current.trim());
+    return result.map((value) => value.replace(/^"|"$/g, ''));
+}
+
+function detectCsvDelimiter(headerLine: string): string {
+    const candidates = [',', ';', '\t'];
+    let best = ',';
+    let bestCount = 0;
+    for (const delimiter of candidates) {
+        const count = parseCsvLine(headerLine, delimiter).length;
+        if (count > bestCount) {
+            bestCount = count;
+            best = delimiter;
+        }
+    }
+    return best;
+}
+
+/** Parse CSV text exported from Excel/Google Sheets (BOM, CRLF, quoted fields, ; delimiter). */
+function parseBulkCsvContent(text: string): { headers: string[]; rows: Record<string, string>[] } {
+    const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const lines = normalized.split('\n').map((line) => line.trimEnd()).filter((line) => line.trim());
+
+    if (lines.length < 2) {
+        throw new Error('CSV must have a header row and at least one data row');
+    }
+
+    const delimiter = detectCsvDelimiter(lines[0]);
+    const headers = parseCsvLine(lines[0], delimiter)
+        .map((header) => header.trim())
+        .filter((header) => header.length > 0);
+
+    if (headers.length === 0) {
+        throw new Error('CSV header row is empty');
+    }
+
+    const rows: Record<string, string>[] = [];
+    for (let i = 1; i < lines.length; i++) {
+        const values = parseCsvLine(lines[i], delimiter);
+        if (values.every((value) => !value.trim())) continue;
+
+        const row: Record<string, string> = {};
+        headers.forEach((header, idx) => {
+            row[header] = values[idx]?.trim() ?? '';
+        });
+        rows.push(row);
+    }
+
+    return { headers, rows };
+}
+
+function isCsvUploadFile(file: File): boolean {
+    const name = file.name.toLowerCase();
+    return (
+        name.endsWith('.csv')
+        || file.type === 'text/csv'
+        || file.type === 'application/vnd.ms-excel'
+        || file.type === 'text/plain'
+    );
+}
+
 const matchesRecipientSmartFilterClient = (
     recipient: CampaignRecipientIntelligence,
     smartFilter: RecipientSmartFilter
@@ -520,6 +610,7 @@ export default function BulkMessaging() {
     const [templateSearch, setTemplateSearch] = useState('');
     const [stepHeaderImage, setStepHeaderImage] = useState<string | null>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
+    const [csvDragActive, setCsvDragActive] = useState(false);
 
     // Filter templates based on search
     const filteredTemplates = useMemo(() => {
@@ -536,6 +627,17 @@ export default function BulkMessaging() {
         if (!text) return [];
         return Array.from(text.matchAll(/\{\{([^}]+)\}\}/g)).map(m => ({ raw: m[0], name: m[1], index: m.index }));
     };
+
+    // Helper to get media header format from template components
+    const getTemplateMediaHeaderFormat = (template: Template | null): 'IMAGE' | 'VIDEO' | 'DOCUMENT' | null => {
+        if (!template?.components) return null;
+        const headerComp = template.components.find((c) => c.type === 'HEADER');
+        const format = headerComp?.format;
+        if (format === 'IMAGE' || format === 'VIDEO' || format === 'DOCUMENT') return format;
+        return null;
+    };
+
+    const templateNeedsMediaHeader = (template: Template | null) => !!getTemplateMediaHeaderFormat(template);
 
     // Helper function to detect variable context from surrounding text
     // Supports both numeric (varNum="1") and named (varNum="name") keys
@@ -1425,43 +1527,80 @@ export default function BulkMessaging() {
         }
     };
 
-    const handleCsvFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const processCsvFile = async (file: File) => {
+        if (!isCsvUploadFile(file)) {
+            toast({
+                title: 'Invalid file',
+                description: 'Please upload a .csv file (Excel: Save As → CSV UTF-8).',
+                variant: 'destructive',
+            });
+            return;
+        }
 
         try {
             const text = await file.text();
-            const lines = text.split('\n').filter(line => line.trim());
-            if (lines.length < 2) {
-                toast({ title: 'Invalid CSV', description: 'CSV must have header and data', variant: 'destructive' });
+            const { headers, rows } = parseBulkCsvContent(text);
+
+            if (rows.length === 0) {
+                toast({
+                    title: 'Invalid CSV',
+                    description: 'CSV must have a header row and at least one data row.',
+                    variant: 'destructive',
+                });
                 return;
             }
 
-            const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-            const parsedData: any[] = [];
-            for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-                if (values.length === 0 || (values.length === 1 && !values[0])) continue;
-                const row: Record<string, string> = {};
-                headers.forEach((h, idx) => { row[h] = values[idx] || ''; });
-                parsedData.push(row);
+            const autoMap = autoMapColumns(headers, selectedTemplate);
+            if (!autoMap.phone) {
+                toast({
+                    title: 'Phone column not detected',
+                    description: 'Map a phone/mobile column in the next step (e.g. phone, mobile, contact_number).',
+                });
             }
 
-            const autoMap = autoMapColumns(headers, selectedTemplate);
             setImportMapping({
                 active: true,
                 type: 'csv',
                 sourceName: file.name,
                 headers,
-                previewData: parsedData.slice(0, 5),
-                fullData: parsedData,
-                columnMap: autoMap
+                previewData: rows.slice(0, 5),
+                fullData: rows,
+                columnMap: autoMap,
             });
-
-            if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (err) {
-            toast({ title: 'Error', description: 'Failed to parse CSV', variant: 'destructive' });
+            console.error('CSV parse error:', err);
+            toast({
+                title: 'Failed to parse CSV',
+                description: err instanceof Error ? err.message : 'Check file format and try again.',
+                variant: 'destructive',
+            });
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
+    };
+
+    const handleCsvFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await processCsvFile(file);
+    };
+
+    const handleDownloadSampleCsv = () => {
+        const templateVars = selectedTemplate ? getTemplateVariables(selectedTemplate) : [];
+        const headers = ['phone', 'name', ...templateVars];
+        const sampleValues = [
+            '919876543210',
+            'John Doe',
+            ...templateVars.map((_, index) => `value_${index + 1}`),
+        ];
+        const csv = `${headers.join(',')}\n${sampleValues.join(',')}\n`;
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'bulk_audience_sample.csv';
+        anchor.click();
+        URL.revokeObjectURL(url);
     };
 
     const autoMapColumns = (headers: string[], template: Template | null) => {
@@ -1469,8 +1608,13 @@ export default function BulkMessaging() {
         headers.forEach(h => {
             const lower = h.toLowerCase().trim();
             const normalized = lower.replace(/[\s_-]+/g, '_'); // "contact number" → "contact_number"
-            const PHONE_PATTERNS = ['phone', 'phone_number', 'mobile', 'mobile_number', 'contact_number', 'contact number', 'whatsapp', 'whatsapp_number', 'cell', 'telephone', 'tel', 'number'];
-            const NAME_PATTERNS = ['name', 'first_name', 'customer_name', 'customer', 'client_name', 'full_name', 'contact_person', 'person'];
+            const PHONE_PATTERNS = [
+                'phone', 'phone_number', 'phonenumber', 'phone_no', 'phone no',
+                'mobile', 'mobile_number', 'mobilenumber', 'mobile_no', 'mobile no',
+                'contact_number', 'contact number', 'contact_no', 'whatsapp', 'whatsapp_number',
+                'cell', 'telephone', 'tel', 'msisdn', 'wa_id', 'recipient_phone',
+            ];
+            const NAME_PATTERNS = ['name', 'first_name', 'customer_name', 'customer', 'client_name', 'full_name', 'contact_person', 'person', 'recipient_name'];
 
             if (PHONE_PATTERNS.includes(lower) || PHONE_PATTERNS.includes(normalized)) {
                 map['phone'] = h;
@@ -1591,6 +1735,15 @@ export default function BulkMessaging() {
         setRecipients(prev => [...prev, ...newRecipients]);
         setImportMapping({ active: false, type: 'csv', sourceName: '', headers: [], previewData: [], fullData: [], columnMap: {} });
         setSelectedDatasetId('');
+
+        if (addedCount === 0) {
+            toast({
+                title: 'No recipients added',
+                description: 'Check phone column mapping and that numbers are valid (10-digit Indian or with country code).',
+                variant: 'destructive',
+            });
+            return;
+        }
 
         toast({ title: 'Import Complete', description: `Added ${addedCount} recipients` });
     };
@@ -1849,7 +2002,13 @@ export default function BulkMessaging() {
                     ...r,
                     params: {
                         ...(Object.keys(params).length > 0 ? params : {}),
-                        ...(stepHeaderImage ? { header_image_url: stepHeaderImage } : {})
+                        ...(stepHeaderImage ? (
+                            getTemplateMediaHeaderFormat(selectedTemplate) === 'VIDEO'
+                                ? { header_video_url: stepHeaderImage }
+                                : getTemplateMediaHeaderFormat(selectedTemplate) === 'DOCUMENT'
+                                    ? { header_document_url: stepHeaderImage }
+                                    : { header_image_url: stepHeaderImage }
+                        ) : {})
                     }
                 };
             });
@@ -2606,8 +2765,8 @@ export default function BulkMessaging() {
                                                         onClick={() => {
                                                             setSelectedTemplate(template);
                                                             // Reset image if not an image template
-                                                            const hasImageHeader = template.components?.some(c => c.type === 'HEADER' && c.format === 'IMAGE');
-                                                            if (!hasImageHeader) setStepHeaderImage(null);
+                                                            const hasMediaHeader = templateNeedsMediaHeader(template);
+                                                            if (!hasMediaHeader) setStepHeaderImage(null);
                                                         }}
                                                         className={cn(
                                                             "group relative flex flex-col p-4 rounded-xl border-2 transition-all cursor-pointer hover:border-primary/50",
@@ -2658,12 +2817,19 @@ export default function BulkMessaging() {
                                                     {/* Header Image Component */}
                                                     {(() => {
                                                         const headerComp = selectedTemplate.components?.find(c => c.type === 'HEADER');
-                                                        if (headerComp?.format === 'IMAGE') {
+                                                        if (headerComp?.format === 'IMAGE' || headerComp?.format === 'VIDEO' || headerComp?.format === 'DOCUMENT') {
+                                                            const isImage = headerComp.format === 'IMAGE';
                                                             return (
                                                                 <div className="mb-3 rounded-md overflow-hidden bg-gray-100 aspect-video flex flex-col items-center justify-center border group relative">
                                                                     {stepHeaderImage ? (
                                                                         <>
-                                                                            <img src={stepHeaderImage} alt="Header" className="w-full h-full object-cover" />
+                                                                            {isImage ? (
+                                                                                <img src={stepHeaderImage} alt="Header" className="w-full h-full object-cover" />
+                                                                            ) : (
+                                                                                <div className="flex flex-col items-center gap-2 p-4 text-center text-muted-foreground">
+                                                                                    <span className="text-xs font-medium">{headerComp.format} uploaded</span>
+                                                                                </div>
+                                                                            )}
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); setStepHeaderImage(null); }}
                                                                                 className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -2740,7 +2906,7 @@ export default function BulkMessaging() {
                                             </div>
                                         )}
 
-                                        {selectedTemplate.components?.some(c => c.type === 'HEADER' && c.format === 'IMAGE') && (
+                                        {templateNeedsMediaHeader(selectedTemplate) && (
                                             <div className={cn(
                                                 "p-4 rounded-xl border-2 transition-all",
                                                 stepHeaderImage ? "bg-emerald-50 border-emerald-200" : "bg-blue-50 border-blue-200"
@@ -2748,24 +2914,30 @@ export default function BulkMessaging() {
                                                 <div className="flex items-center gap-2 mb-2">
                                                     {stepHeaderImage ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <Info className="w-4 h-4 text-blue-600" />}
                                                     <span className={cn("text-sm font-bold", stepHeaderImage ? "text-emerald-900" : "text-blue-900")}>
-                                                        {stepHeaderImage ? "Image Ready" : "Header Image Needed"}
+                                                        {stepHeaderImage ? "Media Ready" : `Header ${getTemplateMediaHeaderFormat(selectedTemplate) || 'Media'} Needed`}
                                                     </span>
                                                 </div>
                                                 <p className={cn("text-xs leading-relaxed mb-3", stepHeaderImage ? "text-emerald-800" : "text-blue-800")}>
                                                     {stepHeaderImage
-                                                        ? "Successfully uploaded. This image will be sent as the header for all messages in this campaign."
-                                                        : "This template requires an image header. Click the upload area in the preview to add one."}
+                                                        ? "Successfully uploaded. This media will be sent as the header for all messages in this campaign."
+                                                        : `This template requires a ${(getTemplateMediaHeaderFormat(selectedTemplate) || 'media').toLowerCase()} header. Click the upload area in the preview to add one.`}
                                                 </p>
                                                 {!stepHeaderImage && (
                                                     <div className="relative">
                                                         <Button variant="outline" size="sm" className="w-full bg-white border-blue-300" disabled={uploadingImage}>
                                                             {uploadingImage ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Upload className="w-3 h-3 mr-2" />}
-                                                            Choose Header Image
+                                                            Choose Header {getTemplateMediaHeaderFormat(selectedTemplate) || 'Media'}
                                                         </Button>
                                                         <input
                                                             type="file"
                                                             className="absolute inset-0 opacity-0 cursor-pointer"
-                                                            accept="image/*"
+                                                            accept={
+                                                                getTemplateMediaHeaderFormat(selectedTemplate) === 'VIDEO'
+                                                                    ? 'video/mp4,video/quicktime,video/3gpp'
+                                                                    : getTemplateMediaHeaderFormat(selectedTemplate) === 'DOCUMENT'
+                                                                        ? 'application/pdf,.doc,.docx,.txt'
+                                                                        : 'image/*'
+                                                            }
                                                             onChange={handleHeaderImageUpload}
                                                             disabled={uploadingImage}
                                                         />
@@ -2886,26 +3058,68 @@ export default function BulkMessaging() {
 
                                         {!importMapping.active ? (
                                             <>
-                                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
+                                                <div
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            fileInputRef.current?.click();
+                                                        }
+                                                    }}
+                                                    onDragEnter={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setCsvDragActive(true);
+                                                    }}
+                                                    onDragOver={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setCsvDragActive(true);
+                                                    }}
+                                                    onDragLeave={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setCsvDragActive(false);
+                                                    }}
+                                                    onDrop={async (e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setCsvDragActive(false);
+                                                        const file = e.dataTransfer.files?.[0];
+                                                        if (file) await processCsvFile(file);
+                                                    }}
+                                                    className={cn(
+                                                        'border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer',
+                                                        csvDragActive
+                                                            ? 'border-primary bg-primary/5'
+                                                            : 'border-gray-300 hover:border-primary/50'
+                                                    )}
+                                                >
                                                     <input
                                                         ref={fileInputRef}
                                                         type="file"
-                                                        accept=".csv"
+                                                        accept=".csv,text/csv,application/vnd.ms-excel"
                                                         onChange={handleCsvFileSelect}
                                                         className="hidden"
                                                         id="csv-upload-bulk"
                                                     />
-                                                    <label htmlFor="csv-upload-bulk" className="cursor-pointer">
-                                                        <Upload className="w-10 h-10 mx-auto text-gray-400 mb-3" />
-                                                        <p className="text-sm font-medium text-gray-600">
-                                                            Click to select a CSV file
-                                                        </p>
-                                                        <p className="text-xs text-gray-400 mt-2">
-                                                            Must contain: phone column + variable data columns
-                                                        </p>
-                                                    </label>
+                                                    <Upload className="w-10 h-10 mx-auto text-gray-400 mb-3" />
+                                                    <p className="text-sm font-medium text-gray-600">
+                                                        Drag & drop a CSV file here, or click to browse
+                                                    </p>
+                                                    <p className="text-xs text-gray-400 mt-2">
+                                                        Must contain: phone column + variable data columns
+                                                    </p>
                                                 </div>
-                                                <Button variant="outline" size="sm" className="w-full">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="w-full"
+                                                    onClick={handleDownloadSampleCsv}
+                                                >
                                                     <Download className="w-4 h-4 mr-2" />
                                                     Download Sample Template
                                                 </Button>
@@ -3397,14 +3611,18 @@ export default function BulkMessaging() {
                                                 )}
 
                                                 {/* Media Header Placeholders */}
-                                                {selectedTemplate?.components?.some((c: any) => c.type === 'HEADER' && c.format === 'IMAGE') && (
+                                                {templateNeedsMediaHeader(selectedTemplate) && (
                                                     <div className="mb-2 h-40 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center border">
                                                         {stepHeaderImage ? (
-                                                            <img src={stepHeaderImage} alt="Header" className="w-full h-full object-cover" />
+                                                            getTemplateMediaHeaderFormat(selectedTemplate) === 'IMAGE' ? (
+                                                                <img src={stepHeaderImage} alt="Header" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground">{getTemplateMediaHeaderFormat(selectedTemplate)} header uploaded</span>
+                                                            )
                                                         ) : (
                                                             <div className="text-center p-4">
                                                                 <Upload className="w-8 h-8 mx-auto mb-1 opacity-20" />
-                                                                <span className="text-xs text-muted-foreground">No Header Image Uploaded</span>
+                                                                <span className="text-xs text-muted-foreground">No Header Media Uploaded</span>
                                                             </div>
                                                         )}
                                                     </div>
@@ -3596,7 +3814,7 @@ export default function BulkMessaging() {
                                 setCurrentStep(prev => prev + 1);
                             }}
                             disabled={
-                                (currentStep === 0 && (!campaignName || !selectedTemplate || (selectedTemplate.components?.some((c: any) => c.type === 'HEADER' && c.format === 'IMAGE') && !stepHeaderImage))) ||
+                                (currentStep === 0 && (!campaignName || !selectedTemplate || (templateNeedsMediaHeader(selectedTemplate) && !stepHeaderImage))) ||
                                 (currentStep === 1 && recipients.length === 0 && !phoneNumbersText.trim())
                             }
                         >

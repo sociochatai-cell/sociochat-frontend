@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
+import { GatedRoute } from '@/components/feature-gate/GatedRoute';
+import RequireAdmin from '@/components/auth/RequireAdmin';
 
 // New Layouts & Pages
 import DashboardLayout from './layouts/DashboardLayout';
@@ -8,13 +10,23 @@ const SignupPage = lazy(() => import('./pages/SignupPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
+const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 import LandingPage from './pages/LandingPage';
 
+// Admin
+const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminInspectLogin = lazy(() => import('./pages/admin/AdminInspectLogin'));
+const AdminReview = lazy(() => import('./pages/admin/AdminReview'));
+const AdminSubscriptions = lazy(() => import('./pages/admin/AdminSubscriptions'));
+const AdminPlans = lazy(() => import('./pages/admin/AdminPlans'));
+const AdminPrivateSlot = lazy(() => import('./pages/admin/AdminPrivateSlot'));
+
 /* ── Lazy-loaded WhatsApp pages ── */
-// Named exports — need .then() to wrap
 const WhatsAppInbox = lazy(() => import('./whatsapp/pages/WhatsAppInbox').then(m => ({ default: m.WhatsAppInbox })));
 const WhatsAppSettings = lazy(() => import('./whatsapp/pages/WhatsAppSettings').then(m => ({ default: m.WhatsAppSettings })));
 const FlowsList = lazy(() => import('./whatsapp/pages/FlowsList').then(m => ({ default: m.FlowsList })));
@@ -22,8 +34,6 @@ const FlowBuilder = lazy(() => import('./whatsapp/pages/FlowBuilder').then(m => 
 const FlowBuilderV2 = lazy(() => import('./whatsapp/pages/FlowBuilderV2').then(m => ({ default: m.FlowBuilderV2 })));
 const DripCampaignsSection = lazy(() => import('./whatsapp/pages/DripCampaignsSection').then(m => ({ default: m.DripCampaignsSection })));
 const WhatsAppSetupPage = lazy(() => import('./whatsapp_automation/pages/WhatsAppSetupPage'));
-
-// Default exports — import directly
 const WhatsAppAutomation = lazy(() => import('./whatsapp/pages/WhatsAppAutomation'));
 const WhatsAppContacts = lazy(() => import('./whatsapp/pages/WhatsAppContacts'));
 const WhatsAppDatasets = lazy(() => import('./whatsapp/pages/WhatsAppDatasets'));
@@ -32,16 +42,10 @@ const WhatsAppGuide = lazy(() => import('./whatsapp/pages/WhatsAppGuide'));
 const TrackingAnalytics = lazy(() => import('./whatsapp/pages/TrackingAnalytics'));
 const DripAnalyticsPage = lazy(() => import('./whatsapp/pages/DripAnalyticsPage'));
 const DripOverallAnalyticsPage = lazy(() => import('./whatsapp/pages/DripOverallAnalyticsPage'));
-
-// Template pages — list (TemplateManager) and builder (TemplateBuilderPage)
 const TemplateManager = lazy(() => import('./whatsapp_automation/pages/TemplateManager'));
 const TemplateBuilderPage = lazy(() => import('./whatsapp/pages/TemplateBuilderPage').then(m => ({ default: m.TemplateBuilderPage ?? m.default })));
-
-// Interactive Automation
 const InteractiveAutomation = lazy(() => import('./whatsapp/pages/InteractiveAutomation').then(m => ({ default: m.InteractiveAutomation })));
 const InteractiveAutomationsList = lazy(() => import('./whatsapp/pages/InteractiveAutomation/InteractiveAutomationsList'));
-
-// Coexistence Dashboard
 const CoexistenceDashboard = lazy(() => import('./whatsapp/pages/CoexistenceDashboard').then(m => ({ default: m.CoexistenceDashboard ?? m.default })));
 const BulkMessaging = lazy(() => import('./pages/BulkMessaging'));
 const WhatsAppDashboard = lazy(() => import('./pages/WhatsAppDashboard'));
@@ -51,7 +55,6 @@ const ConversationsInbox = lazy(() => import('./whatsapp_automation/pages/Conver
 const AdCreatorWizard = lazy(() => import('./ctwa/pages/AdCreatorWizard'));
 const CampaignsListPage = lazy(() => import('./ctwa/pages/CampaignsListPage'));
 
-/* ── Loading fallback ── */
 function PageLoader() {
   return (
     <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -66,94 +69,81 @@ function PageLoader() {
   );
 }
 
-/* ── Main App ── */
+function G({ feature, children }: { feature: Parameters<typeof GatedRoute>[0]['feature']; children: React.ReactNode }) {
+  return <GatedRoute feature={feature}>{children}</GatedRoute>;
+}
+
 export default function App() {
   return (
     <Routes>
-      {/* Auth / static pages — wrapped in Suspense */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SignupPage /></Suspense>} />
       <Route path="/login" element={<Suspense fallback={<PageLoader />}><LoginPage /></Suspense>} />
       <Route path="/verify-email" element={<Suspense fallback={<PageLoader />}><VerifyEmailPage /></Suspense>} />
       <Route path="/pricing" element={<Suspense fallback={<PageLoader />}><PricingPage /></Suspense>} />
+      <Route path="/subscription" element={<Suspense fallback={<PageLoader />}><SubscriptionPage /></Suspense>} />
       <Route path="/forgot-password" element={<Suspense fallback={<PageLoader />}><ForgotPasswordPage /></Suspense>} />
       <Route path="/reset-password" element={<Suspense fallback={<PageLoader />}><ResetPasswordPage /></Suspense>} />
       <Route path="/privacy-policy" element={<Suspense fallback={<PageLoader />}><PrivacyPolicy /></Suspense>} />
 
-      {/* Dashboard — layout handles its own Suspense + transitions */}
+      {/* Admin portal */}
+      <Route path="/admin/login" element={<Suspense fallback={<PageLoader />}><AdminLogin /></Suspense>} />
+      <Route path="/admin" element={<RequireAdmin><Suspense fallback={<PageLoader />}><AdminLayout /></Suspense></RequireAdmin>}>
+        <Route index element={<Navigate to="/admin/users" replace />} />
+        <Route path="users" element={<Suspense fallback={<PageLoader />}><AdminUsers /></Suspense>} />
+        <Route path="inspect-login" element={<Suspense fallback={<PageLoader />}><AdminInspectLogin /></Suspense>} />
+        <Route path="review" element={<Suspense fallback={<PageLoader />}><AdminReview /></Suspense>} />
+        <Route path="subscriptions" element={<Suspense fallback={<PageLoader />}><AdminSubscriptions /></Suspense>} />
+        <Route path="plans" element={<Suspense fallback={<PageLoader />}><AdminPlans /></Suspense>} />
+        <Route path="private-slot" element={<Suspense fallback={<PageLoader />}><AdminPrivateSlot /></Suspense>} />
+      </Route>
+
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<DashboardHome />} />
-        <Route path="hub" element={<WhatsAppDashboard />} />
-
-        {/* Inbox & Test Console */}
-        <Route path="inbox" element={<WhatsAppInbox />} />
-        <Route path="conversations" element={<ConversationsInbox />} />
+        <Route path="hub" element={<G feature="unified_dashboard_analytics"><WhatsAppDashboard /></G>} />
+        <Route path="inbox" element={<G feature="whatsapp_inbox"><WhatsAppInbox /></G>} />
+        <Route path="conversations" element={<G feature="whatsapp_inbox"><ConversationsInbox /></G>} />
         <Route path="send" element={<WhatsAppTestConsole />} />
-        <Route path="bulk" element={<BulkMessaging />} />
-        <Route path="bulk/:id" element={<BulkMessaging />} />
-
-        {/* Templates — List page first, then builder sub-routes */}
-        <Route path="templates" element={<TemplateManager />} />
-        <Route path="templates/new" element={<TemplateBuilderPage />} />
-        <Route path="templates/builder" element={<TemplateBuilderPage />} />
-        <Route path="templates/:id/edit" element={<TemplateBuilderPage />} />
-
-        {/* Automation */}
-        <Route path="automation" element={<WhatsAppAutomation />} />
-
-        {/* Interactive Automation */}
-        <Route path="interactive-automation" element={<InteractiveAutomationsList />} />
-        <Route path="interactive-automations" element={<InteractiveAutomationsList />} />
-        <Route path="interactive-automation/new" element={<InteractiveAutomation />} />
-        <Route path="interactive-automation/:id" element={<InteractiveAutomation />} />
-
-        {/* Drip Campaigns */}
-        <Route path="drip" element={<DripCampaignsSection accountId={0} />} />
-        <Route path="drip-analytics" element={<DripOverallAnalyticsPage />} />
-        <Route path="campaigns/:id/analytics" element={<DripAnalyticsPage />} />
-
-        {/* Flows */}
-        <Route path="flows" element={<FlowsList />} />
-        <Route path="flows/new" element={<FlowBuilderV2 />} />
-        <Route path="flows/builder" element={<FlowBuilder />} />
-        <Route path="flows/builder/:id" element={<FlowBuilder />} />
-        <Route path="flows/:id" element={<FlowBuilder />} />
-        <Route path="flows/:id/edit" element={<FlowBuilderV2 />} />
-        <Route path="flows/v2/new" element={<FlowBuilderV2 />} />
-        <Route path="flows/v1/new" element={<FlowBuilder />} />
-
-        {/* Analytics (hub) & Tracking */}
-        <Route path="analytics" element={<WhatsAppDashboard />} />
-        <Route path="tracking" element={<TrackingAnalytics />} />
-
-        {/* Contacts & Datasets */}
-        <Route path="contacts" element={<WhatsAppContacts />} />
-        <Route path="datasets" element={<WhatsAppDatasets />} />
-
-        {/* Settings & Setup */}
+        <Route path="bulk" element={<G feature="whatsapp_bulk_messaging"><BulkMessaging /></G>} />
+        <Route path="bulk/:id" element={<G feature="whatsapp_bulk_messaging"><BulkMessaging /></G>} />
+        <Route path="templates" element={<G feature="whatsapp_templates"><TemplateManager /></G>} />
+        <Route path="templates/new" element={<G feature="whatsapp_templates"><TemplateBuilderPage /></G>} />
+        <Route path="templates/builder" element={<G feature="whatsapp_templates"><TemplateBuilderPage /></G>} />
+        <Route path="templates/:id/edit" element={<G feature="whatsapp_templates"><TemplateBuilderPage /></G>} />
+        <Route path="automation" element={<G feature="whatsapp_automation"><WhatsAppAutomation /></G>} />
+        <Route path="interactive-automation" element={<G feature="whatsapp_interactive_automation"><InteractiveAutomationsList /></G>} />
+        <Route path="interactive-automations" element={<G feature="whatsapp_interactive_automation"><InteractiveAutomationsList /></G>} />
+        <Route path="interactive-automation/new" element={<G feature="whatsapp_interactive_automation"><InteractiveAutomation /></G>} />
+        <Route path="interactive-automation/:id" element={<G feature="whatsapp_interactive_automation"><InteractiveAutomation /></G>} />
+        <Route path="drip" element={<G feature="whatsapp_drip"><DripCampaignsSection accountId={0} /></G>} />
+        <Route path="drip-analytics" element={<G feature="whatsapp_drip"><DripOverallAnalyticsPage /></G>} />
+        <Route path="campaigns/:id/analytics" element={<G feature="whatsapp_drip"><DripAnalyticsPage /></G>} />
+        <Route path="flows" element={<G feature="whatsapp_flows"><FlowsList /></G>} />
+        <Route path="flows/new" element={<G feature="whatsapp_flows"><FlowBuilderV2 /></G>} />
+        <Route path="flows/builder" element={<G feature="whatsapp_flows"><FlowBuilder /></G>} />
+        <Route path="flows/builder/:id" element={<G feature="whatsapp_flows"><FlowBuilder /></G>} />
+        <Route path="flows/:id" element={<G feature="whatsapp_flows"><FlowBuilder /></G>} />
+        <Route path="flows/:id/edit" element={<G feature="whatsapp_flows"><FlowBuilderV2 /></G>} />
+        <Route path="flows/v2/new" element={<G feature="whatsapp_flows"><FlowBuilderV2 /></G>} />
+        <Route path="flows/v1/new" element={<G feature="whatsapp_flows"><FlowBuilder /></G>} />
+        <Route path="analytics" element={<G feature="whatsapp_analytics"><WhatsAppDashboard /></G>} />
+        <Route path="tracking" element={<G feature="whatsapp_tracking"><TrackingAnalytics /></G>} />
+        <Route path="contacts" element={<G feature="whatsapp_contacts"><WhatsAppContacts /></G>} />
+        <Route path="datasets" element={<G feature="whatsapp_datasets"><WhatsAppDatasets /></G>} />
         <Route path="settings" element={<WhatsAppSettings />} />
         <Route path="connect" element={<WhatsAppSetupPage />} />
         <Route path="whatsapp/setup" element={<WhatsAppSetupPage />} />
         <Route path="guide" element={<WhatsAppGuide />} />
         <Route path="whatsapp/guide" element={<WhatsAppGuide />} />
-
-        {/* Coexistence Dashboard */}
         <Route path="coexistence" element={<CoexistenceDashboard />} />
-
-        {/* Catalog & CTWA */}
-        <Route path="catalog" element={<WhatsAppCatalog />} />
-        <Route path="campaign/create" element={<CreateCTWA />} />
-
+        <Route path="catalog" element={<G feature="whatsapp_catalog"><WhatsAppCatalog /></G>} />
+        <Route path="campaign/create" element={<G feature="whatsapp_ctwa"><CreateCTWA /></G>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
 
-      {/* CTWA standalone routes */}
-      <Route path="/ctwa/create" element={<Suspense fallback={<PageLoader />}><AdCreatorWizard /></Suspense>} />
-      <Route path="/ctwa/campaigns" element={<Suspense fallback={<PageLoader />}><CampaignsListPage /></Suspense>} />
-
-      {/* Global Catch All */}
+      <Route path="/ctwa/create" element={<Suspense fallback={<PageLoader />}><G feature="whatsapp_ctwa"><AdCreatorWizard /></G></Suspense>} />
+      <Route path="/ctwa/campaigns" element={<Suspense fallback={<PageLoader />}><G feature="whatsapp_ctwa"><CampaignsListPage /></G></Suspense>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
-

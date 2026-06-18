@@ -41,11 +41,13 @@ import {
   Mic,
   Loader2,
   Inbox,
-  Archive
+  Archive,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { whatsappApi, type Conversation, type ConversationDetail, type ConversationMessage } from '../api';
 import { useWhatsAppRealtime, isSseHealthy } from '@/whatsapp/hooks/useWhatsAppRealtime';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 
 // ============================================================
 // Types
@@ -303,6 +305,8 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'responded' | 'closed'>('all');
+  const isMobile = useIsMobile();
+  const [mobilePane, setMobilePane] = useState<'list' | 'thread'>('list');
   
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -477,7 +481,8 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
 
   const handleSelectConversation = useCallback((conversation: Conversation) => {
     fetchConversationDetail(conversation.id);
-  }, [fetchConversationDetail]);
+    if (isMobile) setMobilePane('thread');
+  }, [fetchConversationDetail, isMobile]);
 
   const handleSendMessage = useCallback(async () => {
     if (!newMessage.trim() || !selectedConversation || isSending) return;
@@ -517,10 +522,11 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
       // Refresh conversations list
       fetchConversations();
       setSelectedConversation(null);
+      if (isMobile) setMobilePane('list');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to close conversation');
     }
-  }, [selectedConversation, fetchConversations]);
+  }, [selectedConversation, fetchConversations, isMobile]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -549,9 +555,16 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
   // ============================================================
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex">
+    <div className="h-[calc(100dvh-4rem)] flex overflow-hidden min-h-0">
       {/* Conversations List */}
-      <div className="w-80 border-r flex flex-col bg-background">
+      <div
+        className={`
+          border-r flex flex-col bg-background min-h-0
+          ${isMobile
+            ? mobilePane === 'list' ? 'flex-1 w-full' : 'hidden'
+            : 'w-80 shrink-0'}
+        `}
+      >
         {/* Header */}
         <div className="p-4 border-b">
           <div className="flex items-center justify-between mb-4">
@@ -588,7 +601,7 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
           </div>
           
           {/* Status Filter */}
-          <div className="flex gap-1 mt-3">
+          <div className="flex gap-1 mt-3 overflow-x-auto pb-1 -mx-1 px-1">
             {(['all', 'active', 'responded', 'closed'] as const).map((status) => (
               <Button
                 key={status}
@@ -632,19 +645,31 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div
+        className={`
+          flex flex-col min-h-0 min-w-0
+          ${isMobile
+            ? mobilePane === 'thread' ? 'flex-1 w-full' : 'hidden'
+            : 'flex-1'}
+        `}
+      >
         {selectedConversation ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b bg-background flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Avatar className="w-10 h-10">
+            <div className="p-3 sm:p-4 border-b bg-background flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                {isMobile && (
+                  <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setMobilePane('list')} aria-label="Back to list">
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                )}
+                <Avatar className="w-10 h-10 shrink-0">
                   <AvatarFallback className="bg-green-100 text-green-700">
                     {selectedConversation.customer_name?.[0] || selectedConversation.customer_phone.slice(-2)}
                   </AvatarFallback>
                 </Avatar>
-                <div>
-                  <h3 className="font-medium">
+                <div className="min-w-0">
+                  <h3 className="font-medium truncate">
                     {selectedConversation.customer_name || selectedConversation.customer_phone}
                   </h3>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">

@@ -20,10 +20,11 @@ import {
     Sparkles,
     Crown,
     Lock,
+    ClipboardList,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePlan } from '@/contexts/PlanContext';
-import { hasAccess, FEATURE_PLAN_MAP, getUpgradeMessage, PLAN_LABELS } from '@/config/featureGating';
+import { getUpgradeMessage } from '@/config/featureGating';
 import type { FeatureKey } from '@/config/featureGating';
 
 interface NavigationItem {
@@ -69,13 +70,23 @@ const navigationItems: NavigationItem[] = [
     },
     {
         id: 'flows',
-        label: 'Interactive Flows',
-        description: 'Visual flow builder',
+        label: 'Conversational Flows',
+        description: 'Chatbot automation',
         icon: <Workflow className="w-6 h-6" />,
         route: '/dashboard/interactive-automation',
         color: 'text-orange-500',
         gradient: 'from-orange-500/20 to-amber-500/20',
         featureKey: 'whatsapp_interactive_automation' as FeatureKey,
+    },
+    {
+        id: 'whatsapp_flows',
+        label: 'WhatsApp Forms',
+        description: 'Native WhatsApp UI forms',
+        icon: <ClipboardList className="w-6 h-6" />,
+        route: '/dashboard/flows',
+        color: 'text-emerald-500',
+        gradient: 'from-green-500/20 to-blue-500/20',
+        featureKey: 'whatsapp_flows' as FeatureKey,
     },
     {
         id: 'templates',
@@ -134,7 +145,7 @@ interface NavigationCommandCenterProps {
 export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCenterProps) {
     const navigate = useNavigate();
     const location = useLocation();
-    const { plan: userPlan } = usePlan();
+    const { plan: userPlan, isFeatureEnabled } = usePlan();
 
     // Close on route change
     useEffect(() => {
@@ -166,20 +177,18 @@ export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCe
     }, [isOpen, handleKeyDown]);
 
     const handleNavigate = (item: NavigationItem) => {
-        // Check if feature is gated
-        if (item.featureKey) {
-            const requiredPlan = FEATURE_PLAN_MAP[item.featureKey];
-            if (!hasAccess(userPlan, requiredPlan)) {
-                // Don't navigate, will show locked state
-                return;
-            }
+        if (item.featureKey && !isFeatureEnabled(item.featureKey)) {
+            navigate('/subscription');
+            onClose();
+            return;
         }
         navigate(item.route);
         onClose();
     };
 
     const isItemLocked = (item: NavigationItem) => {
-        return false; // All features are unlocked in standalone version
+        if (!item.featureKey) return false;
+        return !isFeatureEnabled(item.featureKey);
     };
 
     const isActivePage = (route: string) => {
@@ -244,7 +253,6 @@ export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCe
                                     {navigationItems.map((item, index) => {
                                         const isActive = isActivePage(item.route);
                                         const locked = isItemLocked(item);
-                                        const requiredPlan = item.featureKey ? FEATURE_PLAN_MAP[item.featureKey] : undefined;
                                         return (
                                             <motion.button
                                                 key={item.id}
@@ -295,8 +303,8 @@ export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCe
                                                     {item.label}
                                                 </h3>
                                                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                                                    {locked && requiredPlan
-                                                        ? getUpgradeMessage(requiredPlan)
+                                                    {locked && item.featureKey
+                                                        ? getUpgradeMessage(item.featureKey)
                                                         : item.description}
                                                 </p>
 
