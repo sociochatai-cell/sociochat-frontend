@@ -12,9 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { TemplateHeader, HeaderType } from '../../utils/templateUtils';
 import { Image, Type, X, Upload, Loader2, CheckCircle, AlertCircle, Link, Video, FileText, MapPin } from 'lucide-react';
-import { API_BASE_URL } from '@/config';
-
-const TEMPLATE_API = `${API_BASE_URL}/api/whatsapp/templates`;
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 
 interface HeaderEditorProps {
     header: TemplateHeader;
@@ -69,6 +67,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
         });
     };
 
+    // Upload file to Meta
     const handleMediaUpload = async (file: File) => {
         const rules = getMediaRules();
         const allowedTypes = rules.accept.split(',');
@@ -77,7 +76,8 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
             return;
         }
 
-        if (file.size > rules.maxSizeBytes) {
+        const maxSize = rules.maxSizeBytes;
+        if (file.size > maxSize) {
             setUploadError(`${header.type[0].toUpperCase() + header.type.slice(1)} too large. Maximum size is ${rules.maxSizeLabel}.`);
             return;
         }
@@ -87,6 +87,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
         setUploadProgress(10);
 
         try {
+            // Convert file to base64 data URL for preview (more reliable than blob URL)
             const previewUrl = await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result as string);
@@ -94,11 +95,12 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                 reader.readAsDataURL(file);
             });
 
+            // Update preview immediately
             onChange({
                 ...header,
                 type: header.type,
                 imageUrl: previewUrl,
-                mediaHandle: undefined,
+                mediaHandle: undefined, // Will be set after upload
             });
 
             setUploadProgress(30);
@@ -109,7 +111,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                 formData.append('account_id', accountId.toString());
             }
 
-            const response = await fetch(`${TEMPLATE_API}/upload_media`, {
+            const response = await fetch(`${WHATSAPP_REST_API_PREFIX}/templates/upload_media`, {
                 method: 'POST',
                 credentials: 'include',
                 body: formData,
@@ -117,6 +119,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
 
             setUploadProgress(70);
             const data = await response.json();
+            console.log('Upload response:', data);
 
             if (data.success && data.handle) {
                 setUploadProgress(100);
@@ -139,9 +142,10 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
         }
     };
 
+    // Upload from URL
     const handleUrlUpload = async () => {
         if (!urlInput.trim()) {
-            setUploadError('Please enter a media URL');
+            setUploadError('Please enter an image URL');
             return;
         }
 
@@ -154,6 +158,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
         setUploadError(null);
         setUploadProgress(20);
 
+        // Set preview immediately
         onChange({
             ...header,
             type: header.type,
@@ -162,7 +167,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
         });
 
         try {
-            const response = await fetch(`${TEMPLATE_API}/upload_media_url`, {
+            const response = await fetch(`${WHATSAPP_REST_API_PREFIX}/templates/upload_media_url`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
@@ -171,6 +176,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
 
             setUploadProgress(70);
             const data = await response.json();
+            console.log('URL upload response:', data);
 
             if (data.success && data.handle) {
                 setUploadProgress(100);
@@ -213,8 +219,6 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
         }
     };
 
-    const mediaRules = getMediaRules();
-
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -241,7 +245,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
             <RadioGroup
                 value={header.type}
                 onValueChange={(v) => handleTypeChange(v as HeaderType)}
-                className="flex flex-wrap gap-4"
+                className="flex gap-4"
             >
                 <div className="flex items-center space-x-2">
                     <RadioGroupItem value="text" id="header-text" />
@@ -299,7 +303,8 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
 
             {isMediaType && (
                 <div className="space-y-4">
-                    {header.imageUrl && header.type === 'image' && (
+                    {/* Show preview if we have an image URL */}
+                    {header.imageUrl && (
                         <div className="relative rounded-lg overflow-hidden border bg-muted">
                             <img
                                 src={header.imageUrl}
@@ -319,7 +324,13 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                                 </div>
                             )}
                             <div className="absolute top-2 right-2 flex gap-2">
-                                <Button type="button" size="sm" variant="secondary" onClick={clearImage} disabled={uploading}>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={clearImage}
+                                    disabled={uploading}
+                                >
                                     <X className="w-4 h-4 mr-1" />
                                     Remove
                                 </Button>
@@ -335,28 +346,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                         </div>
                     )}
 
-                    {header.imageUrl && header.type === 'video' && (
-                        <div className="relative rounded-lg border bg-muted p-6 text-center">
-                            <Video className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                            <p className="text-sm text-muted-foreground">Video ready for submission</p>
-                            <Button type="button" size="sm" variant="secondary" className="mt-3" onClick={clearImage} disabled={uploading}>
-                                <X className="w-4 h-4 mr-1" />
-                                Remove
-                            </Button>
-                        </div>
-                    )}
-
-                    {header.imageUrl && header.type === 'document' && (
-                        <div className="relative rounded-lg border bg-muted p-6 text-center">
-                            <FileText className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                            <p className="text-sm text-muted-foreground">Document ready for submission</p>
-                            <Button type="button" size="sm" variant="secondary" className="mt-3" onClick={clearImage} disabled={uploading}>
-                                <X className="w-4 h-4 mr-1" />
-                                Remove
-                            </Button>
-                        </div>
-                    )}
-
+                    {/* Upload options - only show if no image yet */}
                     {!header.imageUrl && (
                         <Tabs value={uploadMethod} onValueChange={(v) => setUploadMethod(v as 'file' | 'url')}>
                             <TabsList className="grid w-full grid-cols-2">
@@ -375,7 +365,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                                     type="file"
                                     ref={fileInputRef}
                                     onChange={handleFileChange}
-                                    accept={mediaRules.accept}
+                                    accept="image/jpeg,image/jpg,image/png"
                                     className="hidden"
                                 />
                                 <div
@@ -398,7 +388,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                                             <Upload className="w-10 h-10 mx-auto text-muted-foreground" />
                                             <p className="text-sm font-medium">Click to upload {header.type}</p>
                                             <p className="text-xs text-muted-foreground">
-                                                {mediaRules.label} • Max {mediaRules.maxSizeLabel}
+                                                {getMediaRules().label} • Max {getMediaRules().maxSizeLabel}
                                             </p>
                                         </div>
                                     )}
@@ -408,13 +398,21 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                             <TabsContent value="url" className="mt-4 space-y-3">
                                 <div className="flex gap-2">
                                     <Input
-                                        placeholder="https://example.com/your-file"
+                                        placeholder="https://example.com/your-image.jpg"
                                         value={urlInput}
                                         onChange={(e) => setUrlInput(e.target.value)}
                                         disabled={uploading}
                                     />
-                                    <Button type="button" onClick={handleUrlUpload} disabled={uploading || !urlInput.trim()}>
-                                        {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Upload'}
+                                    <Button
+                                        type="button"
+                                        onClick={handleUrlUpload}
+                                        disabled={uploading || !urlInput.trim()}
+                                    >
+                                        {uploading ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            'Upload'
+                                        )}
                                     </Button>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
@@ -424,6 +422,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                         </Tabs>
                     )}
 
+                    {/* Error message */}
                     {uploadError && (
                         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
                             <AlertCircle className="w-4 h-4 flex-shrink-0" />

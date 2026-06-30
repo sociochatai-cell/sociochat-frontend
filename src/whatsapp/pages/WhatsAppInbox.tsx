@@ -3,19 +3,32 @@
 // Main inbox UI for viewing conversations and messages
 // Production-grade: Conversations load ONCE, SSE updates are LOCAL only
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ConversationList, ConversationThread, TemplatesPanel, InboxLoadingScreen, ContactInfoPanel } from '../components';
+import { ConversationList, ConversationThread, TemplatesPanel, InboxLoadingScreen, ContactInfoPanel, FlowResponsesPanel } from '../components';
 import { Conversation, WhatsAppRealtimeEvent } from '../types';
 import { useWhatsAppRealtime } from '../hooks/useWhatsAppRealtime';
-import { Inbox, LayoutTemplate, Plus, X, PanelRight, ArrowLeft, UserPlus } from 'lucide-react';
 import logo from '@/assets/sociovia_logo.png';
-import crmApi from '@/crm/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { API_BASE_URL } from "@/config";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { getWorkspaceId, setWorkspaceId } from '../utils/workspaceContext';
+import {
+  Building2,
+  ChevronDown,
+  Shield,
+  Lock,
+  Unlock,
+  Plus,
+  X,
+  PanelRight,
+  Workflow,
+  Inbox,
+  LayoutTemplate,
+  ExternalLink
+} from 'lucide-react';
 import {
   addMessageLocally,
   updateMessageStatusLocally,
@@ -23,14 +36,16 @@ import {
   addConversationLocally,
   getConversationList,
   clearInboxStore,
-  _getDebugState,
   startPolling,
   stopPolling,
-  setPollingActiveConversation,
+  requestInboxFilterReload,
+  loadConversationList,
 } from '../stores/inboxStore';
-import { useIsMobile } from '@/hooks/useMediaQuery';
+import { useWhatsAppConnection, connectionPathHasLinkedAccount } from '../hooks/useWhatsAppData';
 
 const API_BASE = API_BASE_URL;
+
+type InboxFilterType = 'all' | 'unread' | 'active' | 'expired' | 'needs_reply' | 'human_required' | 'opted_out';
 
 interface WhatsAppAccount {
   id: number;
@@ -38,22 +53,41 @@ interface WhatsAppAccount {
   display_phone_number: string;
   verified_name: string;
   is_active: boolean;
+  is_coexistence?: boolean;
 }
 
 export function WhatsAppInbox() {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const focusNeedsReply =
+    queryParams.get('focus') === 'needs_reply' ||
+    queryParams.get('focus') === 'needs_attention';
+  const initialFilter: InboxFilterType =
+    focusNeedsReply ||
+    queryParams.get('filter') === 'needs_reply' ||
+    queryParams.get('filter') === 'needs_attention'
+      ? 'needs_reply'
+      : queryParams.get('filter') === 'unread'
+        ? 'unread'
+        : 'all';
+  const shouldAutoSelectUnread = queryParams.get('autoselect') === '1';
+  const shouldForceServerUnreadLoad = focusNeedsReply;
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
-  // REMOVED: refreshKey - NO MORE full refreshes!
-  const [account, setAccount] = useState<WhatsAppAccount | null>(null);
-  const [accountLoading, setAccountLoading] = useState(true);
   const [showNewChat, setShowNewChat] = useState(false);
   const [newChatPhone, setNewChatPhone] = useState('');
   const [creatingChat, setCreatingChat] = useState(false);
   const [contactPanelOpen, setContactPanelOpen] = useState(false);
-  const [addingToCrm, setAddingToCrm] = useState(false);
-  const isMobile = useIsMobile();
-  const [mobilePane, setMobilePane] = useState<'list' | 'thread'>('list');
+  const [flowPanelOpen, setFlowPanelOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
+  const [inboxFilter, setInboxFilter] = useState<InboxFilterType>(initialFilter);
+  const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1280);
+
+  // --- Workspace Switcher & Password State ---
+  const [workspaces, setWorkspaces] = useState<{ id: string, name: string }[]>([]);
+  const [isLocked, setIsLocked] = useState(getWorkspaceId() === '1');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false);
 
   // Get base path from current location (agent or dashboard)
   const basePath = location.pathname.startsWith('/agent') ? '/agent' : '/dashboard';
@@ -64,85 +98,183 @@ export function WhatsAppInbox() {
   // Track previous account to detect changes
   const prevAccountRef = useRef<string | null>(null);
 
-  // Check connection status (validates token, not just database records)
+  const isMobile = viewportWidth < 768;
+  const isDesktop = viewportWidth >= 1025;
+
   useEffect(() => {
-    const checkConnection = async () => {
-      setAccountLoading(true);
-      try {
-        // Get workspace_id from storage - try multiple keys for compatibility
-        const workspaceId = localStorage.getItem('sv_whatsapp_workspace_id')
-          || sessionStorage.getItem('sv_whatsapp_workspace_id')
-          || localStorage.getItem('sv_selected_workspace_id')
-          || sessionStorage.getItem('sv_selected_workspace_id');
+    setInboxFilter(initialFilter);
+  }, [initialFilter]);
 
-        // If no workspace_id available, can't check connection
-        if (!workspaceId) {
-          console.warn('[WhatsAppInbox] No workspace_id available, skipping connection check');
-          setAccount(null);
-          setAccountLoading(false);
-          return;
-        }
-
-        // Use /connection-path API which validates token with Meta
-        const res = await fetch(`${API_BASE}/api/whatsapp/connection-path?workspace_id=${workspaceId}`, { credentials: 'include' });
-        const data = await res.json();
-
-        console.log('[WhatsAppInbox] Connection check result:', data);
-        console.log('[WhatsAppInbox] Current inbox store state:', _getDebugState());
-
-        // Only set account if status is CONNECTED (token is valid)
-        if (data.status === 'CONNECTED' && data.account_summary) {
-          const newPhoneNumberId = data.account_summary.phone_number_id || '';
-
-          // Check if account has changed - if so, clear the inbox cache
-          if (prevAccountRef.current && prevAccountRef.current !== newPhoneNumberId) {
-            console.log('[WhatsAppInbox] Account changed from', prevAccountRef.current, 'to', newPhoneNumberId, '- clearing cache');
-            clearInboxStore();
-          }
-
-          prevAccountRef.current = newPhoneNumberId;
-
-          setAccount({
-            id: data.account_summary.id || 0,
-            phone_number_id: newPhoneNumberId,
-            display_phone_number: data.account_summary.phone_number || '',
-            verified_name: data.account_summary.verified_name || '',
-            is_active: true,
-          });
-        } else {
-          // Not connected - clear account and cache
-          if (prevAccountRef.current) {
-            clearInboxStore();
-          }
-          prevAccountRef.current = null;
-          setAccount(null);
-        }
-      } catch (err) {
-        console.error('Failed to check connection:', err);
-        setAccount(null);
-      } finally {
-        setAccountLoading(false);
-      }
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
     };
-    checkConnection();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Real-Time Inbox Updates - LOCAL ONLY, NO API CALLS
-  const workspaceId = localStorage.getItem('sv_whatsapp_workspace_id')
-    || sessionStorage.getItem('sv_whatsapp_workspace_id')
-    || localStorage.getItem('sv_selected_workspace_id')
-    || sessionStorage.getItem('sv_selected_workspace_id');
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileView('chat');
+      return;
+    }
+
+    if (selectedConversation) {
+      setMobileView('chat');
+    } else {
+      setMobileView('list');
+    }
+  }, [isMobile, selectedConversation]);
+
+  const workspaceId = getWorkspaceId() || '';
+  const [secondaryLoadsEnabled, setSecondaryLoadsEnabled] = useState(false);
+
+  // Conversations first — defer connection check, workspaces, and polling
+  useEffect(() => {
+    const id = window.setTimeout(() => setSecondaryLoadsEnabled(true), 2500);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  const {
+    data: connectionData,
+    isLoading: connectionLoading,
+  } = useWhatsAppConnection(workspaceId, secondaryLoadsEnabled);
+
+  const account = useMemo((): WhatsAppAccount | null => {
+    if (!connectionPathHasLinkedAccount(connectionData)) return null;
+    const summary = connectionData!.account_summary!;
+    return {
+      id: Number(summary.id) || 0,
+      phone_number_id: summary.phone_number_id || '',
+      display_phone_number: summary.phone_number || '',
+      verified_name: summary.verified_name || '',
+      is_active: true,
+      is_coexistence: Boolean((summary as { is_coexistence?: boolean }).is_coexistence),
+    };
+  }, [connectionData]);
+
+  // Only clear inbox when the linked phone number actually changes — not when connection-path is slow/fails
+  useEffect(() => {
+    if (!connectionData) return;
+
+    if (!connectionPathHasLinkedAccount(connectionData)) {
+      prevAccountRef.current = null;
+      return;
+    }
+
+    const summary = connectionData!.account_summary!;
+    const newPhoneNumberId = summary.phone_number_id || '';
+    if (prevAccountRef.current && prevAccountRef.current !== newPhoneNumberId) {
+      clearInboxStore();
+    }
+    prevAccountRef.current = newPhoneNumberId;
+  }, [connectionData, isLocked]);
+
+  // Load contacts immediately — do not wait for connection-path
+  useEffect(() => {
+    if (!workspaceId || isLocked) return;
+    void loadConversationList(workspaceId);
+  }, [workspaceId, isLocked]);
+
+  // Fetch workspaces for switcher — low priority, after conversations
+  useEffect(() => {
+    if (!secondaryLoadsEnabled) return;
+
+    const fetchWorkspaces = async () => {
+      try {
+        let user: { id?: string | number } | null = null;
+        const userStr = localStorage.getItem('sv_user') || sessionStorage.getItem('sv_user');
+        if (userStr) {
+          try {
+            user = JSON.parse(userStr);
+          } catch {
+            user = null;
+          }
+        }
+        if (!user?.id) {
+          try {
+            const meRes = await fetch(`${API_BASE}/api/me`, { credentials: 'include' });
+            if (meRes.ok) {
+              user = await meRes.json();
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        const qs = user?.id ? `?user_id=${encodeURIComponent(String(user.id))}` : '';
+        const res = await fetch(`${API_BASE}/api/workspaces${qs}`, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.workspaces) {
+          setWorkspaces(data.workspaces);
+        }
+      } catch (err) {
+        console.error('Failed to fetch workspaces:', err);
+      }
+    };
+    fetchWorkspaces();
+  }, [secondaryLoadsEnabled]);
+
+  const handleWorkspaceChange = (newWsId: string) => {
+    setIsSwitchingWorkspace(true);
+    setWorkspaceId(newWsId);
+
+    if (newWsId === '1') {
+      setIsLocked(true);
+    } else {
+      setIsLocked(false);
+    }
+
+    window.location.reload();
+  };
+
+  const handleUnlock = () => {
+    if (passwordInput === 'prabhu@1charan') {
+      setIsLocked(false);
+      toast.success('Workspace unlocked');
+    } else {
+      toast.error('Incorrect password');
+    }
+  };
 
   const handleRealtimeEvent = useCallback((event: WhatsAppRealtimeEvent) => {
     console.log('📩 [Inbox] SSE event received:', event.type, event.data);
 
+    if (event.type === 'whatsapp_conversation_updated') {
+      const conversationId = event.data?.conversation_id;
+      const patch = event.data?.conversation;
+      const humanRequired =
+        patch?.human_required ?? event.data?.human_required ?? false;
+
+      if (conversationId && patch) {
+        updateConversationLocally(conversationId, {
+          human_required: humanRequired,
+          needs_attention: patch.needs_attention ?? event.data?.needs_attention,
+          human_required_reason: patch.human_required_reason,
+          human_required_at: patch.human_required_at,
+          last_message_at: patch.last_message_at,
+          last_message_preview: patch.last_message_preview,
+        } as Partial<Conversation>);
+        if (selectedConversation?.id === conversationId) {
+          setSelectedConversation((prev) =>
+            prev && prev.id === conversationId ? ({ ...prev, ...patch } as Conversation) : prev
+          );
+        }
+      }
+
+      if (humanRequired) {
+        requestInboxFilterReload();
+      }
+      return;
+    }
+
     if (event.type === 'whatsapp_message_received') {
-      // New message received - UPDATE LOCALLY, no API call!
       const message = event.data?.message;
       const conversationId = event.data?.conversation_id;
+      const fullConversation = event.data?.conversation;
 
       if (conversationId && message) {
-        // Extract text from content object (backend sends {type: 'text', text: 'hi'})
         const messageContent = message.content;
         let messageText = '';
         if (typeof messageContent === 'string') {
@@ -152,18 +284,15 @@ export function WhatsAppInbox() {
           messageText = contentObj.text || contentObj.body || '[Media]';
         }
 
-        // Check if conversation exists in store - if not, we need to add it
-        const existingConv = _getDebugState().conversationCount > 0;
         const storeConvs = getConversationList();
         const conversationExists = storeConvs.some(c => c.id === conversationId);
 
         if (!conversationExists) {
-          // New conversation from SSE - create a stub conversation first
           const newConv: Conversation = {
             id: conversationId,
             account_id: event.data?.account_id || account?.id || 0,
-            user_phone: (event.data as any)?.user_phone || (message as any).from || '',
-            user_name: (event.data as any)?.user_name || (message as any).profile_name || undefined,
+            user_phone: (message as any).from || (message as any).to || '',
+            user_name: (message as any).profile_name || undefined,
             status: 'open',
             unread_count: 1,
             last_message_at: message.created_at || new Date().toISOString(),
@@ -171,37 +300,35 @@ export function WhatsAppInbox() {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };
-          console.log('📥 [Inbox] Adding new conversation from SSE:', conversationId);
           addConversationLocally(newConv);
+        } else if (fullConversation) {
+          updateConversationLocally(conversationId, {
+            status: fullConversation.status,
+            unread_count: fullConversation.unread_count,
+            last_message_at: fullConversation.last_message_at,
+            session_expires_at: fullConversation.session_expires_at,
+          } as any);
         }
 
-        // Add message to store locally
-        // Use actual message.id from backend, or wamid hash for real WhatsApp messages
-        const messageId = message.id ||
-          (message.wamid ? 'sse-' + message.wamid : Date.now());
-
-        console.log('📩 [Inbox] Adding SSE message:', { id: messageId, wamid: message.wamid, text: messageText });
+        const messageId = message.id || (message.wamid ? 'sse-' + message.wamid : Date.now());
 
         addMessageLocally(conversationId, {
           id: messageId,
           wamid: message.wamid,
           conversation_id: conversationId,
-          direction: message.direction || 'incoming',
+          direction: message.direction || (event.data as any).direction || 'incoming',
           type: message.type || 'text',
           content: messageContent,
           body: messageText,
-          status: 'delivered',
+          status: message.status || (message.direction === 'outgoing' || message.direction === 'echo' ? 'sent' : 'received'),
           timestamp: message.created_at || new Date().toISOString(),
           created_at: message.created_at || new Date().toISOString(),
         });
 
-        // NOTE: addMessageLocally ALREADY updates conversation preview and unread_count
-        // Only override unread_count if this is the CURRENTLY SELECTED conversation
         if (selectedConversation?.id === conversationId) {
           updateConversationLocally(conversationId, { unread_count: 0 });
         }
 
-        // Toast notification (throttled to prevent spam)
         const now = Date.now();
         if (now - lastToastRef.current > 3000 && message.direction === 'incoming') {
           lastToastRef.current = now;
@@ -209,46 +336,48 @@ export function WhatsAppInbox() {
         }
       }
     } else if (event.type === 'whatsapp_message_status') {
-      // Message status update - UPDATE LOCALLY, no API call!
       const conversationId = event.data?.conversation_id;
       const messageId = event.data?.wamid;
       const status = event.data?.status;
-
       if (conversationId && messageId && status) {
-        updateMessageStatusLocally(conversationId, messageId, status);
+        updateMessageStatusLocally(conversationId, messageId, status, {
+          error_code: event.data?.error_code,
+          error_message: event.data?.error_message,
+        });
       }
     }
-    // NO setRefreshKey - everything is updated locally!
-  }, [selectedConversation?.id]);
+  }, [selectedConversation?.id, account?.id]);
 
   useWhatsAppRealtime({
-    workspaceId: workspaceId || '',
+    workspaceId: secondaryLoadsEnabled ? workspaceId : '',
     onEvent: handleRealtimeEvent
   });
 
-  // Polling fallback — SSE may be buffered by proxies / dev tunnels
   useEffect(() => {
-    if (!account) return;
-    startPolling(selectedConversation?.id ?? null, 5000);
-    return () => stopPolling();
-  }, [account]);
+    if (!workspaceId || isLocked || !secondaryLoadsEnabled) return;
 
-  // Keep polling aware of which conversation is active
-  useEffect(() => {
-    setPollingActiveConversation(selectedConversation?.id ?? null);
-  }, [selectedConversation?.id]);
+    // Polling fallback starts quickly, so inbox still updates if SSE is flaky.
+    const startDelay = window.setTimeout(() => {
+      startPolling(selectedConversation?.id ?? null, 7000);
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(startDelay);
+      stopPolling();
+    };
+  }, [workspaceId, isLocked, secondaryLoadsEnabled, selectedConversation?.id]);
 
   const handleSelectConversation = useCallback(async (conversation: Conversation) => {
     setSelectedConversation(conversation);
-    if (isMobile) setMobilePane('thread');
-
+    if (isMobile) {
+      setMobileView('chat');
+    }
     if (conversation.unread_count > 0) {
       try {
-        await fetch(`${API_BASE}/api/whatsapp/conversations/${conversation.id}/read`, {
+        await fetch(`${WHATSAPP_REST_API_PREFIX}/conversations/${conversation.id}/read`, {
           method: 'POST',
           credentials: 'include',
         });
-        // Update locally instead of refreshing
         updateConversationLocally(conversation.id, { unread_count: 0 });
       } catch (error) {
         console.error('Failed to mark conversation as read:', error);
@@ -256,51 +385,41 @@ export function WhatsAppInbox() {
     }
   }, [isMobile]);
 
+  const handleBackToList = useCallback(() => {
+    setMobileView('list');
+  }, []);
+
   const handleStartNewChat = async () => {
-    const phone = newChatPhone.replace(/\D/g, ''); // Remove non-digits
+    const phone = newChatPhone.replace(/\D/g, '');
     if (!phone || phone.length < 10) {
       toast.error('Please enter a valid phone number');
       return;
     }
-
     setCreatingChat(true);
     try {
-      // Get workspace_id from storage
-      const workspaceId = localStorage.getItem('sv_whatsapp_workspace_id') || sessionStorage.getItem('sv_whatsapp_workspace_id');
-      const wsParam = workspaceId ? `&workspace_id=${workspaceId}` : '';
-
-      // Get all conversations to check if one exists for this phone
-      const res = await fetch(`${API_BASE}/api/whatsapp/conversations?limit=200${wsParam}`, { credentials: 'include' });
+      const wsId = getWorkspaceId();
+      const wsParam = wsId ? `&workspace_id=${wsId}` : '';
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/conversations?limit=200${wsParam}`, { credentials: 'include' });
       const data = await res.json();
-
-      // Find existing conversation with matching phone
-      const existingConversation = data.conversations?.find((c: Conversation) => {
-        if (!c.user_phone) return false;
-        return c.user_phone === phone || c.user_phone.endsWith(phone) || phone.endsWith(c.user_phone);
-      });
-
+      const existingConversation = data.conversations?.find((c: Conversation) =>
+        c.user_phone === phone || c.user_phone.endsWith(phone) || phone.endsWith(c.user_phone)
+      );
       if (existingConversation) {
-        // Conversation exists, select it
         setSelectedConversation(existingConversation);
-        if (isMobile) setMobilePane('thread');
         toast.success('Opened existing conversation');
       } else {
-        // Create a "virtual" conversation for display (it will be created when first message is sent)
         setSelectedConversation({
-          id: 0, // Temporary ID
+          id: 0,
           account_id: account?.id || 0,
           user_phone: phone,
           status: 'open',
           unread_count: 0,
-          is_session_open: true, // Allow typing text messages initially (Meta enforces 24h rule)
           last_message_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         } as Conversation);
-        toast.success(`Ready to message ${phone}. Send a template to start the conversation.`);
-        if (isMobile) setMobilePane('thread');
+        toast.success(`Ready to message ${phone}.`);
       }
-
       setShowNewChat(false);
       setNewChatPhone('');
     } catch (err) {
@@ -310,127 +429,62 @@ export function WhatsAppInbox() {
     }
   };
 
-  const handleAddToCrm = async () => {
-    if (!selectedConversation?.id) return;
-    setAddingToCrm(true);
-    try {
-      await crmApi.addLeadFromConversation(String(selectedConversation.id));
-      toast.success('Added to CRM');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add to CRM');
-    } finally {
-      setAddingToCrm(false);
-    }
-  };
-
-  // Show loading state
-  if (accountLoading) {
+  if (!workspaceId) {
     return <InboxLoadingScreen />;
   }
 
-  // Show no account linked state
-  if (!account) {
-    return (
-      <div className="h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
-        <div className="border-b bg-gradient-to-r from-background via-background to-primary/5 p-4">
+  const showConnectionWarning = !connectionLoading && !account;
+
+  return (
+    <div className="h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5 pb-[env(safe-area-inset-bottom)]">
+      <div className="sticky top-0 z-30 border-b bg-gradient-to-r from-background via-background to-primary/5 px-3 py-3 sm:px-4 sm:py-4 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-[shimmer_3s_ease-in-out_infinite]" />
+        <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white border border-primary/20 shadow-lg">
+            <div className="p-1.5 sm:p-2 rounded-xl bg-white border border-primary/20 shadow-lg">
               <img src={logo} alt="Sociovia" className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">WhatsApp Inbox</h1>
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="max-w-md text-center p-8">
-            <Inbox className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">No WhatsApp Account Linked</h2>
-            <p className="text-muted-foreground mb-6">
-              To use the inbox, please connect your WhatsApp Business account for this workspace.
-            </p>
-            <Button onClick={() => navigate(`${basePath}/whatsapp/setup`)} className="gap-2">
-              <Inbox className="w-4 h-4" />
-              Connect WhatsApp Account
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-[100dvh] flex flex-col bg-gradient-to-br from-background via-background to-primary/5 overflow-hidden">
-      {/* Header */}
-      <div className="border-b bg-gradient-to-r from-background via-background to-primary/5 p-3 sm:p-4 relative overflow-hidden shrink-0">
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-[shimmer_3s_ease-in-out_infinite]" />
-        <div className="relative z-10 flex items-center justify-between gap-2 min-w-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            {isMobile && mobilePane === 'thread' && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="shrink-0"
-                onClick={() => setMobilePane('list')}
-                aria-label="Back to conversations"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            )}
-            <div className="p-1.5 sm:p-2 rounded-xl bg-white border border-primary/20 shadow-lg shrink-0">
-              <img src={logo} alt="Sociovia" className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-base sm:text-2xl font-bold truncate">
-                {isMobile && mobilePane === 'thread' && selectedConversation
-                  ? (selectedConversation.user_name || selectedConversation.user_phone || 'Chat')
-                  : account?.verified_name
-                    ? <><span className="text-green-600">{account.verified_name}'s</span> Inbox</>
-                    : 'WhatsApp Inbox'}
+              <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+                {account?.verified_name ? <><span className="text-green-600">{account.verified_name}'s</span> Inbox</> : 'WhatsApp Inbox'}
               </h1>
-              {(!isMobile || mobilePane === 'list') && (
-                <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block truncate">
-                  View conversations and messages. Real-time updates active.
-                </p>
+              <p className="text-sm text-muted-foreground hidden sm:block">View conversations and messages. Real-time updates active.</p>
+              {connectionLoading && !account && (
+                <p className="text-xs text-muted-foreground">Loading account info…</p>
               )}
             </div>
           </div>
-
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            {(!isMobile || mobilePane === 'list') && (
-              <Button
-                variant="default"
-                size={isMobile ? 'sm' : 'default'}
-                className="gap-1 sm:gap-2"
-                onClick={() => setShowNewChat(true)}
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">New Chat</span>
-              </Button>
-            )}
-
-            {selectedConversation && selectedConversation.id > 0 && (!isMobile || mobilePane === 'thread') && (
+          <div className="flex items-center gap-2">
+            <Button variant="default" className="gap-2 h-11" onClick={() => setShowNewChat(true)}><Plus className="w-4 h-4" /> New Chat</Button>
+            <Button
+              variant={inboxFilter === 'human_required' ? 'secondary' : 'outline'}
+              className="gap-2 h-11"
+              onClick={() => setInboxFilter(inboxFilter === 'human_required' ? 'all' : 'human_required')}
+            >
+              Human Required
+            </Button>
+            {selectedConversation?.lead_id && (
+              // Deep-link to the linked CRM lead. Inbox lives under the agent/dashboard
+              // layout, so route relative to basePath. Backend now sets
+              // whatsapp_conversations.lead_id; only shown when the field is present.
               <Button
                 variant="outline"
-                size={isMobile ? 'sm' : 'default'}
-                className="gap-1 sm:gap-2 hover:bg-primary/10"
-                onClick={handleAddToCrm}
-                disabled={addingToCrm}
-                title="Add this conversation to CRM"
+                className="gap-2 h-11"
+                onClick={() =>
+                  navigate(`${basePath}/crm/leads?lead=${encodeURIComponent(String(selectedConversation.lead_id))}`)
+                }
+                title="View linked CRM lead"
               >
-                <UserPlus className="w-4 h-4" />
-                <span className="hidden sm:inline">{addingToCrm ? 'Adding...' : 'Add to CRM'}</span>
+                <ExternalLink className="w-4 h-4" /> View lead
               </Button>
             )}
-
-            {selectedConversation && (!isMobile || mobilePane === 'thread') && (
-              <Button
-                variant={contactPanelOpen ? 'secondary' : 'outline'}
-                size="icon"
-                onClick={() => setContactPanelOpen(!contactPanelOpen)}
-                className="hover:bg-primary/10"
-                title="Toggle Contact Info"
-              >
+            {selectedConversation && isDesktop && (
+              <Button variant={flowPanelOpen ? "secondary" : "outline"} size="icon" onClick={() => setFlowPanelOpen(!flowPanelOpen)} title="Flow responses">
+                <Workflow className="w-4 h-4" />
+              </Button>
+            )}
+            {selectedConversation && isDesktop && (
+              <Button variant={contactPanelOpen ? "secondary" : "outline"} size="icon" onClick={() => setContactPanelOpen(!contactPanelOpen)}>
                 <PanelRight className="w-4 h-4" />
               </Button>
             )}
@@ -438,110 +492,108 @@ export function WhatsAppInbox() {
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* Conversations list */}
-        <div
-          className={`
-            border-r bg-gradient-to-b from-background to-muted/20 overflow-hidden shadow-inner min-h-0
-            ${isMobile
-              ? mobilePane === 'list' ? 'flex-1 w-full' : 'hidden'
-              : 'w-1/3 min-w-[240px] max-w-[400px] shrink-0'}
-          `}
-        >
+      {showConnectionWarning && (
+        <div className="px-3 sm:px-4 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-900 flex items-center justify-between gap-3">
+          <span>Could not verify WhatsApp connection yet. Your conversations are still loading.</span>
+          <Button variant="outline" size="sm" onClick={() => navigate(`${basePath}/whatsapp/setup`)}>Connect</Button>
+        </div>
+      )}
+
+      <div className="flex-1 flex overflow-hidden">
+        <div className={[
+          'border-r bg-gradient-to-b from-background to-muted/20 overflow-hidden shadow-inner',
+          isMobile
+            ? (mobileView === 'list' ? 'w-full' : 'hidden')
+            : 'w-[38%] min-w-[280px] max-w-[420px] lg:w-[30%]'
+        ].join(' ')}>
           <ConversationList
             selectedConversationId={selectedConversation?.id || null}
             onSelectConversation={handleSelectConversation}
+            initialFilter={inboxFilter}
+            autoSelectUnread={shouldAutoSelectUnread}
+            forceServerUnreadLoad={shouldForceServerUnreadLoad}
           />
         </div>
-
-        {/* Message thread */}
-        <div
-          className={`
-            bg-gradient-to-br from-background via-background to-muted/10 overflow-hidden min-h-0
-            ${isMobile
-              ? mobilePane === 'thread' ? 'flex-1 w-full' : 'hidden'
-              : 'flex-1 min-w-0'}
-          `}
-        >
+        <div className={[
+          'flex-1 bg-gradient-to-br from-background via-background to-muted/10 overflow-hidden',
+          isMobile ? (mobileView === 'chat' ? 'w-full' : 'hidden') : ''
+        ].join(' ')}>
           <ConversationThread
             conversation={selectedConversation}
             phoneNumberId={account?.phone_number_id}
-            onNewConversationCreated={(newId) => {
-              if (selectedConversation) {
-                setSelectedConversation({ ...selectedConversation, id: newId });
-              }
-            }}
+            isCoexistence={Boolean(account?.is_coexistence)}
+            onBack={handleBackToList}
+            showBackButton={isMobile && mobileView === 'chat'}
+            onOpenContactInfo={() => setContactPanelOpen(true)}
           />
         </div>
-
-        {/* Contact Info panel — sheet on mobile, column on desktop */}
-        {isMobile ? (
-          contactPanelOpen && selectedConversation && (
-            <div className="fixed inset-0 z-50 bg-background">
-              <ContactInfoPanel
-                conversation={selectedConversation}
-                isOpen={true}
-                onClose={() => setContactPanelOpen(false)}
-                accountId={account?.id}
-                embedded
-              />
-            </div>
-          )
-        ) : (
-          <ContactInfoPanel
-            conversation={selectedConversation}
-            isOpen={contactPanelOpen}
-            onClose={() => setContactPanelOpen(false)}
-            accountId={account?.id}
-          />
-        )}
+        <ContactInfoPanel conversation={selectedConversation} isOpen={contactPanelOpen} onClose={() => setContactPanelOpen(false)} accountId={account?.id} />
+        <FlowResponsesPanel conversation={selectedConversation} isOpen={flowPanelOpen} onClose={() => setFlowPanelOpen(false)} />
       </div>
 
-      {/* New Chat Dialog */}
       <Dialog open={showNewChat} onOpenChange={setShowNewChat}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Start New Conversation</DialogTitle>
-            <DialogDescription>
-              Enter a phone number to start a new WhatsApp conversation.
-              Include country code (e.g., 919876543210 for India).
-            </DialogDescription>
+            <DialogDescription>Enter a phone number to start a new WhatsApp conversation.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-4">
-            <Input
-              placeholder="Phone number (e.g., 919876543210)"
-              value={newChatPhone}
-              onChange={(e) => setNewChatPhone(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleStartNewChat()}
-            />
+            <Input placeholder="Phone number (e.g., 919876543210)" value={newChatPhone} onChange={(e) => setNewChatPhone(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleStartNewChat()} />
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setShowNewChat(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={handleStartNewChat}
-                disabled={creatingChat || !newChatPhone}
-              >
-                {creatingChat ? 'Starting...' : 'Start Chat'}
-              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setShowNewChat(false)}>Cancel</Button>
+              <Button className="flex-1" onClick={handleStartNewChat} disabled={creatingChat || !newChatPhone}>{creatingChat ? 'Starting...' : 'Start Chat'}</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+      <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
 
-      {/* CSS for animations */}
-      <style>{`
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
+      {isLocked && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-background/30 transition-all animate-in fade-in duration-500">
+          <div className="max-w-md w-full bg-white shadow-2xl rounded-2xl border border-primary/20 overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 text-center relative">
+              <div className="absolute top-4 right-4">
+                <Shield className="w-5 h-5 text-primary/30" />
+              </div>
+              <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center mx-auto mb-4 border border-primary/10">
+                <Lock className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Workspace Locked</h2>
+              <p className="text-sm text-muted-foreground">
+                This workspace requires a password to access conversations.
+              </p>
+            </div>
+
+            <div className="p-8 space-y-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Access Password</label>
+                <div className="relative">
+                  <Input
+                    type="password"
+                    placeholder="Enter password..."
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+                    className="pr-10"
+                    autoFocus
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {passwordInput === 'prabhu@1charan' ? (
+                      <Unlock className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <Lock className="w-4 h-4 text-muted-foreground" />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <Button onClick={handleUnlock} className="w-full gap-2 h-11 text-lg font-semibold">
+                Unlock Workspace
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

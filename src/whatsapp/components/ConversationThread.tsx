@@ -4,16 +4,19 @@
 // Uses singleton store for message caching - loads ONCE per conversation
 
 import { useEffect, useRef, useState, useCallback, useSyncExternalStore, useMemo } from 'react';
-import { ConversationMessage, Conversation } from '../types';
+import { ConversationMessage, Conversation, FlowState } from '../types';
 import { format, isToday, isYesterday } from 'date-fns';
 import { MessageBubble } from './MessageBubble';
 import { EmptyState } from './EmptyState';
 import { MessageComposer } from './MessageComposer';
 import { Button } from '@/components/ui/button';
-import { XCircle, RefreshCcw, User, Clock, Loader2, BarChart3, Power } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { XCircle, RefreshCcw, User, Clock, Loader2, BarChart3, Power, ChevronLeft, Sparkles } from 'lucide-react';
 import { ChatAutomationsPanel } from './ChatAutomationsPanel';
 import { toast } from 'sonner';
-import { API_BASE_URL } from "@/config";
+import { WHATSAPP_REST_API_PREFIX } from "@/config";
+import { maskPhoneNumber } from '@/lib/phoneMask';
+import { getConversationFlowState } from '../api';
 import {
   subscribeToMessages,
   getMessagesForConversation,
@@ -21,26 +24,22 @@ import {
   loadMessagesFor,
   addMessageLocally,
   updateConversationLocally,
+  clearHumanEscalationLocally,
   hasMoreMessagesFor,
   loadOlderMessages,
 } from '../stores/inboxStore';
 import { useSessionCountdown } from '../hooks/useSessionCountdown';
-
-const API_BASE = API_BASE_URL;
-
-// Template cache type
-interface TemplateInfo {
-  name: string;
-  body: string | null;
-  header: string | null;
-  footer: string | null;
-}
+import type { TemplateInfo } from '../utils/messageDisplay';
 
 interface ConversationThreadProps {
   conversation: Conversation | null;
-  phoneNumberId?: string;
-  onNewConversationCreated?: (newId: number) => void;
   onConversationUpdate?: () => void;
+  phoneNumberId?: string;
+  isCoexistence?: boolean;
+  onBack?: () => void;
+  showBackButton?: boolean;
+  onOpenContactInfo?: () => void;
+  // REMOVED: refreshTrigger - no longer needed, store handles updates
 }
 
 // Module-level template cache (persists across re-renders)
@@ -60,13 +59,26 @@ export function ConversationThread({
   conversation,
   onConversationUpdate,
   phoneNumberId,
-  onNewConversationCreated,
+  isCoexistence = false,
+  onBack,
+  showBackButton = false,
+  onOpenContactInfo,
 }: ConversationThreadProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<Record<string, TemplateInfo>>(templateCache);
   const [closing, setClosing] = useState(false);
   const [automationsPanelOpen, setAutomationsPanelOpen] = useState(false);
+  const [aiChatEnabled, setAiChatEnabled] = useState(true);
+  const [aiPausedByAgent, setAiPausedByAgent] = useState(
+    () => Boolean(conversation?.ai_paused_by_agent),
+  );
+  // Live interactive-flow state for the open conversation. Drives the
+  // MessageComposer "typed keyboard" affordances (ITEM #2) when the flow is
+  // paused at an input step. Fetched fresh (no persistent cache) since it
+  // reflects in-flight progress.
+  const [flowState, setFlowState] = useState<FlowState | null>(null);
+  const agentPauseLockUntilRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -74,12 +86,84 @@ export function ConversationThread({
 
   const conversationId = conversation?.id ?? null;
   const userPhone = conversation?.user_phone ?? '';
+  const maskedUserPhone = useMemo(() => maskPhoneNumber(userPhone), [userPhone]);
 
   // Real-time session countdown
   const { formatted: sessionCountdown } = useSessionCountdown(
     conversation?.session_time_left_seconds,
     conversation?.is_session_open ?? false
   );
+
+  const fetchAutomationOverrides = useCallback(async () => {
+    if (!conversationId || !conversation?.account_id || conversationId <= 0) return;
+    try {
+      const res = await fetch(
+        `${WHATSAPP_REST_API_PREFIX}/accounts/${conversation.account_id}/automation/contact/${conversationId}/overrides`,
+        { credentials: 'include' },
+      );
+      const data = await res.json();
+      if (data.success) {
+        const aiOff = data.overrides?.ai_chat === false;
+        const pausedByAgent = Boolean(
+          data.ai_paused_by_agent ?? conversation?.ai_paused_by_agent ?? aiOff,
+        );
+        const lockActive = Date.now() < agentPauseLockUntilRef.current;
+        if (lockActive) {
+          setAiChatEnabled(false);
+          setAiPausedByAgent(true);
+        } else {
+          setAiChatEnabled(!aiOff);
+          setAiPausedByAgent(pausedByAgent);
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
+  }, [conversationId, conversation?.account_id, conversation?.ai_paused_by_agent]);
+
+  useEffect(() => {
+    if (!conversationId || !conversation?.account_id || conversationId <= 0) return;
+    const timer = window.setTimeout(() => {
+      void fetchAutomationOverrides();
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [conversationId, conversation?.account_id, fetchAutomationOverrides]);
+
+  useEffect(() => {
+    if (conversation?.ai_paused_by_agent) {
+      setAiPausedByAgent(true);
+      setAiChatEnabled(false);
+    }
+  }, [conversation?.id, conversation?.ai_paused_by_agent]);
+
+  // Fetch the live interactive-flow state for the open conversation so the
+  // composer can show typed-input affordances (enum chips / numeric pad / email
+  // hint) when the flow is paused waiting for input.
+  const fetchFlowState = useCallback(async () => {
+    if (!conversationId || conversationId <= 0) {
+      setFlowState(null);
+      return;
+    }
+    try {
+      const data = await getConversationFlowState(conversationId);
+      // Backend returns the state under `flowState`; the older typed wrapper
+      // calls it `flow_state`. Accept either so we're resilient to both.
+      const raw = (data as any) || {};
+      setFlowState(raw.flowState ?? raw.flow_state ?? null);
+    } catch {
+      setFlowState(null);
+    }
+  }, [conversationId]);
+
+  // Refetch flow-state on conversation change. We also refetch after the agent
+  // sends a message (see handleMessageSent) since that can advance the flow.
+  useEffect(() => {
+    if (conversationId && conversationId > 0) {
+      void fetchFlowState();
+    } else {
+      setFlowState(null);
+    }
+  }, [conversationId, fetchFlowState]);
 
   // Scroll position restoration for infinite scroll
   const prevScrollHeightRef = useRef<number>(0);
@@ -114,28 +198,40 @@ export function ConversationThread({
     () => false
   );
 
-  // Fetch templates once on mount
+  // Load templates after messages (large payload — must not block chat open)
   useEffect(() => {
+    if (!conversationId || conversationId <= 0) return;
+
     if (templateCacheLoaded) {
       setTemplates(templateCache);
       return;
     }
 
-    fetch(`${API_BASE}/api/whatsapp/templates`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.templates) {
-          const cache: Record<string, TemplateInfo> = {};
-          data.templates.forEach((t: TemplateInfo) => {
-            cache[t.name] = t;
-          });
-          templateCache = cache;
-          templateCacheLoaded = true;
-          setTemplates(cache);
-        }
-      })
-      .catch(err => console.error('Failed to fetch templates:', err));
-  }, []);
+    const timer = window.setTimeout(() => {
+      fetch(`${WHATSAPP_REST_API_PREFIX}/templates`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.templates) {
+            const cache: Record<string, TemplateInfo> = {};
+            data.templates.forEach((t: any) => {
+              cache[t.name] = {
+                name: t.name,
+                body: t.body_text ?? t.body ?? null,
+                header: t.header_text ?? t.header ?? null,
+                footer: t.footer_text ?? t.footer ?? null,
+                components: t.components ?? undefined,
+              };
+            });
+            templateCache = cache;
+            templateCacheLoaded = true;
+            setTemplates(cache);
+          }
+        })
+        .catch(err => console.error('Failed to fetch templates:', err));
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [conversationId]);
 
   const checkIfAtBottom = () => {
     if (!messagesContainerRef.current) return true;
@@ -222,19 +318,21 @@ export function ConversationThread({
 
   /* REMOVED: refreshTrigger effect - store handles real-time updates now */
 
-  const handleMessageSent = useCallback((sentMessage?: ConversationMessage, newConversationId?: number) => {
-    // If it's a new conversation, notify parent to update URL/Selection
-    if (newConversationId && onNewConversationCreated && conversationId === 0) {
-      onNewConversationCreated(newConversationId);
-    }
+  const handleMessageSent = useCallback((sentMessage?: ConversationMessage) => {
+    if (!conversationId) return;
 
-    // Add locally using either the real ID or the new one
-    const targetId = newConversationId || conversationId;
+    clearHumanEscalationLocally(conversationId);
+    agentPauseLockUntilRef.current = Date.now() + 30_000;
+    setAiChatEnabled(false);
+    setAiPausedByAgent(true);
+    updateConversationLocally(conversationId, { ai_paused_by_agent: true });
+    void fetchAutomationOverrides();
+    // The send may advance the interactive flow; refresh affordance state.
+    void fetchFlowState();
 
-    if (sentMessage && targetId && targetId > 0) {
-      addMessageLocally(targetId, sentMessage);
+    if (sentMessage) {
+      addMessageLocally(conversationId, sentMessage);
 
-      // Determine message preview based on type
       let preview = '';
       if (typeof sentMessage.content === 'string') {
         preview = sentMessage.content;
@@ -252,28 +350,39 @@ export function ConversationThread({
         preview = '[Media]';
       }
 
-      // Add caption to preview if present
       const contentObj = sentMessage.content as any;
       if (contentObj?.caption) {
         preview += `: ${contentObj.caption}`;
       }
 
-      updateConversationLocally(targetId, {
+      updateConversationLocally(conversationId, {
         last_message_at: sentMessage.timestamp || sentMessage.created_at || new Date().toISOString(),
         last_message_preview: preview,
       });
-      // Auto-scroll to bottom
       setTimeout(() => scrollToBottom(true), 100);
     }
-    // NO fetchMessages - store is already updated locally
-  }, [conversationId, onNewConversationCreated]);
+  }, [conversationId, fetchAutomationOverrides, fetchFlowState]);
+
+  const handleAutomationOverridesChange = useCallback(
+    (overrides: { ai_chat?: boolean }, pausedByAgent: boolean) => {
+      if (!conversationId) return;
+      setAiChatEnabled(overrides.ai_chat !== false);
+      setAiPausedByAgent(pausedByAgent);
+      updateConversationLocally(conversationId, { ai_paused_by_agent: pausedByAgent });
+    },
+    [conversationId],
+  );
+
+  const showAiPausedBanner =
+    !aiChatEnabled &&
+    (aiPausedByAgent || Boolean(conversation?.ai_paused_by_agent));
 
   // Close/Reopen handlers
   const handleClose = async () => {
     if (!conversationId) return;
     setClosing(true);
     try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/conversations/${conversationId}/close`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/conversations/${conversationId}/close`, {
         method: 'POST',
         credentials: 'include',
       });
@@ -295,7 +404,7 @@ export function ConversationThread({
     if (!conversationId) return;
     setClosing(true);
     try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/conversations/${conversationId}/reopen`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/conversations/${conversationId}/reopen`, {
         method: 'POST',
         credentials: 'include',
       });
@@ -355,19 +464,48 @@ export function ConversationThread({
     );
   }
 
+  // Meta Cloud API free-form sends are blocked outside the 24h customer service window.
   const isSessionExpired = !conversation?.is_session_open && !conversation?.closed_by_agent;
   const isClosed = conversation?.closed_by_agent || isSessionExpired;
+
+  // ----- Typed-keyboard affordance inputs for MessageComposer (ITEM #2) -----
+  // Only relevant while the flow is paused waiting on an input step.
+  const flowWaitingForInput = Boolean(flowState?.waitingForInput);
+  // The backend returns the awaited field's metadata in `currentInput`
+  // (validationType + enum options). Fall back to currentField / the collected
+  // response's validationType for resilience against older backends.
+  const flowCurrentField = flowState?.currentInput?.field ?? flowState?.currentField ?? null;
+  const flowCurrentValidationType =
+    flowState?.currentInput?.validationType ??
+    (flowState?.responses ?? []).find((r) => r.field === flowCurrentField)?.validationType ??
+    null;
+  const flowCurrentEnumValues: string[] | null = flowState?.currentInput?.enumValues ?? null;
 
   return (
     <div className="h-full flex flex-col">
       {/* Chat Header */}
-      <div className="border-b p-3 bg-gradient-to-r from-background to-muted/20 flex items-center justify-between">
+      <div className="sticky top-0 z-20 border-b p-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 flex items-center justify-between">
         <div className="flex items-center gap-3">
+          {showBackButton && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              onClick={onBack}
+              aria-label="Back to conversation list"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+          )}
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
             <User className="w-5 h-5 text-primary" />
           </div>
-          <div>
-            <h3 className="font-semibold">{conversation?.user_name || conversation?.user_phone}</h3>
+          <button
+            type="button"
+            onClick={onOpenContactInfo}
+            className={`text-left rounded-md ${onOpenContactInfo ? 'cursor-pointer hover:bg-muted/40 px-1 py-1 -mx-1 -my-1 transition-colors' : 'cursor-default'}`}
+          >
+            <h3 className="font-semibold">{conversation?.user_name || maskedUserPhone}</h3>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Clock className="w-3 h-3" />
               {conversation?.is_session_open ? (
@@ -376,17 +514,25 @@ export function ConversationThread({
                 </span>
               ) : conversation?.closed_by_agent ? (
                 <span className="text-red-600 font-medium">Closed by agent</span>
+              ) : isCoexistence ? (
+                <span className="text-amber-600 font-medium">24h window closed (send template)</span>
               ) : (
-                <span className="text-muted-foreground">Session expired</span>
+                <span className="text-amber-600 font-medium">24h window closed (send template)</span>
               )}
             </div>
-          </div>
+          </button>
 
           {/* Session Status Pill */}
           {conversation?.is_session_open && (
             <span className="ml-2 px-2.5 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
               Active
+            </span>
+          )}
+
+          {isCoexistence && (
+            <span className="ml-2 px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full">
+              Coexistence
             </span>
           )}
         </div>
@@ -398,10 +544,17 @@ export function ConversationThread({
             <Button
               variant="outline"
               size="sm"
-              className="gap-2"
+              className={cn(
+                'gap-2',
+                showAiPausedBanner && 'border-amber-300/80 bg-amber-50/80 text-amber-900 hover:bg-amber-100/80',
+              )}
               onClick={() => setAutomationsPanelOpen(true)}
             >
-              <Power className="w-4 h-4" />
+              {showAiPausedBanner ? (
+                <Sparkles className="w-4 h-4 text-amber-600" />
+              ) : (
+                <Power className="w-4 h-4" />
+              )}
               Automations
             </Button>
           )}
@@ -412,7 +565,7 @@ export function ConversationThread({
               variant="outline"
               size="sm"
               className="gap-2"
-              onClick={() => window.location.href = `/dashboard/analytics?conversation=${conversation.id}`}
+              onClick={() => window.location.href = `/dashboard/whatsapp/analytics?conversation=${conversation.id}`}
             >
               <BarChart3 className="w-4 h-4" />
               Stats
@@ -444,6 +597,28 @@ export function ConversationThread({
           )}
         </div>
       </div>
+
+      {showAiPausedBanner && (
+        <div
+          className="shrink-0 flex items-start gap-2.5 px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-sm text-amber-950"
+          role="status"
+          aria-live="polite"
+        >
+          <Sparkles className="w-4 h-4 mt-0.5 text-amber-600 shrink-0" aria-hidden />
+          <p className="flex-1 leading-snug">
+            <span className="font-semibold">AI replies are paused</span>
+            {' — you took over this chat manually. '}
+            <button
+              type="button"
+              className="font-semibold underline underline-offset-2 hover:text-amber-800"
+              onClick={() => setAutomationsPanelOpen(true)}
+            >
+              Turn on AI Chat
+            </button>
+            {' in Automations to let the bot handle this contact again.'}
+          </p>
+        </div>
+      )}
 
       {/* Messages area */}
       <div
@@ -490,7 +665,11 @@ export function ConversationThread({
         closedByAgent={conversation?.closed_by_agent}
         phoneNumberId={phoneNumberId}
         accountId={conversation?.account_id}
-        recipientName={conversation?.user_name || conversation?.user_phone}
+        recipientName={conversation?.user_name || maskedUserPhone}
+        waitingForInput={flowWaitingForInput}
+        validationType={flowCurrentValidationType}
+        enumValues={flowCurrentEnumValues}
+        currentField={flowCurrentField}
       />
 
       {/* Automations Panel */}
@@ -500,7 +679,9 @@ export function ConversationThread({
           onClose={() => setAutomationsPanelOpen(false)}
           conversationId={conversation.id}
           accountId={conversation.account_id}
-          contactName={conversation.user_name || conversation.user_phone}
+          contactName={conversation.user_name || maskedUserPhone}
+          aiPausedByAgent={aiPausedByAgent}
+          onOverridesChange={handleAutomationOverridesChange}
         />
       )}
     </div>

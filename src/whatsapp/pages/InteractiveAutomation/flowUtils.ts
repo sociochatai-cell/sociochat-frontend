@@ -10,9 +10,12 @@ import type {
     AutomationFlow,
     ValidationIssue,
     MessageNode,
-    TemplateNode as TemplateNodeType,
+    TemplateNode,
     TriggerNode,
     EndNode,
+    InputNode,
+    ApiNode,
+    LeadNode,
     MessageButton
 } from './types';
 import { LIMITS, NODE_DIMENSIONS } from './constants';
@@ -191,15 +194,20 @@ export const validateFlow = (flow: AutomationFlow): ValidationIssue[] => {
                 });
             }
 
-            // Check button action
             if (button.action.type === 'quick_reply' && !button.action.targetNodeId) {
-                issues.push({
-                    severity: 'warning',
-                    nodeId: node.id,
-                    buttonId: button.id,
-                    message: 'Button is not connected to any message',
-                    autoFixable: false,
-                });
+                const hasEdge = flow.edges.some(
+                    e => e.source === node.id && e.sourceHandle === button.id
+                );
+                if (!hasEdge) {
+                    issues.push({
+                        severity: 'warning',
+                        nodeId: node.id,
+                        buttonId: button.id,
+                        handleId: button.id,
+                        message: 'Button is not connected to any message',
+                        autoFixable: false,
+                    });
+                }
             }
 
             if (button.action.type === 'url' && !button.action.url) {
@@ -222,28 +230,171 @@ export const validateFlow = (flow: AutomationFlow): ValidationIssue[] => {
                 });
             }
         });
+
+        // Check for unconnected list rows if interactive type is list
+        if (node.data.interactiveType === 'list') {
+            (node.data.sections || []).forEach((section: any) => {
+                (section.rows || []).forEach((row: any) => {
+                    if (!row.targetNodeId) {
+                        issues.push({
+                            severity: 'warning',
+                            nodeId: node.id,
+                            handleId: row.id,
+                            message: `List row '${row.title}' is not connected`,
+                            autoFixable: false,
+                        });
+                    }
+                });
+            });
+        }
+
     });
 
-    // Check template nodes
-    const templateNodes = flow.nodes.filter(n => n.type === 'template') as TemplateNodeType[];
-    templateNodes.forEach(node => {
-        if (!node.data.templateName?.trim()) {
+    // Check input nodes
+    const inputNodes = flow.nodes.filter(n => n.type === 'input') as InputNode[];
+    inputNodes.forEach(node => {
+        if (!node.data.body.trim()) {
             issues.push({
                 severity: 'error',
                 nodeId: node.id,
-                message: 'Template must be selected',
+                message: 'Question body is required',
+                autoFixable: false,
+            });
+        }
+        if (!node.data.field.trim()) {
+            issues.push({
+                severity: 'error',
+                nodeId: node.id,
+                message: 'Save field name is required',
+                autoFixable: false,
+            });
+        }
+        if (!node.data.targetNodeId) {
+            issues.push({
+                severity: 'warning',
+                nodeId: node.id,
+                handleId: 'output',
+                message: 'Input node is not connected to a next step',
+                autoFixable: false,
+            });
+        }
+    });
+
+    const placeholderRe = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
+    const collectPlaceholders = (text: string | undefined): string[] => {
+        if (!text) return [];
+        const found: string[] = [];
+        let m: RegExpExecArray | null;
+        const re = new RegExp(placeholderRe.source, 'g');
+        while ((m = re.exec(text)) !== null) {
+            found.push(m[1]);
+        }
+        return found;
+    };
+    const apiNodes = flow.nodes.filter(n => n.type === 'api') as ApiNode[];
+    const collectedFields = new Set<string>();
+    inputNodes.forEach(node => {
+        if (node.data.field?.trim()) {
+            collectedFields.add(node.data.field.trim());
+        }
+    });
+    apiNodes.forEach(node => {
+        (node.data.buttonCapture || []).forEach(rule => {
+            if (rule.field?.trim()) {
+                collectedFields.add(rule.field.trim());
+            }
+        });
+    });
+    Object.keys(flow.flowConfig?.variableDefaults || {}).forEach(k => collectedFields.add(k));
+
+    const runtimeVars = new Set([
+        'phone',
+        'contact_name',
+        'name',
+        'customer_name',
+        'last_button_clicked',
+        ...collectedFields,
+    ]);
+    const flowVarKeys = new Set(Object.keys(flow.variables || {}));
+
+    const apiNodeOutgoingOk = (nodeId: string, branches: ApiNode['data']['branches']) => {
+        const handles = flow.edges
+            .filter(e => e.source === nodeId)
+            .map(e => e.sourceHandle || '');
+        const okHandles = new Set(['success', 'output', 'default', 'error', 'router']);
+        if (handles.some(h => okHandles.has(h))) return true;
+        return (branches || []).some(b =>
+            handles.includes(`branch-${b.id}`)
+        );
+    };
+
+    apiNodes.forEach(node => {
+        if (!node.data.url?.trim()) {
+            issues.push({
+                severity: 'error',
+                nodeId: node.id,
+                message: 'API URL is required',
                 autoFixable: false,
             });
         }
 
-        if (node.data.buttons.length === 0) {
+        const apiText = [
+            node.data.url,
+            node.data.body,
+            ...(node.data.headers || []).flatMap(h => [h.key, h.value]),
+            ...(node.data.queryParams || []).flatMap(q => [q.key, q.value]),
+        ].join('\n');
+        for (const key of collectPlaceholders(apiText)) {
+            if (runtimeVars.has(key)) continue;
+            const val = flow.variables?.[key];
+            if (!flowVarKeys.has(key) || !val || val === '***') {
+                issues.push({
+                    severity: 'warning',
+                    nodeId: node.id,
+                    message: `Set flow variable "${key}" via Flow variables (toolbar) — used in this API node`,
+                    autoFixable: false,
+                });
+                break;
+            }
+        }
+        if (!apiNodeOutgoingOk(node.id, node.data.branches)) {
             issues.push({
                 severity: 'warning',
                 nodeId: node.id,
-                message: 'Template has no quick reply buttons',
+                message: 'Connect success, error, or branch output from this API node',
                 autoFixable: false,
             });
         }
+    });
+
+    // Check if trigger node is connected (at least one outgoing edge)
+    triggerNodes.forEach((node) => {
+        const hasOutgoingEdge = flow.edges.some(e => e.source === node.id);
+        if (!hasOutgoingEdge) {
+            issues.push({
+                severity: 'error',
+                nodeId: node.id,
+                message: 'Trigger must be connected to a message or node',
+                autoFixable: false,
+            });
+        }
+    });
+
+    // Check template button mappings
+    const templateNodes = flow.nodes.filter(n => n.type === 'template') as TemplateNode[];
+    templateNodes.forEach((node) => {
+        const data = node.data as any;
+        (data.buttonMappings || []).forEach((mapping: any, idx: number) => {
+            if ((mapping.buttonType === 'quick_reply' || mapping.buttonType === 'flow') && !mapping.targetNodeId) {
+                issues.push({
+                    severity: 'warning',
+                    nodeId: node.id,
+                    handleId: `btn-${idx}`,
+                    message: `Template button '${mapping.buttonText}' is not connected`,
+                    autoFixable: false,
+                });
+            }
+        });
     });
 
     // Check for orphan nodes (nodes not connected to trigger)
@@ -255,6 +406,9 @@ export const validateFlow = (flow: AutomationFlow): ValidationIssue[] => {
     }
 
     flow.nodes.forEach(node => {
+        if ((node.data as { internalRouter?: boolean })?.internalRouter) {
+            return;
+        }
         if (!connectedNodeIds.has(node.id) && node.type !== 'trigger') {
             issues.push({
                 severity: 'warning',
@@ -363,6 +517,133 @@ export const addEndNode = (
 };
 
 /**
+ * Add a new template node to the flow
+ */
+export const addTemplateNode = (
+    flow: AutomationFlow,
+    position?: { x: number; y: number }
+): AutomationFlow => {
+    const nodeId = generateId('tpl');
+    const newPosition = position || calculateNextPosition(flow.nodes);
+
+    const newNode: TemplateNode = {
+        id: nodeId,
+        type: 'template',
+        position: newPosition,
+        data: {
+            buttonMappings: [],
+        },
+    };
+
+    return {
+        ...flow,
+        nodes: [...flow.nodes, newNode],
+    };
+};
+
+/**
+ * Add a new input node to the flow
+ */
+export const addInputNode = (
+    flow: AutomationFlow,
+    position?: { x: number; y: number }
+): AutomationFlow => {
+    const nodeId = generateId('input');
+    const newPosition = position || calculateNextPosition(flow.nodes);
+
+    const newNode: InputNode = {
+        id: nodeId,
+        type: 'input',
+        position: newPosition,
+        data: {
+            body: 'Please enter your detail:',
+            field: 'detail',
+            validationType: 'text',
+            targetNodeId: null,
+        },
+    };
+
+    return {
+        ...flow,
+        nodes: [...flow.nodes, newNode],
+    };
+};
+
+/**
+ * Add a new API integration node to the flow
+ */
+export const addApiNode = (
+    flow: AutomationFlow,
+    position?: { x: number; y: number }
+): AutomationFlow => {
+    const nodeId = generateId('api');
+    const newPosition = position || calculateNextPosition(flow.nodes);
+
+    const newNode: ApiNode = {
+        id: nodeId,
+        type: 'api',
+        position: newPosition,
+        data: {
+            label: 'External API',
+            method: 'POST',
+            url: 'https://api.example.com/lookup',
+            bodyType: 'json',
+            body: '{\n  "phone": "{{phone}}"\n}',
+            timeoutSec: 15,
+            responseFormat: 'auto',
+            headers: [
+                { key: 'Authorization', value: 'Bearer {{flow_api_token}}', enabled: true },
+                { key: 'Content-Type', value: 'application/json', enabled: true },
+            ],
+            queryParams: [],
+            branches: [],
+            output: {
+                onSuccess: {
+                    mode: 'auto',
+                    textPath: 'message',
+                    buttonsPath: 'quickReplies',
+                    fallbackText: 'Request completed.',
+                },
+                onError: {
+                    text: 'We could not reach the service. Please try again later.',
+                },
+            },
+        },
+    };
+
+    return {
+        ...flow,
+        nodes: [...flow.nodes, newNode],
+    };
+};
+
+/**
+ * Add a new lead ("Mark as Lead") node to the flow
+ */
+export const addLeadNode = (
+    flow: AutomationFlow,
+    position?: { x: number; y: number }
+): AutomationFlow => {
+    const nodeId = generateId('lead');
+    const newPosition = position || calculateNextPosition(flow.nodes);
+
+    const newNode: LeadNode = {
+        id: nodeId,
+        type: 'lead',
+        position: newPosition,
+        data: {
+            label: 'Mark as Lead',
+            condition: { source: 'response', operator: 'any' },
+        },
+    };
+
+    return {
+        ...flow,
+        nodes: [...flow.nodes, newNode],
+    };
+};
+
+/**
  * Update a node in the flow
  */
 export const updateNode = <T extends FlowNode>(
@@ -412,6 +693,10 @@ export const addEdge = (
     sourceHandle: string,
     target: string
 ): AutomationFlow => {
+    if (source === target) {
+        return flow;
+    }
+
     const edgeId = generateId('edge');
     const newEdge: FlowEdge = {
         id: edgeId,
@@ -427,25 +712,64 @@ export const addEdge = (
     );
     const newEdges = [...filteredEdges, newEdge];
 
-    // Update Node (Button Target)
+    // 3. Update Node Data (Buttons, List Rows, Template Mappings)
     const newNodes = flow.nodes.map(node => {
-        if (node.id === source && node.type === 'message') {
-            const messageNode = node as MessageNode;
-            return {
-                ...node,
-                data: {
-                    ...node.data,
-                    buttons: messageNode.data.buttons.map(btn => {
-                        if (btn.id === sourceHandle && btn.action.type === 'quick_reply') {
-                            return {
-                                ...btn,
-                                action: { ...btn.action, targetNodeId: target }
-                            };
-                        }
-                        return btn;
-                    })
-                }
-            };
+        if (node.id === source) {
+            // Message Node
+            if (node.type === 'message') {
+                const messageNode = node as MessageNode;
+                return {
+                    ...messageNode,
+                    data: {
+                        ...messageNode.data,
+                        buttons: (messageNode.data.buttons || []).map((btn: MessageButton) => {
+                            if (btn.id === sourceHandle && btn.action.type === 'quick_reply') {
+                                return { ...btn, action: { ...btn.action, targetNodeId: target } };
+                            }
+                            return btn;
+                        }),
+                        sections: (messageNode.data.sections || []).map((section: any) => ({
+                            ...section,
+                            rows: (section.rows || []).map((row: any) => {
+                                if (row.id === sourceHandle) {
+                                    return { ...row, targetNodeId: target };
+                                }
+                                return row;
+                            })
+                        }))
+                    }
+                } as FlowNode;
+            }
+            // Template Node
+            if ((node.type as string) === 'template') {
+                const templateNode = node as unknown as TemplateNode;
+                return {
+                    ...templateNode,
+                    data: {
+                        ...templateNode.data,
+                        buttonMappings: (templateNode.data.buttonMappings || []).map((m: any, idx: number) => {
+                            if (
+                                `btn-${idx}` === sourceHandle &&
+                                (m.buttonType === 'quick_reply' || m.buttonType === 'flow')
+                            ) {
+                                return { ...m, targetNodeId: target };
+                            }
+                            return m;
+                        })
+                    }
+                } as unknown as FlowNode;
+            }
+            // Input Node
+            if ((node.type as string) === 'input') {
+                const inputNode = node as unknown as InputNode;
+                return {
+                    ...inputNode,
+                    data: {
+                        ...inputNode.data,
+                        targetNodeId: sourceHandle === 'output' ? target : inputNode.data.targetNodeId,
+                    }
+                } as unknown as FlowNode;
+            }
         }
         return node;
     });
@@ -469,34 +793,159 @@ export const removeEdge = (
 
     const newEdges = flow.edges.filter(e => e.id !== edgeId);
 
-    // Update Node (Reset Button Target)
+    // Update Node Data
     const newNodes = flow.nodes.map(node => {
-        if (node.id === edge.source && node.type === 'message') {
-            const messageNode = node as MessageNode;
-            return {
-                ...node,
-                data: {
-                    ...node.data,
-                    buttons: messageNode.data.buttons.map(btn => {
-                        if (btn.id === edge.sourceHandle && btn.action.type === 'quick_reply') {
-                            return {
-                                ...btn,
-                                action: { ...btn.action, targetNodeId: null }
-                            };
-                        }
-                        return btn;
-                    })
-                }
-            };
+        if (node.id === edge.source) {
+            // Message Node
+            if (node.type === 'message') {
+                const messageNode = node as MessageNode;
+                return {
+                    ...messageNode,
+                    data: {
+                        ...messageNode.data,
+                        buttons: (messageNode.data.buttons || []).map((btn: MessageButton) => {
+                            if (btn.id === edge.sourceHandle && btn.action.type === 'quick_reply') {
+                                return { ...btn, action: { ...btn.action, targetNodeId: null } };
+                            }
+                            return btn;
+                        }),
+                        sections: (messageNode.data.sections || []).map((section: any) => ({
+                            ...section,
+                            rows: (section.rows || []).map((row: any) => {
+                                if (row.id === edge.sourceHandle) {
+                                    return { ...row, targetNodeId: null };
+                                }
+                                return row;
+                            })
+                        }))
+                    }
+                } as FlowNode;
+            }
+            // Template Node
+            if ((node.type as string) === 'template') {
+                const templateNode = node as unknown as TemplateNode;
+                return {
+                    ...templateNode,
+                    data: {
+                        ...templateNode.data,
+                        buttonMappings: (templateNode.data.buttonMappings || []).map((m: any, idx: number) => {
+                            if (
+                                `btn-${idx}` === edge.sourceHandle &&
+                                (m.buttonType === 'quick_reply' || m.buttonType === 'flow')
+                            ) {
+                                return { ...m, targetNodeId: null };
+                            }
+                            return m;
+                        })
+                    }
+                } as unknown as FlowNode;
+            }
+            // Input Node
+            if ((node.type as string) === 'input') {
+                const inputNode = node as unknown as InputNode;
+                return {
+                    ...inputNode,
+                    data: {
+                        ...inputNode.data,
+                        targetNodeId: edge.sourceHandle === 'output' ? null : inputNode.data.targetNodeId,
+                    }
+                } as unknown as FlowNode;
+            }
         }
         return node;
     });
 
     return {
         ...flow,
-        edges: newEdges,
         nodes: newNodes,
+        edges: newEdges,
     };
+};
+
+/**
+ * Synchronize edges list based on targetNodeId in node data
+ */
+export const syncEdgesFromNodes = (flow: AutomationFlow): AutomationFlow => {
+    const newEdges: FlowEdge[] = [];
+
+    flow.nodes.forEach(node => {
+        // 1. Message Buttons & Rows
+        if (node.type === 'message') {
+            (node.data.buttons || []).forEach((btn: MessageButton) => {
+                if (btn.action.type === 'quick_reply' && btn.action.targetNodeId) {
+                    newEdges.push({
+                        id: generateId('edge'),
+                        source: node.id,
+                        sourceHandle: btn.id,
+                        target: btn.action.targetNodeId,
+                        targetHandle: 'input'
+                    });
+                }
+            });
+            // List Rows
+            (node.data.sections || []).forEach((section: any) => {
+                (section.rows || []).forEach((row: any) => {
+                    if (row.targetNodeId) {
+                        newEdges.push({
+                            id: generateId('edge'),
+                            source: node.id,
+                            sourceHandle: row.id,
+                            target: row.targetNodeId,
+                            targetHandle: 'input'
+                        });
+                    }
+                });
+            });
+        }
+
+        // 2. Template Buttons
+        if ((node.type as string) === 'template') {
+            const tplNode = node as unknown as TemplateNode;
+            (tplNode.data.buttonMappings || []).forEach((mapping: any, idx: number) => {
+                if ((mapping.buttonType === 'quick_reply' || mapping.buttonType === 'flow') && mapping.targetNodeId) {
+                    newEdges.push({
+                        id: generateId('edge'),
+                        source: node.id,
+                        sourceHandle: `btn-${idx}`,
+                        target: mapping.targetNodeId,
+                        targetHandle: 'input'
+                    });
+                }
+            });
+        }
+        
+        // 3. Trigger Node (preserve existing visual edge)
+        if ((node.type as string) === 'trigger') {
+            const existingTriggerEdge = flow.edges.find(e => e.source === node.id && e.sourceHandle === 'output');
+            if (existingTriggerEdge) {
+                newEdges.push(existingTriggerEdge);
+            }
+        }
+        
+        // 4. Input Node
+        if ((node.type as string) === 'input') {
+            const inputNode = node as unknown as InputNode;
+            const nextId = inputNode.data.targetNodeId;
+            if (nextId && nextId !== node.id) {
+                newEdges.push({
+                    id: generateId('edge'),
+                    source: node.id,
+                    sourceHandle: 'output',
+                    target: nextId,
+                    targetHandle: 'input'
+                });
+            }
+        }
+
+        // 5. API Node — preserve React Flow edges (success / error / branch-*)
+        if ((node.type as string) === 'api') {
+            flow.edges
+                .filter(e => e.source === node.id)
+                .forEach(edge => newEdges.push(edge));
+        }
+    });
+    
+    return { ...flow, edges: newEdges };
 };
 
 // =============================================================================

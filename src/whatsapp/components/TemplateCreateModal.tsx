@@ -13,7 +13,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Template } from './TemplateCard';
 import { FileText, Loader2, Info } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { API_BASE_URL } from "@/config";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { invalidateHttpCache } from '../utils/waPersistentCache';
+import { clearCache } from '../hooks/useDataCache';
 
 const API_BASE = API_BASE_URL;
 
@@ -80,7 +82,7 @@ export function TemplateCreateModal({
         try {
             setCreating(true);
 
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/templates`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -98,6 +100,9 @@ export function TemplateCreateModal({
             const data = await res.json();
 
             if (data.success) {
+                // Drop the cached GET /templates so the list refetches fresh after creation.
+                invalidateHttpCache('/api/whatsapp/templates');
+                clearCache('whatsapp_templates');
                 toast({
                     title: 'Template Created!',
                     description: 'Template submitted for Meta approval. Status: PENDING',

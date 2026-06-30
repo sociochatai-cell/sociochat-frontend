@@ -19,7 +19,8 @@ import {
     SUPPORTED_LANGUAGES,
     CATEGORIES,
 } from '../../utils/templateUtils';
-import { Loader2, AlertCircle, ArrowLeft, Send } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowLeft, Send, Sparkles, ShoppingBag } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface TemplateFormProps {
     state: TemplateState;
@@ -29,6 +30,16 @@ interface TemplateFormProps {
     onCancel: () => void;
     isSubmitting: boolean;
     accountId?: number; // For fetching published flows
+    voiceCallCapability?: {
+        success: boolean;
+        strict_mode: boolean;
+        voice_calling_ready: boolean;
+        block_template_submission: boolean;
+        receive_in_sociovia_dashboard: boolean;
+        receive_path?: string;
+        warnings?: string[];
+    } | null;
+    loadingVoiceCallCapability?: boolean;
 }
 
 export function TemplateForm({
@@ -39,11 +50,74 @@ export function TemplateForm({
     onCancel,
     isSubmitting,
     accountId,
+    voiceCallCapability,
+    loadingVoiceCallCapability,
 }: TemplateFormProps) {
     const handleNameChange = (value: string) => {
         // Auto-format to lowercase with underscores
         const formatted = value.toLowerCase().replace(/[^a-z0-9_]/g, '_');
         onChange({ name: formatted });
+    };
+
+    const handlePresetSelect = (presetKey: string) => {
+        let presetState: Partial<TemplateState> = {};
+        if (presetKey === 'otp_auth') {
+            presetState = {
+                name: 'otp_verification_code',
+                category: 'AUTHENTICATION',
+                header: { type: 'none' },
+                body: 'Your verification code is {{1}}. Valid for 10 minutes. Please do not share this code with anyone.',
+                footer: 'Sociovia Secure Auth',
+                buttons: [{ type: 'copy_code', text: 'Copy Code', copy_code: '123456' }],
+            };
+        } else if (presetKey === 'welcome_marketing') {
+            presetState = {
+                name: 'welcome_new_user',
+                category: 'MARKETING',
+                header: { type: 'text', text: 'Welcome to Sociovia!' },
+                body: 'Hi {{customer_name}}, welcome to our community! We are thrilled to have you here. As a welcome gift, use code {{promo_code}} to get {{discount}}% off on your first order.',
+                footer: 'Enjoy your shopping!',
+                buttons: [{ type: 'url', text: 'Shop Now', url: 'https://www.sociovia.com/shop' }],
+            };
+        } else if (presetKey === 'order_receipt') {
+            presetState = {
+                name: 'order_confirmation_receipt',
+                category: 'UTILITY',
+                header: { type: 'text', text: 'Order Confirmed' },
+                body: 'Hello {{customer_name}}, thank you for your order! We have confirmed your order #{{order_id}} for a total of {{amount}}. We will notify you when it ships.',
+                footer: 'Thank you for shopping with us!',
+                buttons: [{ type: 'url', text: 'View Order Details', url: 'https://www.sociovia.com/orders/{{order_id}}' }],
+            };
+        } else if (presetKey === 'shipping_update') {
+            presetState = {
+                name: 'order_shipped_tracking',
+                category: 'UTILITY',
+                header: { type: 'text', text: 'Order Shipped' },
+                body: 'Hi {{customer_name}}, your order #{{order_id}} has been shipped! Tracking Code: {{tracking_code}}. Click below to track.',
+                footer: 'Thank you for choosing us!',
+                buttons: [{ type: 'url', text: 'Track Shipment', url: 'https://www.sociovia.com/track?code={{tracking_code}}' }],
+            };
+        } else if (presetKey === 'appointment_reminder') {
+            presetState = {
+                name: 'appointment_reminder_schedule',
+                category: 'UTILITY',
+                header: { type: 'text', text: 'Appointment Reminder' },
+                body: 'Hi {{customer_name}}, this is a reminder for your upcoming appointment on {{date}} at {{time}}. If you need to reschedule, please let us know.',
+                footer: 'We look forward to seeing you!',
+                buttons: [{ type: 'url', text: 'Manage Booking', url: 'https://www.sociovia.com/appointments' }],
+            };
+        } else if (presetKey === 'catalog_showcase') {
+            presetState = {
+                name: 'product_catalog_showcase',
+                category: 'MARKETING',
+                header: { type: 'text', text: 'Our Latest Products' },
+                body: 'Hi {{customer_name}}, we have updated our product catalog with new arrivals. Browse our latest products and place your order directly on WhatsApp!',
+                footer: 'Tap below to explore our catalog',
+                buttons: [{ type: 'catalog', text: 'View catalog' }],
+            };
+        }
+        onChange(presetState);
+        toast.success('Preset loaded successfully! You can now customize or submit it.');
     };
 
     return (
@@ -85,9 +159,33 @@ export function TemplateForm({
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 {/* Template Metadata */}
                 <div className="space-y-4">
-                    <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                        Template Details
+                    <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-cyan-500" />
+                        Template Details & Presets
                     </h3>
+
+                    {/* Presets Dropdown */}
+                    <div className="space-y-2 p-3 bg-cyan-500/5 border border-cyan-500/10 rounded-xl">
+                        <Label className="text-xs font-semibold text-cyan-800 dark:text-cyan-400 flex items-center gap-1">
+                            ⚡ Quick-Approval Presets
+                        </Label>
+                        <Select onValueChange={handlePresetSelect}>
+                            <SelectTrigger className="bg-white dark:bg-slate-950 border-cyan-500/20 text-slate-700 dark:text-slate-200 text-xs">
+                                <SelectValue placeholder="Select a preset to load..." />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white">
+                                <SelectItem value="otp_auth">🔑 One-Time Password (OTP) - Authentication</SelectItem>
+                                <SelectItem value="welcome_marketing">👋 Welcome Greeting - Marketing</SelectItem>
+                                <SelectItem value="catalog_showcase">🛒 Product Catalog Showcase - Marketing</SelectItem>
+                                <SelectItem value="order_receipt">🧾 Order Confirmation Receipt - Utility</SelectItem>
+                                <SelectItem value="shipping_update">🚚 Shipment Tracking Update - Utility</SelectItem>
+                                <SelectItem value="appointment_reminder">📅 Appointment Booking Reminder - Utility</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-cyan-700/80 leading-normal">
+                            Pre-configured layout with placeholders and fallback example parameters for immediate automated Meta approval (&lt; 1 min).
+                        </p>
+                    </div>
 
                     {/* Name */}
                     <div className="space-y-2">
@@ -102,7 +200,7 @@ export function TemplateForm({
                             className={`font-mono ${validation.errors.name ? 'border-destructive' : ''}`}
                         />
                         <p className="text-xs text-muted-foreground">
-                            Lowercase letters, numbers, and underscores only
+                            Lowercase letters, numbers, and underscores only (spaces auto-formatted to underscores)
                         </p>
                         {validation.errors.name && (
                             <p className="text-xs text-destructive">{validation.errors.name}</p>
@@ -120,7 +218,7 @@ export function TemplateForm({
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-white">
                                     {CATEGORIES.map(cat => (
                                         <SelectItem key={cat.value} value={cat.value}>
                                             {cat.label}
@@ -139,7 +237,7 @@ export function TemplateForm({
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-white">
                                     {SUPPORTED_LANGUAGES.map(lang => (
                                         <SelectItem key={lang.code} value={lang.code}>
                                             {lang.label}
@@ -204,6 +302,8 @@ export function TemplateForm({
                     onChange={(buttons) => onChange({ buttons })}
                     error={validation.errors.buttons}
                     accountId={accountId}
+                    voiceCallCapability={voiceCallCapability}
+                    loadingVoiceCallCapability={loadingVoiceCallCapability}
                 />
 
                 <Separator />
@@ -233,7 +333,7 @@ export function TemplateForm({
                 <Button
                     type="button"
                     onClick={onSubmit}
-                    disabled={!validation.isValid || isSubmitting}
+                    disabled={isSubmitting || !accountId}
                     className="gap-2"
                 >
                     {isSubmitting ? (

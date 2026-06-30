@@ -7,6 +7,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_ENDPOINT } from '@/config';
+import { getWorkspaceId as getStoredWorkspaceId } from '../utils/workspaceContext';
+import { cachedFetch } from '../utils/waPersistentCache';
 
 interface TrackingRecord {
     source: 'inbox' | 'bulk';
@@ -76,9 +78,7 @@ const TrackingAnalytics: React.FC = () => {
 
     // Get workspace ID from storage
     const getWorkspaceId = () => {
-        return localStorage.getItem('sv_whatsapp_workspace_id') ||
-            sessionStorage.getItem('sv_whatsapp_workspace_id') ||
-            '4'; // Default fallback
+        return getStoredWorkspaceId() || '4'; // Default fallback
     };
 
     const fetchData = useCallback(async () => {
@@ -96,7 +96,7 @@ const TrackingAnalytics: React.FC = () => {
             }
 
             // Fetch tracking records
-            const response = await fetch(
+            const response = await cachedFetch(
                 `${API_ENDPOINT}/v1/tracking/all?${params.toString()}`,
                 {
                     headers: {
@@ -120,7 +120,7 @@ const TrackingAnalytics: React.FC = () => {
             }
 
             // Fetch debug stats
-            const debugResponse = await fetch(
+            const debugResponse = await cachedFetch(
                 `${API_ENDPOINT}/v1/tracking/debug`,
                 {
                     headers: {

@@ -3,7 +3,6 @@
 // Displays connected WhatsApp account information with Manage dropdown
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,9 +28,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Phone, Building2, Trash2, Loader2, Unlink, Link, Settings2, Info, Pencil, BarChart3, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Phone, Building2, Trash2, Loader2, Unlink, Link, Settings2, Info, Pencil, BarChart3, RefreshCw } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { API_BASE_URL } from "@/config";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { invalidateWhatsAppAccountsCache } from '@/whatsapp/hooks/useWhatsAppData';
 
 const API_BASE = API_BASE_URL;
 
@@ -71,14 +71,11 @@ export function WhatsAppAccountCard({
   isSyncing = false,
   onPopupTrigger
 }: WhatsAppAccountCardProps) {
-  const navigate = useNavigate();
   const [unlinking, setUnlinking] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
-  const [unlinkDialogOpen, setUnlinkDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [newName, setNewName] = useState(account.verified_name || '');
 
   const formatPhoneNumber = (phone: string | null) => {
@@ -93,16 +90,15 @@ export function WhatsAppAccountCard({
     return limit.toString();
   };
 
-  const handleUnlinkClick = () => {
-    setDropdownOpen(false);
-    setUnlinkDialogOpen(true);
-  };
+  const handleUnlink = async () => {
+    if (!confirm(`This will deactivate "${account.verified_name || account.display_phone_number}". You can re-link it later. Continue?`)) {
+      return;
+    }
 
-  const handleUnlinkConfirm = async () => {
-    setUnlinkDialogOpen(false);
     setUnlinking(true);
+    setDropdownOpen(false);
     try {
-      const response = await fetch(`${API_BASE}/api/whatsapp/accounts/${account.id}/unlink`, {
+      const response = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${account.id}/unlink`, {
         method: 'PATCH',
         credentials: 'include',
       });
@@ -117,8 +113,8 @@ export function WhatsAppAccountCard({
         description: 'WhatsApp account is now inactive. You can re-link it anytime.',
       });
 
+      invalidateWhatsAppAccountsCache(account.workspace_id ?? undefined);
       onUpdate?.();
-      navigate('/dashboard');
     } catch (error) {
       toast({
         title: 'Error',
@@ -151,7 +147,7 @@ export function WhatsAppAccountCard({
 
     setRenaming(true);
     try {
-      const response = await fetch(`${API_BASE}/api/whatsapp/accounts/${account.id}/rename`, {
+      const response = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${account.id}/rename`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -169,6 +165,7 @@ export function WhatsAppAccountCard({
         description: `Account is now named "${newName.trim()}"`,
       });
 
+      invalidateWhatsAppAccountsCache(account.workspace_id ?? undefined);
       setRenameDialogOpen(false);
       onUpdate?.();
     } catch (error) {
@@ -182,16 +179,15 @@ export function WhatsAppAccountCard({
     }
   };
 
-  const handleDeleteClick = () => {
-    setDropdownOpen(false);
-    setDeleteDialogOpen(true);
-  };
+  const handleDelete = async () => {
+    if (!confirm(`⚠️ PERMANENTLY DELETE "${account.verified_name || account.display_phone_number}"?\n\nThis will delete all conversations and messages. This cannot be undone!`)) {
+      return;
+    }
 
-  const handleDeleteConfirm = async () => {
-    setDeleteDialogOpen(false);
     setDeleting(true);
+    setDropdownOpen(false);
     try {
-      const response = await fetch(`${API_BASE}/api/whatsapp/accounts/${account.id}`, {
+      const response = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${account.id}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -206,8 +202,8 @@ export function WhatsAppAccountCard({
         description: 'WhatsApp account and all data permanently deleted.',
       });
 
+      invalidateWhatsAppAccountsCache(account.workspace_id ?? undefined);
       onUpdate?.();
-      navigate('/dashboard');
     } catch (error) {
       toast({
         title: 'Error',
@@ -341,7 +337,7 @@ export function WhatsAppAccountCard({
                   <DropdownMenuItem
                     onClick={() => {
                       setDropdownOpen(false);
-                      window.location.href = '/dashboard/analytics';
+                      window.location.href = '/dashboard/whatsapp/analytics';
                     }}
                     className="cursor-pointer"
                   >
@@ -366,7 +362,7 @@ export function WhatsAppAccountCard({
 
                   {account.is_active ? (
                     <DropdownMenuItem
-                      onClick={handleUnlinkClick}
+                      onClick={handleUnlink}
                       className="text-orange-600 focus:text-orange-600 focus:bg-orange-50 cursor-pointer"
                     >
                       <Unlink className="w-4 h-4 mr-2" />
@@ -385,7 +381,7 @@ export function WhatsAppAccountCard({
                   <DropdownMenuSeparator />
 
                   <DropdownMenuItem
-                    onClick={handleDeleteClick}
+                    onClick={handleDelete}
                     className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
@@ -437,13 +433,9 @@ export function WhatsAppAccountCard({
           <div className="mt-4 pt-4 border-t text-xs text-muted-foreground flex items-center justify-between">
             <span>Connected {new Date(account.created_at).toLocaleDateString()}</span>
             <div className="flex items-center gap-2">
-              {account.token_type === 'permanent' ? (
-                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+              {account.token_type === 'permanent' && (
+                <Badge variant="outline" className="text-xs">
                   Permanent Token
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
-                  Temporary Token
                 </Badge>
               )}
             </div>
@@ -501,71 +493,6 @@ export function WhatsAppAccountCard({
               ) : (
                 'Save Name'
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Unlink Confirmation Dialog */}
-      <Dialog open={unlinkDialogOpen} onOpenChange={setUnlinkDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-orange-600">
-              <Unlink className="w-5 h-5" />
-              Unlink Account
-            </DialogTitle>
-            <DialogDescription className="pt-2">
-              This will deactivate <strong>"{account.verified_name || account.display_phone_number}"</strong>. All messaging, templates, and flows will be paused.
-              <br /><br />
-              You can re-link it later from the settings page.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={() => setUnlinkDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUnlinkConfirm}
-              className="bg-orange-600 hover:bg-orange-700 text-white gap-2"
-            >
-              <Unlink className="w-4 h-4" />
-              Yes, Unlink Account
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="w-5 h-5" />
-              Delete Permanently
-            </DialogTitle>
-            <DialogDescription className="pt-2">
-              <span className="font-semibold text-destructive">⚠️ This action cannot be undone.</span>
-              <br /><br />
-              Permanently delete <strong>"{account.verified_name || account.display_phone_number}"</strong> and all associated conversations, messages, and data.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteConfirm}
-              className="gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Yes, Delete Permanently
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -23,4 +23,10 @@ export { default as InteractiveAutomationsList } from './InteractiveAutomation/I
 export { default as TrackingAnalytics } from './TrackingAnalytics';
 export { default as WhatsAppContacts } from './WhatsAppContacts';
 export { default as WhatsAppDatasets } from './WhatsAppDatasets';
+export { WhatsAppCoexistence } from './WhatsAppCoexistence';
+export { WhatsAppCatalog } from './WhatsAppCatalog';
+export { FlowSubmissions } from './FlowSubmissions';
+export { BookingDashboard } from './BookingDashboard';
+export { BookingSettings } from './BookingSettings';
+
 

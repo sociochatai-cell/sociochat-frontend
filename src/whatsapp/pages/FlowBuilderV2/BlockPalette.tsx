@@ -13,10 +13,10 @@ import {
   Hash, 
   FileText, 
   List, 
-  CircleDot,
-  CheckSquare,
+  CircleDot, 
+  CheckSquare, 
   Calendar,
-  Clock
+  Clock 
 } from 'lucide-react';
 import {
   Tooltip,
@@ -58,9 +58,9 @@ const BLOCKS: BlockItem[] = [
     label: 'Email', 
     icon: <Mail />, 
     description: 'Email address',
-    bgColor: 'bg-purple-50',
-    borderColor: 'border-purple-200',
-    iconColor: 'text-purple-600'
+    bgColor: 'bg-slate-50',
+    borderColor: 'border-slate-200',
+    iconColor: 'text-slate-600'
   },
   { 
     type: 'phone', 
@@ -116,23 +116,23 @@ const BLOCKS: BlockItem[] = [
     borderColor: 'border-teal-200',
     iconColor: 'text-teal-600'
   },
-  {
-    type: 'date',
-    label: 'Date',
-    icon: <Calendar />,
+  { 
+    type: 'date', 
+    label: 'Date', 
+    icon: <Calendar />, 
     description: 'Date picker',
     bgColor: 'bg-amber-50',
     borderColor: 'border-amber-200',
     iconColor: 'text-amber-600'
   },
-  {
-    type: 'time',
-    label: 'Time',
-    icon: <Clock />,
-    description: 'Time slot picker',
-    bgColor: 'bg-orange-50',
-    borderColor: 'border-orange-200',
-    iconColor: 'text-orange-600'
+  { 
+    type: 'time', 
+    label: 'Time Slot', 
+    icon: <Clock />, 
+    description: 'Time slot selector',
+    bgColor: 'bg-rose-50',
+    borderColor: 'border-rose-200',
+    iconColor: 'text-rose-600'
   },
 ];
 

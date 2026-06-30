@@ -3,7 +3,7 @@
 // Slide-out panel showing automation toggle switches for a specific contact
 // Allows enabling/disabling automations per-contact
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X,
@@ -16,12 +16,13 @@ import {
     Loader2,
     Check,
     Power,
-    GitMerge
+    GitMerge,
+    Bot
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { API_BASE_URL } from '@/config';
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 
 interface AutomationOverrides {
     welcome: boolean;
@@ -39,6 +40,8 @@ interface ChatAutomationsPanelProps {
     conversationId: number;
     accountId: number;
     contactName?: string;
+    aiPausedByAgent?: boolean;
+    onOverridesChange?: (overrides: AutomationOverrides, aiPausedByAgent: boolean) => void;
 }
 
 const AUTOMATION_TYPES = [
@@ -86,10 +89,10 @@ const AUTOMATION_TYPES = [
     },
     {
         key: 'interactive_flows',
-        label: 'Interactive Flows',
-        description: 'Flow triggers and menu responses',
-        icon: GitMerge,
-        color: 'from-orange-500 to-red-500',
+        label: 'Conversational Flows',
+        description: 'Flow triggers and chatbot responses',
+        icon: Bot,
+        color: 'from-orange-500 to-purple-600',
     },
 ] as const;
 
@@ -98,7 +101,9 @@ export function ChatAutomationsPanel({
     onClose,
     conversationId,
     accountId,
-    contactName
+    contactName,
+    aiPausedByAgent: aiPausedByAgentProp = false,
+    onOverridesChange,
 }: ChatAutomationsPanelProps) {
     const [overrides, setOverrides] = useState<AutomationOverrides>({
         welcome: true,
@@ -112,34 +117,46 @@ export function ChatAutomationsPanel({
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState<string | null>(null);
     const [saved, setSaved] = useState<string | null>(null);
-
-    // Fetch current overrides
-    const fetchOverrides = useCallback(async () => {
-        if (!conversationId || !accountId) return;
-
-        setLoading(true);
-        try {
-            const res = await fetch(
-                `${API_BASE_URL}/api/whatsapp/accounts/${accountId}/automation/contact/${conversationId}/overrides`,
-                { credentials: 'include' }
-            );
-            const data = await res.json();
-
-            if (data.success) {
-                setOverrides(data.overrides);
-            }
-        } catch (err) {
-            console.error('Failed to fetch overrides:', err);
-        } finally {
-            setLoading(false);
-        }
-    }, [conversationId, accountId]);
+    const [aiPausedByAgent, setAiPausedByAgent] = useState(aiPausedByAgentProp);
+    const onOverridesChangeRef = useRef(onOverridesChange);
+    onOverridesChangeRef.current = onOverridesChange;
 
     useEffect(() => {
-        if (isOpen) {
-            fetchOverrides();
-        }
-    }, [isOpen, fetchOverrides]);
+        setAiPausedByAgent(aiPausedByAgentProp);
+    }, [aiPausedByAgentProp]);
+
+    // Load overrides once when panel opens (avoid onOverridesChange in deps — causes infinite refetch loop)
+    useEffect(() => {
+        if (!isOpen || !conversationId || !accountId) return;
+
+        let cancelled = false;
+        setLoading(true);
+
+        (async () => {
+            try {
+                const res = await fetch(
+                    `${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/automation/contact/${conversationId}/overrides`,
+                    { credentials: 'include' },
+                );
+                const data = await res.json();
+
+                if (cancelled || !data.success) return;
+
+                setOverrides(data.overrides);
+                const paused = Boolean(data.ai_paused_by_agent);
+                setAiPausedByAgent(paused);
+                onOverridesChangeRef.current?.(data.overrides, paused);
+            } catch (err) {
+                if (!cancelled) console.error('Failed to fetch overrides:', err);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, conversationId, accountId]);
 
     // Toggle automation
     const handleToggle = async (ruleType: string, newValue: boolean) => {
@@ -148,7 +165,7 @@ export function ChatAutomationsPanel({
 
         try {
             const res = await fetch(
-                `${API_BASE_URL}/api/whatsapp/accounts/${accountId}/automation/contact/${conversationId}/overrides`,
+                `${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/automation/contact/${conversationId}/overrides`,
                 {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -164,6 +181,9 @@ export function ChatAutomationsPanel({
 
             if (data.success) {
                 setOverrides(data.overrides);
+                const paused = Boolean(data.ai_paused_by_agent);
+                setAiPausedByAgent(paused);
+                onOverridesChangeRef.current?.(data.overrides, paused);
                 setSaved(ruleType);
                 setTimeout(() => setSaved(null), 1500);
             }
@@ -232,6 +252,12 @@ export function ChatAutomationsPanel({
 
                         {/* Content */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                            {!loading && aiPausedByAgent && !overrides.ai_chat && (
+                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200/80 rounded-lg px-3 py-2 leading-relaxed">
+                                    AI replies are paused — you took over this chat manually. Turn on{' '}
+                                    <span className="font-medium">AI Chat</span> below to hand this contact back to the bot.
+                                </p>
+                            )}
                             {loading ? (
                                 <div className="flex items-center justify-center h-40">
                                     <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

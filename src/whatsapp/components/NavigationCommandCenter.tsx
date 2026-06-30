@@ -20,12 +20,16 @@ import {
     Sparkles,
     Crown,
     Lock,
+    ShoppingBag,
+    Bot,
     ClipboardList,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePlan } from '@/contexts/PlanContext';
-import { getUpgradeMessage } from '@/config/featureGating';
+import { hasAccess, FEATURE_PLAN_MAP, getUpgradeMessage, PLAN_LABELS } from '@/config/featureGating';
 import type { FeatureKey } from '@/config/featureGating';
+import { Link } from 'react-router-dom';
+import { isWaOpsQaNavVisible } from '@/whatsapp/utils/waOpsNavVisible';
 
 interface NavigationItem {
     id: string;
@@ -53,7 +57,7 @@ const navigationItems: NavigationItem[] = [
         label: 'Datasets',
         description: 'Manage data sources',
         icon: <Database className="w-6 h-6" />,
-        route: '/dashboard/datasets',
+        route: '/dashboard/whatsapp/datasets',
         color: 'text-violet-500',
         gradient: 'from-violet-500/20 to-purple-500/20',
         featureKey: 'whatsapp_datasets' as FeatureKey,
@@ -63,7 +67,7 @@ const navigationItems: NavigationItem[] = [
         label: 'Contacts',
         description: 'Customer directory',
         icon: <Users className="w-6 h-6" />,
-        route: '/dashboard/contacts',
+        route: '/dashboard/whatsapp/contacts',
         color: 'text-emerald-500',
         gradient: 'from-emerald-500/20 to-green-500/20',
         featureKey: 'whatsapp_contacts' as FeatureKey,
@@ -72,10 +76,10 @@ const navigationItems: NavigationItem[] = [
         id: 'flows',
         label: 'Conversational Flows',
         description: 'Chatbot automation',
-        icon: <Workflow className="w-6 h-6" />,
-        route: '/dashboard/interactive-automation',
+        icon: <Bot className="w-6 h-6" />,
+        route: '/dashboard/whatsapp/interactive-automation',
         color: 'text-orange-500',
-        gradient: 'from-orange-500/20 to-amber-500/20',
+        gradient: 'from-orange-500/20 to-purple-500/20',
         featureKey: 'whatsapp_interactive_automation' as FeatureKey,
     },
     {
@@ -83,17 +87,27 @@ const navigationItems: NavigationItem[] = [
         label: 'WhatsApp Forms',
         description: 'Native WhatsApp UI forms',
         icon: <ClipboardList className="w-6 h-6" />,
-        route: '/dashboard/flows',
+        route: '/dashboard/whatsapp/flows',
         color: 'text-emerald-500',
         gradient: 'from-green-500/20 to-blue-500/20',
         featureKey: 'whatsapp_flows' as FeatureKey,
+    },
+    {
+        id: 'catalog',
+        label: 'Catalog',
+        description: 'Storefront & Products',
+        icon: <ShoppingBag className="w-6 h-6" />,
+        route: '/dashboard/whatsapp/catalog',
+        color: 'text-emerald-500',
+        gradient: 'from-emerald-500/20 to-teal-500/20',
+        featureKey: 'whatsapp_catalog' as FeatureKey,
     },
     {
         id: 'templates',
         label: 'Templates',
         description: 'Message templates',
         icon: <FileText className="w-6 h-6" />,
-        route: '/dashboard/templates',
+        route: '/dashboard/whatsapp/templates',
         color: 'text-pink-500',
         gradient: 'from-pink-500/20 to-rose-500/20',
     },
@@ -102,7 +116,7 @@ const navigationItems: NavigationItem[] = [
         label: 'Bulk Send',
         description: 'Broadcast campaigns',
         icon: <Send className="w-6 h-6" />,
-        route: '/dashboard/bulk',
+        route: '/dashboard/whatsapp/bulk',
         color: 'text-indigo-500',
         gradient: 'from-indigo-500/20 to-blue-500/20',
         featureKey: 'whatsapp_bulk_messaging' as FeatureKey,
@@ -112,7 +126,7 @@ const navigationItems: NavigationItem[] = [
         label: 'Inbox',
         description: 'Conversations',
         icon: <Inbox className="w-6 h-6" />,
-        route: '/dashboard/inbox',
+        route: '/dashboard/whatsapp/inbox',
         color: 'text-green-500',
         gradient: 'from-green-500/20 to-emerald-500/20',
     },
@@ -121,7 +135,7 @@ const navigationItems: NavigationItem[] = [
         label: 'Automations',
         description: 'Auto-responses & rules',
         icon: <Zap className="w-6 h-6" />,
-        route: '/dashboard/automation',
+        route: '/dashboard/whatsapp/automation',
         color: 'text-yellow-500',
         gradient: 'from-yellow-500/20 to-orange-500/20',
         featureKey: 'whatsapp_automation' as FeatureKey,
@@ -131,18 +145,9 @@ const navigationItems: NavigationItem[] = [
         label: 'Settings',
         description: 'Account & preferences',
         icon: <Settings className="w-6 h-6" />,
-        route: '/dashboard/settings',
+        route: '/dashboard/whatsapp/settings',
         color: 'text-slate-500',
         gradient: 'from-slate-500/20 to-gray-500/20',
-    },
-    {
-        id: 'subscription',
-        label: 'Subscription',
-        description: 'View & upgrade your plan',
-        icon: <Sparkles className="w-6 h-6" />,
-        route: '/subscription',
-        color: 'text-amber-500',
-        gradient: 'from-amber-500/20 to-yellow-500/20',
     },
 ];
 
@@ -154,7 +159,8 @@ interface NavigationCommandCenterProps {
 export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCenterProps) {
     const navigate = useNavigate();
     const location = useLocation();
-    const { plan: userPlan, isFeatureEnabled } = usePlan();
+    const { plan: userPlan } = usePlan();
+    const basePath = location.pathname.startsWith('/agent') ? '/agent' : '/dashboard';
 
     // Close on route change
     useEffect(() => {
@@ -186,10 +192,13 @@ export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCe
     }, [isOpen, handleKeyDown]);
 
     const handleNavigate = (item: NavigationItem) => {
-        if (item.featureKey && !isFeatureEnabled(item.featureKey)) {
-            navigate('/subscription');
-            onClose();
-            return;
+        // Check if feature is gated
+        if (item.featureKey) {
+            const requiredPlan = FEATURE_PLAN_MAP[item.featureKey];
+            if (!hasAccess(userPlan, requiredPlan)) {
+                // Don't navigate, will show locked state
+                return;
+            }
         }
         navigate(item.route);
         onClose();
@@ -197,7 +206,8 @@ export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCe
 
     const isItemLocked = (item: NavigationItem) => {
         if (!item.featureKey) return false;
-        return !isFeatureEnabled(item.featureKey);
+        const requiredPlan = FEATURE_PLAN_MAP[item.featureKey];
+        return !hasAccess(userPlan, requiredPlan);
     };
 
     const isActivePage = (route: string) => {
@@ -262,6 +272,7 @@ export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCe
                                     {navigationItems.map((item, index) => {
                                         const isActive = isActivePage(item.route);
                                         const locked = isItemLocked(item);
+                                        const requiredPlan = item.featureKey ? FEATURE_PLAN_MAP[item.featureKey] : undefined;
                                         return (
                                             <motion.button
                                                 key={item.id}
@@ -292,14 +303,21 @@ export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCe
                                                     </div>
                                                 )}
 
+                                                {/* Locked Badge */}
+                                                {locked && requiredPlan && (
+                                                    <div className="absolute -top-2 -right-2 px-2 py-0.5 bg-amber-500 text-white text-[10px] font-medium rounded-full shadow-lg flex items-center gap-1">
+                                                        <Crown className="w-2.5 h-2.5" />
+                                                        {PLAN_LABELS[requiredPlan]}
+                                                    </div>
+                                                )}
 
                                                 {/* Icon */}
                                                 <div className={cn(
                                                     "w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-transform group-hover:scale-110",
                                                     "bg-white/80 dark:bg-slate-800/80 shadow-sm",
-                                                    item.color
+                                                    locked ? 'text-slate-300 grayscale' : item.color
                                                 )}>
-                                                    {item.icon}
+                                                    {locked ? <Lock className="w-6 h-6 text-slate-400" /> : item.icon}
                                                 </div>
 
                                                 {/* Label & Description */}
@@ -312,8 +330,8 @@ export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCe
                                                     {item.label}
                                                 </h3>
                                                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                                                    {locked && item.featureKey
-                                                        ? getUpgradeMessage(item.featureKey)
+                                                    {locked && requiredPlan
+                                                        ? getUpgradeMessage(requiredPlan)
                                                         : item.description}
                                                 </p>
 
@@ -331,6 +349,24 @@ export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCe
                             </div>
 
                             {/* Footer hint */}
+                            {isWaOpsQaNavVisible(location.search) && (
+                                <div className="px-6 py-2 border-t border-amber-200/60 bg-amber-50/90 dark:bg-amber-950/30">
+                                    <p className="text-[11px] font-semibold text-amber-900 dark:text-amber-200 mb-1">WhatsApp ops QA (Phase 7–9)</p>
+                                    <div className="flex flex-wrap gap-x-2 gap-y-1 text-[11px]">
+                                        <Link className="text-primary underline" to={`${basePath}/whatsapp/ops/onboarding`} onClick={onClose}>Onboarding</Link>
+                                        <span className="text-muted-foreground">·</span>
+                                        <Link className="text-primary underline" to={`${basePath}/whatsapp/ops/verification`} onClick={onClose}>Verification</Link>
+                                        <span className="text-muted-foreground">·</span>
+                                        <Link className="text-primary underline" to={`${basePath}/whatsapp/ops/trust`} onClick={onClose}>Trust</Link>
+                                        <span className="text-muted-foreground">·</span>
+                                        <Link className="text-primary underline" to={`${basePath}/whatsapp/ops/operator`} onClick={onClose}>Operational</Link>
+                                        <span className="text-muted-foreground">·</span>
+                                        <Link className="text-primary underline" to={`${basePath}/whatsapp/ops/warmup`} onClick={onClose}>Warmup / safe mode</Link>
+                                        <span className="text-muted-foreground">·</span>
+                                        <Link className="text-primary underline" to={`${basePath}/whatsapp/automation`} onClick={onClose}>Automation (banner)</Link>
+                                    </div>
+                                </div>
+                            )}
                             <div className="px-6 py-3 border-t border-slate-200/50 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/50">
                                 <p className="text-xs text-center text-slate-400">
                                     Press <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[10px]">ESC</kbd> or click outside to close

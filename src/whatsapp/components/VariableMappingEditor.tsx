@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Settings2, Loader2, CheckCircle, Info, Eye } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { API_BASE_URL } from "@/config";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 
 interface VariableMappingEditorProps {
     open: boolean;
@@ -84,7 +84,7 @@ export function VariableMappingEditor({
         try {
             setSaving(true);
             const res = await fetch(
-                `${API_BASE_URL}/api/whatsapp/templates/${templateId}/variable-mapping`,
+                `${WHATSAPP_REST_API_PREFIX}/templates/${templateId}/variable-mapping`,
                 {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },

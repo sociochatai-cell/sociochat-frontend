@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { RefreshCw, BarChart3, TrendingUp } from 'lucide-react';
-import { API_BASE_URL } from '@/config';
+import { WHATSAPP_REST_API_PREFIX } from '@/config';
 import { cachedFetch } from '../../utils/waPersistentCache';
 import { RefreshButton } from '../../components/RefreshButton';
 import { cn } from '@/lib/utils';
-
-const API_PREFIX = `${API_BASE_URL}/api/whatsapp`;
 
 interface FlowStat { flow_id: number; name: string; category: string; status: string; submissions: number; }
 
@@ -17,14 +15,16 @@ export function AnalyticsTab({ accountId }: { accountId: string | null }) {
   const loadAnalytics = () => {
     if (!accountId) return;
     setLoading(true);
-    cachedFetch(`${API_PREFIX}/flows/analytics/summary?account_id=${accountId}`)
+    cachedFetch(`${WHATSAPP_REST_API_PREFIX}/flows/analytics/summary?account_id=${accountId}`)
       .then(r => r.json())
       .then(j => { if (j.success) setData(j); })
       .catch(() => {})
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadAnalytics(); }, [accountId]);
+  useEffect(() => {
+    loadAnalytics();
+  }, [accountId]);
 
   if (loading) return <div className="flex justify-center py-12"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>;
   if (!data) return <Card><CardContent className="py-8 text-center text-muted-foreground">No analytics data</CardContent></Card>;
@@ -34,6 +34,8 @@ export function AnalyticsTab({ accountId }: { accountId: string | null }) {
       <div className="flex justify-end">
         <RefreshButton onRefresh={loadAnalytics} isRefreshing={loading} title="Refresh" size="sm" />
       </div>
+
+      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { l: 'Total Forms', v: data.total_flows, c: 'from-primary/15', i: BarChart3 },
@@ -49,6 +51,8 @@ export function AnalyticsTab({ accountId }: { accountId: string | null }) {
           </CardContent></Card>
         ))}
       </div>
+
+      {/* Category breakdown */}
       {Object.keys(data.categories).length > 0 && (
         <Card><CardContent className="p-4">
           <p className="text-sm font-medium mb-3">By Category</p>
@@ -65,6 +69,8 @@ export function AnalyticsTab({ accountId }: { accountId: string | null }) {
           </div>
         </CardContent></Card>
       )}
+
+      {/* Top forms */}
       <Card><CardContent className="p-4">
         <p className="text-sm font-medium mb-3">Form Leaderboard</p>
         <div className="space-y-2">

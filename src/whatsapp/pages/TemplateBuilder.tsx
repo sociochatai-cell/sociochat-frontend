@@ -20,8 +20,9 @@ import {
     Sparkles, RefreshCw, Send, ArrowLeft, Info, Clock,
     MessageCircle, Shield, Target
 } from 'lucide-react';
-import { API_BASE_URL } from "@/config";
-import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { getWorkspaceId } from '../utils/workspaceContext';
+import { cachedFetch } from '../utils/waPersistentCache';
 
 const API_BASE = API_BASE_URL;
 
@@ -181,13 +182,12 @@ export default function TemplateBuilder() {
 
     // Get account ID from storage
     useEffect(() => {
-        const wsId = localStorage.getItem('sv_whatsapp_workspace_id') ||
-            sessionStorage.getItem('sv_whatsapp_workspace_id');
+        const wsId = getWorkspaceId();
         // In a real app, you'd fetch the account for this workspace
         // For now, we'll use a placeholder
         if (wsId) {
             // Fetch account for workspace
-            fetch(`${API_BASE}/api/whatsapp/accounts?workspace_id=${wsId}`, { credentials: 'include' })
+            cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts?workspace_id=${wsId}`, { credentials: 'include' })
                 .then(res => res.json())
                 .then(data => {
                     if (data.accounts && data.accounts.length > 0) {
@@ -207,7 +207,7 @@ export default function TemplateBuilder() {
 
         setValidating(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates/validate`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/templates/validate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -239,7 +239,7 @@ export default function TemplateBuilder() {
     const handleRewrite = async () => {
         setRewriting(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates/rewrite`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/templates/rewrite`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -308,7 +308,7 @@ export default function TemplateBuilder() {
         const stageInterval = setInterval(advanceStage, 2000);
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates/create`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/templates/create`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -337,7 +337,7 @@ export default function TemplateBuilder() {
 
                 setTimeout(() => {
                     setSubmissionProgress({ stage: 'idle', message: '', progress: 0 });
-                    navigate('/dashboard/settings');
+                    navigate('/dashboard/whatsapp/settings');
                 }, 3000);
             } else {
                 setSubmissionProgress({
@@ -372,7 +372,6 @@ export default function TemplateBuilder() {
     };
 
     return (
-        <WhatsAppConnectionGuard feature="Templates">
         <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
             <SubmissionProgressUI progress={submissionProgress} />
 
@@ -659,6 +658,5 @@ export default function TemplateBuilder() {
                 </DialogContent>
             </Dialog>
         </div>
-        </WhatsAppConnectionGuard>
     );
 }

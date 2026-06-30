@@ -18,14 +18,15 @@ import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
+import { getWorkspaceId } from '../utils/workspaceContext';
 import {
     Plus, Trash2, ArrowUp, ArrowDown, Save, Send, Eye, ArrowLeft,
     Type, ListOrdered, CheckSquare, Calendar, Layout, Settings,
     AlertTriangle, CheckCircle, XCircle, Loader2, Copy, Smartphone,
     MessageCircle, FileText, Sparkles, GripVertical
 } from 'lucide-react';
-import { API_BASE_URL } from "@/config";
-import { cachedFetch } from "../utils/waPersistentCache";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { cachedFetch } from '../utils/waPersistentCache';
 
 const API_BASE = API_BASE_URL;
 
@@ -609,10 +610,7 @@ function ScreenEditor({
                         <Layout className="w-4 h-4 text-primary" />
                         <Input
                             value={screen.id}
-                            onChange={(e) => onChange({
-                                ...screen,
-                                id: e.target.value.toUpperCase().replace(/[^A-Z_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'SCREEN'
-                            })}
+                            onChange={(e) => onChange({ ...screen, id: e.target.value.toUpperCase().replace(/\s/g, '_') })}
                             className="w-32 h-7 text-sm font-mono"
                             placeholder="SCREEN_ID"
                         />
@@ -1000,14 +998,13 @@ export function FlowBuilder() {
     const [accountId, setAccountId] = useState<number | null>(null);
 
     // Get workspace_id and fetch the active account
-    const workspaceId = localStorage.getItem('sv_whatsapp_workspace_id') ||
-        sessionStorage.getItem('sv_whatsapp_workspace_id');
+    const workspaceId = getWorkspaceId();
 
     useEffect(() => {
         const fetchAccount = async () => {
             if (!workspaceId) return;
             try {
-                const res = await cachedFetch(`${API_BASE}/api/whatsapp/accounts?workspace_id=${workspaceId}`);
+                const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts?workspace_id=${workspaceId}`);
                 const data = await res.json();
                 if (data.success && data.accounts?.length > 0) {
                     setAccountId(data.accounts[0].id);
@@ -1029,7 +1026,7 @@ export function FlowBuilder() {
     const loadFlow = async (flowId: number) => {
         try {
             setLoading(true);
-            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flowId}`);
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/flows/${flowId}`);
             const data = await res.json();
 
             if (data.success) {
@@ -1050,7 +1047,7 @@ export function FlowBuilder() {
     // Validate flow
     const validateFlow = useCallback(async () => {
         try {
-            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/validate`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/flows/validate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ flow_json: flowJson, entry_screen_id: entryScreenId })
@@ -1085,7 +1082,7 @@ export function FlowBuilder() {
         try {
             setSaving(true);
 
-            const url = flowId ? `${API_BASE}/api/whatsapp/flows/${flowId}` : `${API_BASE}/api/whatsapp/flows`;
+            const url = flowId ? `/api/whatsapp/flows/${flowId}` : '/api/whatsapp/flows';
             const method = flowId ? 'PUT' : 'POST';
 
             const res = await cachedFetch(url, {
@@ -1131,7 +1128,7 @@ export function FlowBuilder() {
             setPublishing(true);
 
             // Publish directly to Meta (no demo mode)
-            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flowId}/publish`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/flows/${flowId}/publish`, {
                 method: 'POST'
             });
 
@@ -1139,7 +1136,7 @@ export function FlowBuilder() {
 
             if (data.success) {
                 toast({ title: 'Published!', description: 'Flow published to Meta successfully' });
-                navigate('/dashboard/flows');
+                navigate('/dashboard/whatsapp/flows');
             } else {
                 // Show specific error with action hint
                 let errorMsg = data.message || data.error || 'Failed to publish';

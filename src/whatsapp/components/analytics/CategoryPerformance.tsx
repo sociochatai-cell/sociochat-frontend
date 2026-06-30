@@ -3,7 +3,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Megaphone, Shield, IndianRupee } from 'lucide-react';
+import { FileText, Megaphone, Shield, Banknote } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CategoryData {
@@ -159,7 +159,35 @@ const CategoryCard = ({
     );
 };
 
-export function CategoryPerformance({ categories }: CategoryPerformanceProps) {
+export function CategoryPerformance({ categories, loading = false }: CategoryPerformanceProps) {
+    if (loading) {
+        return (
+            <Card className="border-0 shadow-md">
+                <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-lg">💰 Category Performance</CardTitle>
+                    <CardDescription>Message breakdown by category</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="rounded-xl border-2 p-4 bg-muted/30 animate-pulse space-y-3">
+                                <div className="h-5 w-28 rounded bg-muted" />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="h-14 rounded bg-background/80" />
+                                    <div className="h-14 rounded bg-background/80" />
+                                    <div className="h-14 rounded bg-background/80" />
+                                    <div className="h-14 rounded bg-background/80" />
+                                </div>
+                                <div className="h-2 rounded bg-background/80" />
+                                <div className="h-2 rounded bg-background/80" />
+                            </div>
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
+
     // Calculate total cost
     const totalCost = categories ?
         Object.entries(categories).reduce((sum, [key, data]) => {

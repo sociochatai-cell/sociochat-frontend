@@ -88,6 +88,7 @@ export interface WhatsAppApiResponse {
   wamid?: string;
   message_id?: number;
   conversation_id?: number;
+  message?: ConversationMessage;
   error?: string;
   error_code?: string;
   payload_sent?: Record<string, unknown>;
@@ -97,7 +98,7 @@ export interface ConversationMessage {
   id: number | string; // Can be DB integer id or SSE-generated string
   conversation_id: number;
   wamid?: string;
-  direction: 'incoming' | 'outgoing';
+  direction: 'incoming' | 'outgoing' | 'echo';  // echo = sent from mobile app (coexistence)
   type: string; // text, template, image, video, audio, document, interactive
   template_name?: string; // For template messages - used for analytics
   template_category?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION'; // Template category for analytics
@@ -118,6 +119,9 @@ export interface Conversation {
   account_id: number;
   user_phone: string;
   user_name?: string;
+  // Linked CRM lead. Backend sets whatsapp_conversations.lead_id; the conversation
+  // API may not surface this field yet — render lead deep-links only when truthy.
+  lead_id?: string | number | null;
   status: 'open' | 'closed';
   unread_count: number;
   // Session tracking (24h window)
@@ -125,6 +129,11 @@ export interface Conversation {
   session_time_left_seconds?: number; // Countdown in seconds
   close_reason?: 'agent' | 'expired' | 'never_opened' | null; // Why session is closed
   closed_by_agent?: boolean; // If manually closed by agent
+  needs_attention?: boolean;
+  human_required?: boolean;
+  ai_paused_by_agent?: boolean;
+  ai_paused_by_agent_at?: string | null;
+  opted_out?: boolean;
   closed_at?: string | null; // When agent closed it
   last_inbound_at?: string | null;
   last_outbound_at?: string | null;
@@ -158,6 +167,44 @@ export interface Conversation {
   } | null;
 }
 
+// Interactive Automation Flow State
+// ==================================
+
+export interface FlowResponse {
+  field: string;
+  label: string;
+  value: any;
+  order: number;
+  validationType?: string;
+}
+
+export interface FlowCurrentInput {
+  field: string | null;
+  label?: string;
+  validationType?: string;
+  enumValues?: string[] | null;
+  placeholder?: string | null;
+  required?: boolean;
+}
+
+export interface FlowState {
+  automationId: number | null;
+  automationName?: string;
+  currentNodeId?: string | null;
+  isActive: boolean;
+  waitingForInput: boolean;
+  currentField?: string | null;
+  currentInput?: FlowCurrentInput | null;
+  responses: FlowResponse[];
+}
+
+/** Wrapper returned by the interactive-automations conversation-state endpoint. */
+export interface ConversationFlowStateResponse {
+  success: boolean;
+  flow_state?: FlowState;
+  error?: string;
+}
+
 // Local Storage Keys
 export const STORAGE_KEYS = {
   ACCESS_TOKEN: 'wa_test_access_token',
@@ -176,6 +223,11 @@ export interface MessageReceivedEvent {
   conversation_id: number;
   account_id: number;
   workspace_id: string;
+  user_phone?: string;
+  user_name?: string;
+  campaign_id?: number | string | null;
+  reply_preview?: string | null;
+  conversation?: Conversation;
 }
 
 export interface MessageStatusEvent {
@@ -185,4 +237,8 @@ export interface MessageStatusEvent {
   conversation_id: number;
   account_id: number;
   workspace_id: string;
+  campaign_id?: number | string | null;
+  recipient_phone?: string;
+  error_code?: string;
+  error_message?: string;
 }

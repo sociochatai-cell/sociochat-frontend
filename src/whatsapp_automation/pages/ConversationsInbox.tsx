@@ -22,9 +22,9 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { 
-  MessageCircle, 
-  Send, 
+import {
+  MessageCircle,
+  Send,
   Search,
   RefreshCw,
   MoreVertical,
@@ -41,13 +41,12 @@ import {
   Mic,
   Loader2,
   Inbox,
-  Archive,
-  ArrowLeft,
+  Archive
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { whatsappApi, type Conversation, type ConversationDetail, type ConversationMessage } from '../api';
 import { useWhatsAppRealtime, isSseHealthy } from '@/whatsapp/hooks/useWhatsAppRealtime';
-import { useIsMobile } from '@/hooks/useMediaQuery';
+import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 
 // ============================================================
 // Types
@@ -146,7 +145,7 @@ const ConversationListItem: React.FC<ConversationListItemProps> = ({
     const date = new Date(dateStr);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) {
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } else if (diffDays === 1) {
@@ -168,9 +167,8 @@ const ConversationListItem: React.FC<ConversationListItemProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className={`w-full text-left p-4 border-b transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary ${
-        isSelected ? 'bg-muted/70' : ''
-      }`}
+      className={`w-full text-left p-4 border-b transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary ${isSelected ? 'bg-muted/70' : ''
+        }`}
     >
       <div className="flex items-start gap-3">
         <div className="relative">
@@ -179,7 +177,7 @@ const ConversationListItem: React.FC<ConversationListItemProps> = ({
               {getInitials(conversation.customer_name, conversation.customer_phone)}
             </AvatarFallback>
           </Avatar>
-          <span 
+          <span
             className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-background ${getStatusColor(conversation.status)}`}
           />
         </div>
@@ -216,22 +214,21 @@ interface MessageBubbleProps {
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isOutbound = message.direction === 'outbound';
-  
+
   const formatTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return new Date(dateStr).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
   return (
     <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} mb-3`}>
-      <div 
-        className={`max-w-[70%] rounded-lg px-4 py-2 ${
-          isOutbound 
-            ? 'bg-green-500 text-white rounded-br-sm' 
-            : 'bg-muted rounded-bl-sm'
-        }`}
+      <div
+        className={`max-w-[70%] rounded-lg px-4 py-2 ${isOutbound
+          ? 'bg-green-500 text-white rounded-br-sm'
+          : 'bg-muted rounded-bl-sm'
+          }`}
       >
         {message.type !== 'text' && (
           <div className={`flex items-center gap-2 mb-1 ${isOutbound ? 'text-green-100' : 'text-muted-foreground'}`}>
@@ -239,27 +236,27 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             <span className="text-xs capitalize">{message.type}</span>
           </div>
         )}
-        
+
         {message.media_url && (
           <div className="mb-2">
             {message.type === 'image' ? (
-              <SafeImage 
-                src={message.media_url} 
-                alt="Shared image" 
+              <SafeImage
+                src={message.media_url}
+                alt="Shared image"
                 className="rounded max-w-full max-h-48 object-cover"
                 fallbackText="Image expired"
                 fallbackClassName="rounded w-full h-32"
               />
             ) : message.type === 'video' ? (
-              <video 
-                src={message.media_url} 
-                controls 
+              <video
+                src={message.media_url}
+                controls
                 className="rounded max-w-full max-h-48"
               />
             ) : (
-              <a 
-                href={message.media_url} 
-                target="_blank" 
+              <a
+                href={message.media_url}
+                target="_blank"
                 rel="noopener noreferrer"
                 className={`flex items-center gap-2 p-2 rounded ${isOutbound ? 'bg-green-600' : 'bg-background'}`}
               >
@@ -269,9 +266,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             )}
           </div>
         )}
-        
+
         <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-        
+
         <div className={`flex items-center justify-end gap-1 mt-1 ${isOutbound ? 'text-green-100' : 'text-muted-foreground'}`}>
           <span className="text-xs">{formatTime(message.created_at)}</span>
           {isOutbound && <MessageStatusIcon status={message.status} />}
@@ -290,11 +287,8 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
   const workspaceId = propWorkspaceId || routeWorkspaceId || 'default';
 
   // Resolve the real workspace ID for SSE (same key WhatsAppInbox uses)
-  const sseWorkspaceId = localStorage.getItem('sv_whatsapp_workspace_id')
-    || sessionStorage.getItem('sv_whatsapp_workspace_id')
-    || localStorage.getItem('sv_selected_workspace_id')
-    || workspaceId;
-  
+  const sseWorkspaceId = getWorkspaceId() || workspaceId;
+
   // State
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<ConversationDetail | null>(null);
@@ -305,9 +299,7 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'responded' | 'closed'>('all');
-  const isMobile = useIsMobile();
-  const [mobilePane, setMobilePane] = useState<'list' | 'thread'>('list');
-  
+
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -321,7 +313,7 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
   const fetchConversations = useCallback(async () => {
     setIsLoadingList(true);
     setError(null);
-    
+
     try {
       const response = await whatsappApi.getConversations(workspaceId);
       if (response.error) {
@@ -337,7 +329,7 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
 
   const fetchConversationDetail = useCallback(async (conversationId: string) => {
     setIsLoadingMessages(true);
-    
+
     try {
       const response = await whatsappApi.getConversation(conversationId);
       if (response.error) {
@@ -416,7 +408,7 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
         const newMsg: ConversationMessage = {
           id: String(msg.id) || msg.wamid || String(Date.now()),
           conversation_id: convIdStr,
-          direction: msg.direction === 'incoming' ? 'inbound' : msg.direction === 'outgoing' ? 'outbound' : (msg.direction || 'inbound') as any,
+          direction: msg.direction === 'incoming' ? 'inbound' : (msg.direction === 'outgoing' || msg.direction === 'echo') ? 'outbound' : (msg.direction || 'inbound') as any,
           type: msg.type || 'text',
           content: preview,
           status: msg.status || 'delivered',
@@ -444,6 +436,68 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
           m.id === wamid ? { ...m, status } : m
         );
         return { ...prev, messages: updated };
+      });
+    } else if (event.type === 'whatsapp_echo_received') {
+      // Echo message from mobile app (coexistence mode)
+      const msg = event.data?.message;
+      const conversationId = event.data?.conversation_id;
+      if (!conversationId || !msg) return;
+
+      const convIdStr = String(conversationId);
+
+      // Extract preview text
+      let preview = '';
+      if (typeof msg.content === 'string') {
+        preview = msg.content;
+      } else if (msg.content && typeof msg.content === 'object') {
+        preview = msg.content.text || msg.content.body || '[Media]';
+      }
+
+      // Update conversation list (preview, time) - no unread increment for outgoing
+      setConversations(prev => {
+        const exists = prev.some(c => String(c.id) === convIdStr);
+        if (exists) {
+          return prev.map(c => {
+            if (String(c.id) !== convIdStr) return c;
+            return {
+              ...c,
+              last_message_preview: preview,
+              last_message_at: msg.created_at || new Date().toISOString(),
+              status: 'active' as const,
+            };
+          });
+        }
+        // New conversation from echo
+        const newConv: Conversation = {
+          id: convIdStr,
+          customer_phone: msg.to || '',
+          status: 'active',
+          last_message_at: msg.created_at || new Date().toISOString(),
+          last_message_preview: preview,
+          unread_count: 0,
+          created_at: new Date().toISOString(),
+        };
+        return [newConv, ...prev];
+      });
+
+      // If this conversation is currently selected, append the echo message
+      setSelectedConversation(prev => {
+        if (!prev || String(prev.id) !== convIdStr) return prev;
+        const isDup = prev.messages.some(m =>
+          m.id === String(msg.id) || (msg.wamid && m.id === msg.wamid)
+        );
+        if (isDup) return prev;
+
+        const newMsg: ConversationMessage = {
+          id: String(msg.id) || msg.wamid || String(Date.now()),
+          conversation_id: convIdStr,
+          direction: 'outbound' as const,  // Echo = sent from business
+          type: msg.type || 'text',
+          content: preview,
+          status: 'sent',
+          created_at: msg.created_at || new Date().toISOString(),
+        };
+        return { ...prev, messages: [...prev.messages, newMsg] };
       });
     }
   }, []);
@@ -481,12 +535,11 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
 
   const handleSelectConversation = useCallback((conversation: Conversation) => {
     fetchConversationDetail(conversation.id);
-    if (isMobile) setMobilePane('thread');
-  }, [fetchConversationDetail, isMobile]);
+  }, [fetchConversationDetail]);
 
   const handleSendMessage = useCallback(async () => {
     if (!newMessage.trim() || !selectedConversation || isSending) return;
-    
+
     setIsSending(true);
     try {
       const response = await whatsappApi.sendMessage({
@@ -495,11 +548,11 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
         type: 'text',
         text: newMessage.trim(),
       });
-      
+
       if (!response.success) {
         throw new Error(response.error || 'Failed to send message');
       }
-      
+
       setNewMessage('');
       // Refresh conversation to get the new message
       fetchConversationDetail(selectedConversation.id);
@@ -512,21 +565,20 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
 
   const handleCloseConversation = useCallback(async () => {
     if (!selectedConversation) return;
-    
+
     try {
       const response = await whatsappApi.closeConversation(selectedConversation.id);
       if (!response.success) {
         throw new Error(response.error || 'Failed to close conversation');
       }
-      
+
       // Refresh conversations list
       fetchConversations();
       setSelectedConversation(null);
-      if (isMobile) setMobilePane('list');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to close conversation');
     }
-  }, [selectedConversation, fetchConversations, isMobile]);
+  }, [selectedConversation, fetchConversations]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -540,13 +592,13 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
   // ============================================================
 
   const filteredConversations = conversations.filter((conv) => {
-    const matchesSearch = searchQuery === '' || 
+    const matchesSearch = searchQuery === '' ||
       conv.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       conv.customer_phone.includes(searchQuery) ||
       conv.last_message_preview?.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'all' || conv.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -555,16 +607,9 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
   // ============================================================
 
   return (
-    <div className="h-[calc(100dvh-4rem)] flex overflow-hidden min-h-0">
+    <div className="h-[calc(100vh-4rem)] flex">
       {/* Conversations List */}
-      <div
-        className={`
-          border-r flex flex-col bg-background min-h-0
-          ${isMobile
-            ? mobilePane === 'list' ? 'flex-1 w-full' : 'hidden'
-            : 'w-80 shrink-0'}
-        `}
-      >
+      <div className="w-80 border-r flex flex-col bg-background">
         {/* Header */}
         <div className="p-4 border-b">
           <div className="flex items-center justify-between mb-4">
@@ -575,8 +620,8 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="icon"
                     onClick={fetchConversations}
                     disabled={isLoadingList}
@@ -588,7 +633,7 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
               </Tooltip>
             </TooltipProvider>
           </div>
-          
+
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -599,9 +644,9 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
               className="pl-9"
             />
           </div>
-          
+
           {/* Status Filter */}
-          <div className="flex gap-1 mt-3 overflow-x-auto pb-1 -mx-1 px-1">
+          <div className="flex gap-1 mt-3">
             {(['all', 'active', 'responded', 'closed'] as const).map((status) => (
               <Button
                 key={status}
@@ -645,31 +690,19 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
       </div>
 
       {/* Chat Area */}
-      <div
-        className={`
-          flex flex-col min-h-0 min-w-0
-          ${isMobile
-            ? mobilePane === 'thread' ? 'flex-1 w-full' : 'hidden'
-            : 'flex-1'}
-        `}
-      >
+      <div className="flex-1 flex flex-col">
         {selectedConversation ? (
           <>
             {/* Chat Header */}
-            <div className="p-3 sm:p-4 border-b bg-background flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                {isMobile && (
-                  <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setMobilePane('list')} aria-label="Back to list">
-                    <ArrowLeft className="w-4 h-4" />
-                  </Button>
-                )}
-                <Avatar className="w-10 h-10 shrink-0">
+            <div className="p-4 border-b bg-background flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Avatar className="w-10 h-10">
                   <AvatarFallback className="bg-green-100 text-green-700">
                     {selectedConversation.customer_name?.[0] || selectedConversation.customer_phone.slice(-2)}
                   </AvatarFallback>
                 </Avatar>
-                <div className="min-w-0">
-                  <h3 className="font-medium truncate">
+                <div>
+                  <h3 className="font-medium">
                     {selectedConversation.customer_name || selectedConversation.customer_phone}
                   </h3>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -681,7 +714,7 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
                   </div>
                 </div>
               </div>
-              
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon">
@@ -693,7 +726,7 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Refresh
                   </DropdownMenuItem>
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     onClick={handleCloseConversation}
                     disabled={selectedConversation.status === 'closed'}
                   >
@@ -737,7 +770,7 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
                     disabled={isSending}
                     className="flex-1"
                   />
-                  <Button 
+                  <Button
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim() || isSending}
                   >
@@ -750,7 +783,7 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
                 </div>
               </div>
             )}
-            
+
             {selectedConversation.status === 'closed' && (
               <div className="p-4 border-t bg-muted/50 text-center text-sm text-muted-foreground">
                 This conversation has been closed
@@ -779,9 +812,9 @@ const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: pr
             <AlertTitle>Error</AlertTitle>
             <AlertDescription className="flex items-center justify-between">
               <span>{error}</span>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setError(null)}
                 className="ml-2"
               >

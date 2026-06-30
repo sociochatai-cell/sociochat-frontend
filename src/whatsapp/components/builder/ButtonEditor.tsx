@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TemplateButton, ButtonType, TemplateCategory } from '../../utils/templateUtils';
 import { Plus, Trash2, ExternalLink, Phone, MessageSquare, AlertCircle, Workflow, Copy, PhoneCall, Store } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { API_BASE_URL } from '@/config';
+import { WHATSAPP_REST_API_PREFIX } from '@/config';
 
 interface Flow {
     id: number;
@@ -19,15 +19,35 @@ interface Flow {
     status: string;
 }
 
+interface VoiceCallCapability {
+    success: boolean;
+    strict_mode: boolean;
+    voice_calling_ready: boolean;
+    block_template_submission: boolean;
+    receive_in_sociovia_dashboard: boolean;
+    receive_path?: string;
+    warnings?: string[];
+}
+
 interface ButtonEditorProps {
     buttons: TemplateButton[];
     category: TemplateCategory;
     onChange: (buttons: TemplateButton[]) => void;
     error?: string;
     accountId?: number; // Needed to fetch flows for the same WABA
+    voiceCallCapability?: VoiceCallCapability | null;
+    loadingVoiceCallCapability?: boolean;
 }
 
-export function ButtonEditor({ buttons, category, onChange, error, accountId }: ButtonEditorProps) {
+export function ButtonEditor({
+    buttons,
+    category,
+    onChange,
+    error,
+    accountId,
+    voiceCallCapability,
+    loadingVoiceCallCapability,
+}: ButtonEditorProps) {
     const isDisabled = category === 'AUTHENTICATION';
     const maxButtons = 10;
     const [flows, setFlows] = useState<Flow[]>([]);
@@ -45,11 +65,7 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
         if (!accountId) return;
         try {
             setLoadingFlows(true);
-            // Must use API_BASE_URL (frontend and API are different origins in
-            // production) and send the session cookie — otherwise the request
-            // hits the frontend's own origin / is unauthenticated and the flow
-            // dropdown comes back empty in prod while working on local same-origin.
-            const url = `${API_BASE_URL}/api/whatsapp/flows?account_id=${accountId}&status=PUBLISHED`;
+            const url = `${WHATSAPP_REST_API_PREFIX}/flows?account_id=${accountId}&status=PUBLISHED`;
             console.log('[ButtonEditor] Fetching flows from:', url);
             const res = await fetch(url, { credentials: 'include' });
             const data = await res.json();
@@ -127,7 +143,47 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
                             <p>Flow button: select a PUBLISHED flow from the same WhatsApp account.</p>
                         )}
                         {buttons.some(b => b.type === 'catalog') && (
-                            <p>Catalog button: requires MARKETING category and a product catalog connected to this WABA.</p>
+                            <p>Catalog button: requires MARKETING category and a product catalog connected to this WABA in WhatsApp Manager.</p>
+                        )}
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            {buttons.some(b => b.type === 'voice_call') && (
+                <Alert className={
+                    voiceCallCapability?.voice_calling_ready
+                        ? 'bg-emerald-50 border-emerald-200'
+                        : 'bg-amber-50 border-amber-200'
+                }>
+                    <AlertCircle className={
+                        voiceCallCapability?.voice_calling_ready
+                            ? 'w-4 h-4 text-emerald-600'
+                            : 'w-4 h-4 text-amber-600'
+                    } />
+                    <AlertDescription className={
+                        voiceCallCapability?.voice_calling_ready
+                            ? 'text-xs text-emerald-800 space-y-1'
+                            : 'text-xs text-amber-800 space-y-1'
+                    }>
+                        {loadingVoiceCallCapability ? (
+                            <p>Checking call readiness...</p>
+                        ) : (
+                            <>
+                                <p>
+                                    {voiceCallCapability?.voice_calling_ready
+                                        ? 'Call readiness check passed for this account.'
+                                        : 'Call readiness check is incomplete for this account.'}
+                                </p>
+                                <p>
+                                    {voiceCallCapability?.receive_path || 'Calls are handled in WhatsApp clients, not inside Sociovia dashboard.'}
+                                </p>
+                                {voiceCallCapability?.block_template_submission && (
+                                    <p>Strict mode is enabled, so submission is blocked until readiness checks pass.</p>
+                                )}
+                                {(voiceCallCapability?.warnings || []).slice(0, 2).map((w, idx) => (
+                                    <p key={idx}>{w}</p>
+                                ))}
+                            </>
                         )}
                     </AlertDescription>
                 </Alert>
@@ -294,7 +350,7 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
                                     </Select>
                                     {flows.length === 0 && !loadingFlows && (
                                         <p className="text-xs text-amber-600">
-                                            Create and publish a flow first at /dashboard/flows/new
+                                            Create and publish a flow first at /dashboard/whatsapp/flows/new
                                         </p>
                                     )}
                                 </div>
@@ -312,7 +368,7 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
 
                             {btn.type === 'catalog' && (
                                 <p className="text-xs text-muted-foreground">
-                                    Catalog button opens the product catalog connected to your WABA.
+                                    Catalog button opens the product catalog connected to your WABA. The button text (e.g., "View catalog") is required by Meta. You cannot select specific products — the entire connected catalog is displayed.
                                 </p>
                             )}
 

@@ -11,15 +11,15 @@
 
 export type FlowCategory = 'leads' | 'booking' | 'feedback' | 'support' | 'custom';
 
-export type FieldType =
-  | 'text'
-  | 'email'
-  | 'phone'
-  | 'number'
-  | 'textarea'
-  | 'dropdown'
-  | 'radio'
-  | 'checkbox'
+export type FieldType = 
+  | 'text' 
+  | 'email' 
+  | 'phone' 
+  | 'number' 
+  | 'textarea' 
+  | 'dropdown' 
+  | 'radio' 
+  | 'checkbox' 
   | 'date'
   | 'time';
 

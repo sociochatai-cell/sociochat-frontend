@@ -8,7 +8,7 @@ import { TemplateCard, Template } from './TemplateCard';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Info, RefreshCw, Sparkles, Plus } from 'lucide-react';
-import { API_BASE_URL } from "@/config";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 
 const API_BASE = API_BASE_URL;
 
@@ -25,7 +25,7 @@ export function TemplateSuggestionList({ onUseTemplate }: TemplateSuggestionList
         const fetchSuggestions = async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`${API_BASE}/api/whatsapp/template-suggestions`, {
+                const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/template-suggestions`, {
                     credentials: 'include',
                 });
                 const data = await res.json();
@@ -45,13 +45,13 @@ export function TemplateSuggestionList({ onUseTemplate }: TemplateSuggestionList
 
     const handleUseTemplate = (template: Template) => {
         // Navigate to builder with suggestion ID
-        navigate(`/dashboard/templates/new?suggestion=${template.id}`);
+        navigate(`/dashboard/whatsapp/templates/new?suggestion=${template.id}`);
         // Also call the callback if provided (for closing modals etc.)
         onUseTemplate?.(template);
     };
 
     const handleCreateNew = () => {
-        navigate('/dashboard/templates/new');
+        navigate('/dashboard/whatsapp/templates/new');
     };
 
     return (

@@ -12,9 +12,11 @@ import { Zap, Plus, Trash2, Copy, Play, Loader2, Code, History, Upload, Users, B
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { API_BASE_URL } from '@/config';
+import { WHATSAPP_API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { cachedFetch } from '../utils/waPersistentCache';
+import { RefreshButton } from '../components/RefreshButton';
 
-const API_BASE = API_BASE_URL;
+const API_BASE = WHATSAPP_API_BASE_URL;
 
 interface Trigger {
     id: number;
@@ -29,6 +31,9 @@ interface Trigger {
     trigger_count: number;
     last_triggered_at: string | null;
     webhook_url: string;
+    header_format?: 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'TEXT' | null;
+    has_copy_code_button?: boolean;
+    example_media_url?: string | null;
 }
 
 interface TriggerLog {
@@ -77,6 +82,8 @@ function IntegrationGuide({ trigger }: { trigger: Trigger }) {
     const webhookPath = trigger.webhook_url || `/api/whatsapp/hooks/${trigger.id}`;
     const fullUrl = `${baseUrl}${webhookPath}`;
     const varCount = trigger.variable_count || 0;
+    const headerFormat = trigger.header_format || null;
+    const hasCopyCode = trigger.has_copy_code_button || false;
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -88,13 +95,51 @@ function IntegrationGuide({ trigger }: { trigger: Trigger }) {
         ? Array.from({ length: varCount }, (_, i) => `"Variable ${i + 1}"`)
         : [];
 
+    // Build media field snippet for JSON payloads
+    const mediaFieldJson = headerFormat === 'IMAGE'
+        ? `\n    "header_image_url": "https://example.com/image.jpg",`
+        : headerFormat === 'VIDEO'
+        ? `\n    "header_video_url": "https://example.com/video.mp4",`
+        : headerFormat === 'DOCUMENT'
+        ? `\n    "header_document_id": "<WHATSAPP_MEDIA_ID>",\n    "header_document_filename": "document.pdf",`
+        : '';
+    const copyCodeFieldJson = hasCopyCode ? `\n    "copy_code_value": "YOURCODE25",` : '';
+
+    // Python/Node/JS/PHP dict fields
+    const mediaFieldPy = headerFormat === 'IMAGE'
+        ? `\n        "header_image_url": "https://example.com/image.jpg",`
+        : headerFormat === 'VIDEO'
+        ? `\n        "header_video_url": "https://example.com/video.mp4",`
+        : headerFormat === 'DOCUMENT'
+        ? `\n        "header_document_id": "<WHATSAPP_MEDIA_ID>",\n        "header_document_filename": "document.pdf",`
+        : '';
+    const copyCodeFieldPy = hasCopyCode ? `\n        "copy_code_value": "YOURCODE25",` : '';
+
+    const mediaFieldJs = headerFormat === 'IMAGE'
+        ? `\n            header_image_url: "https://example.com/image.jpg",`
+        : headerFormat === 'VIDEO'
+        ? `\n            header_video_url: "https://example.com/video.mp4",`
+        : headerFormat === 'DOCUMENT'
+        ? `\n            header_document_id: "<WHATSAPP_MEDIA_ID>",\n            header_document_filename: "document.pdf",`
+        : '';
+    const copyCodeFieldJs = hasCopyCode ? `\n            copy_code_value: "YOURCODE25",` : '';
+
+    const mediaFieldPhp = headerFormat === 'IMAGE'
+        ? `\n        'header_image_url' => 'https://example.com/image.jpg',`
+        : headerFormat === 'VIDEO'
+        ? `\n        'header_video_url' => 'https://example.com/video.mp4',`
+        : headerFormat === 'DOCUMENT'
+        ? `\n        'header_document_id' => '<WHATSAPP_MEDIA_ID>',\n        'header_document_filename' => 'document.pdf',`
+        : '';
+    const copyCodeFieldPhp = hasCopyCode ? `\n        'copy_code_value' => 'YOURCODE25',` : '';
+
     const codeExamples = {
         curl: `# Single message
 curl -X POST "${fullUrl}?secret=${trigger.secret_key}" \\
   -H "Content-Type: application/json" \\
   -d '{
     "to": "1234567890",
-    "variables": [${variableExamples.join(', ')}]
+    "variables": [${variableExamples.join(', ')}]${mediaFieldJson}${copyCodeFieldJson}
   }'
 
 # Bulk send (up to 100 recipients)
@@ -104,7 +149,7 @@ curl -X POST "${fullUrl}/bulk?secret=${trigger.secret_key}" \\
     "recipients": [
       {"phone": "1234567890", "variables": [${variableExamples.join(', ')}]},
       {"phone": "0987654321", "variables": [${variableExamples.join(', ')}]}
-    ]
+    ]${mediaFieldJson}${copyCodeFieldJson}
   }'`,
 
         python: `import requests
@@ -119,7 +164,7 @@ def send_whatsapp_message(phone: str, variables: list = None):
         f"{TRIGGER_URL}?secret={SECRET}",
         json={
             "to": phone,
-            "variables": variables or []
+            "variables": variables or []${mediaFieldPy}${copyCodeFieldPy}
         }
     )
     return response.json()
@@ -147,7 +192,7 @@ async function sendWhatsAppMessage(phone, variables = []) {
     try {
         const response = await axios.post(\`\${TRIGGER_URL}?secret=\${SECRET}\`, {
             to: phone,
-            variables: variables
+            variables: variables${mediaFieldJs}${copyCodeFieldJs}
         });
         return response.data;
     } catch (error) {
@@ -183,7 +228,10 @@ sendWhatsAppMessage("1234567890", [${variableExamples.join(', ')}])
         const response = await fetch(\`\${TRIGGER_URL}?secret=\${SECRET}\`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: phone, variables })
+        body: JSON.stringify({
+            to: phone,
+            variables${mediaFieldJs}${copyCodeFieldJs}
+        })
     });
     return response.json();
 }
@@ -217,7 +265,7 @@ function sendWhatsAppMessage($phone, $variables = []) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
         'to' => $phone,
-        'variables' => $variables
+        'variables' => $variables${mediaFieldPhp}${copyCodeFieldPhp}
     ]));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     
@@ -268,7 +316,7 @@ Setup in Zapier:
 5. Data:
    - phone: {{Phone Number Field}}
    - var1: {{First Variable}}
-   - var2: {{Second Variable}}
+   - var2: {{Second Variable}}${headerFormat === 'IMAGE' ? '\n   - header_image_url: {{Image URL}}' : headerFormat === 'VIDEO' ? '\n   - header_video_url: {{Video URL}}' : headerFormat === 'DOCUMENT' ? '\n   - header_document_url: {{Document URL}}\n   - header_document_filename: document.pdf' : ''}${hasCopyCode ? '\n   - copy_code_value: {{Coupon Code}}' : ''}
    ...
 
 Example payload:
@@ -276,7 +324,7 @@ Example payload:
     "phone": "1234567890",
     "var1": "John Doe",
     "var2": "Order #123",
-    "var3": "$99.99"
+    "var3": "$99.99"${mediaFieldJson}${copyCodeFieldJson}
 }
 -->`
     };
@@ -354,6 +402,29 @@ Example payload:
                     </p>
                 </div>
             )}
+
+            {headerFormat && headerFormat !== 'TEXT' && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mt-4">
+                    <h4 className="font-medium text-purple-800">
+                        {headerFormat === 'IMAGE' ? '🖼️ Image Header Required' : headerFormat === 'VIDEO' ? '🎬 Video Header Required' : '📄 Document Header Required'}
+                    </h4>
+                    <p className="text-sm text-purple-700 mt-1">
+                        Include <code className="bg-purple-100 px-1 rounded">
+                            {headerFormat === 'IMAGE' ? 'header_image_url' : headerFormat === 'VIDEO' ? 'header_video_url' : 'header_document_url'}
+                        </code> in your request body with a public HTTPS URL.
+                        {headerFormat === 'DOCUMENT' && <span> Also include <code className="bg-purple-100 px-1 rounded">header_document_filename</code> for the file name shown to users.</span>}
+                    </p>
+                </div>
+            )}
+
+            {hasCopyCode && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
+                    <h4 className="font-medium text-green-800">🏷️ Coupon Code (COPY_CODE button)</h4>
+                    <p className="text-sm text-green-700 mt-1">
+                        Include <code className="bg-green-100 px-1 rounded">copy_code_value</code> in your request body with the coupon code to display.
+                    </p>
+                </div>
+            )}
         </div>
     );
 }
@@ -371,11 +442,11 @@ function TriggerLogsView({ accountId, triggerId }: { accountId: string; triggerI
     async function loadLogs() {
         try {
             setLoading(true);
-            let url = `${API_BASE}/api/whatsapp/accounts/${accountId}/trigger-logs?limit=50`;
+            let url = `${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/trigger-logs?limit=50`;
             if (triggerId) url += `&trigger_id=${triggerId}`;
             if (filter !== 'all') url += `&success=${filter === 'success'}`;
 
-            const res = await fetch(url, { credentials: 'include' });
+            const res = await cachedFetch(url, { credentials: 'include' });
             if (res.ok) {
                 const data = await res.json();
                 setLogs(data.logs || []);
@@ -474,8 +545,8 @@ function TriggerAnalyticsView({ accountId }: { accountId: string }) {
     async function loadAnalytics() {
         try {
             setLoading(true);
-            const res = await fetch(
-                `${API_BASE}/api/whatsapp/accounts/${accountId}/trigger-analytics?days=${days}`,
+            const res = await cachedFetch(
+                `${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/trigger-analytics?days=${days}`,
                 { credentials: 'include' }
             );
             if (res.ok) {
@@ -581,7 +652,7 @@ export function TriggeredMessagesSectionEnhanced({ accountId }: { accountId: str
     async function loadTriggers() {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/triggers`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/triggers`, {
                 credentials: 'include'
             });
             if (res.ok) {
@@ -598,7 +669,7 @@ export function TriggeredMessagesSectionEnhanced({ accountId }: { accountId: str
 
     async function loadTemplates() {
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates?account_id=${accountId}&status=APPROVED`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/templates?account_id=${accountId}&status=APPROVED`, {
                 credentials: 'include'
             });
             if (res.ok) {
@@ -618,7 +689,7 @@ export function TriggeredMessagesSectionEnhanced({ accountId }: { accountId: str
 
         try {
             setCreating(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/triggers`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/triggers`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -645,7 +716,7 @@ export function TriggeredMessagesSectionEnhanced({ accountId }: { accountId: str
         if (!confirm("Are you sure? This will break any integrations using this trigger.")) return;
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/triggers/${id}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/triggers/${id}`, {
                 method: 'DELETE',
                 credentials: 'include'
             });
@@ -667,7 +738,7 @@ export function TriggeredMessagesSectionEnhanced({ accountId }: { accountId: str
                 payload.variables = Array.from({ length: varCount }, (_, i) => `test_var_${i + 1}`);
             }
 
-            const res = await fetch(`${API_BASE}/api/whatsapp/hooks/${trigger.id}?secret=${trigger.secret_key}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/hooks/${trigger.id}?secret=${trigger.secret_key}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -722,11 +793,12 @@ export function TriggeredMessagesSectionEnhanced({ accountId }: { accountId: str
                 <CardContent className="pt-0 pb-6 animate-in slide-in-from-top-2 duration-200">
                     {/* Action Bar */}
                     <div className="flex justify-between items-center mb-4">
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 items-center">
+                            <RefreshButton onRefresh={loadTriggers} isRefreshing={loading} title="Refresh" size="sm" />
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => window.open(`${API_BASE}/api/whatsapp/triggers/api-docs`, '_blank')}
+                                onClick={() => window.open(`${WHATSAPP_REST_API_PREFIX}/triggers/api-docs`, '_blank')}
                             >
                                 <Book className="w-4 h-4 mr-1" />
                                 API Docs

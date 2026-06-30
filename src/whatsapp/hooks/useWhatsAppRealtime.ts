@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { toast } from 'sonner';
 import { WhatsAppRealtimeEvent } from '../types';
-import { API_BASE_URL } from '@/config';
+import { WHATSAPP_API_BASE_URL } from '@/config';
 
-const API_BASE = API_BASE_URL;
+const API_BASE = WHATSAPP_API_BASE_URL;
 
 // ── SSE health tracker ──
 // Tracks whether SSE has delivered any data recently.

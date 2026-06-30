@@ -5,8 +5,8 @@
  * WhatsApp Business integration and Click-to-WhatsApp (CTWA) ad creation.
  */
 
-// API Client (imported directly to avoid type conflicts)
-// export * from './api';
+// API Client
+export * from './api';
 
 // Types
 export * from './types';

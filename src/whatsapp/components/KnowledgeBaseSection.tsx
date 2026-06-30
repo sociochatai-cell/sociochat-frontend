@@ -63,9 +63,8 @@ import {
     Info,
     HelpCircle,
 } from 'lucide-react';
-import { API_BASE_URL } from '@/config';
-
-const API_BASE = API_BASE_URL;
+import { WHATSAPP_REST_API_PREFIX } from "@/config";
+import { cachedFetch, invalidateHttpCache } from '../utils/waPersistentCache';
 
 interface KnowledgeDocument {
     id: number;
@@ -264,7 +263,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
     // URL Preview states
     const [urlPreview, setUrlPreview] = useState<any>(null);
     const [previewLoading, setPreviewLoading] = useState(false);
-    const [useJsRendering, setUseJsRendering] = useState(true); // AI Browser on by default
+    const [useJsRendering, setUseJsRendering] = useState(false); // off by default — Playwright OOMs on small Cloud Run instances
 
     // Chunks viewer states
     const [showChunksDialog, setShowChunksDialog] = useState(false);
@@ -287,7 +286,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         const pollInterval = setInterval(async () => {
             try {
                 const res = await fetch(
-                    `${API_BASE}/api/whatsapp/knowledge/crawl/${crawlJobId}`,
+                    `${WHATSAPP_REST_API_PREFIX}/knowledge/crawl/${crawlJobId}`,
                     { credentials: 'include' }
                 );
                 if (res.ok) {
@@ -307,6 +306,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
                         clearInterval(pollInterval);
                         // Remove the pending upload tile
                         setPendingUploads(prev => prev.filter(u => u.jobId !== crawlJobId));
+                        invalidateHttpCache('/api/whatsapp/knowledge');
                         await loadData(); // Refresh documents list
                     }
                 }
@@ -344,7 +344,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         setCrawlUrl('');
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/knowledge/crawl`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/knowledge/crawl`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -352,7 +352,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
                     workspace_id: workspaceId,
                     url: urlToCrawl,
                     max_pages: maxPages,
-                    use_playwright: false,
+                    use_playwright: useJsRendering,
                 }),
             });
 
@@ -366,6 +366,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
                     setPendingUploads(prev => prev.filter(u => u.id !== pendingId));
                     setCrawling(false);
                     // Refresh data to show new chunks
+                    invalidateHttpCache('/api/whatsapp/knowledge');
                     await loadData();
                 } else if (data.job_id) {
                     // Handle ASYNC crawl (has job_id for polling)
@@ -377,6 +378,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
                     // Success but no chunks - still remove pending
                     setPendingUploads(prev => prev.filter(u => u.id !== pendingId));
                     setCrawling(false);
+                    invalidateHttpCache('/api/whatsapp/knowledge');
                     await loadData();
                 }
             } else {
@@ -401,8 +403,8 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
             setLoading(true);
 
             // Fetch documents
-            const docsRes = await fetch(
-                `${API_BASE}/api/whatsapp/knowledge?workspace_id=${workspaceId}`,
+            const docsRes = await cachedFetch(
+                `${WHATSAPP_REST_API_PREFIX}/knowledge?workspace_id=${workspaceId}`,
                 { credentials: 'include' }
             );
             if (docsRes.ok) {
@@ -411,8 +413,8 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
             }
 
             // Fetch stats
-            const statsRes = await fetch(
-                `${API_BASE}/api/whatsapp/knowledge/stats?workspace_id=${workspaceId}`,
+            const statsRes = await cachedFetch(
+                `${WHATSAPP_REST_API_PREFIX}/knowledge/stats?workspace_id=${workspaceId}`,
                 { credentials: 'include' }
             );
             if (statsRes.ok) {
@@ -439,7 +441,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
 
         try {
             const res = await fetch(
-                `${API_BASE}/api/whatsapp/knowledge/index-workspace`,
+                `${WHATSAPP_REST_API_PREFIX}/knowledge/index-workspace`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -450,6 +452,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
 
             if (res.ok) {
                 setIndexSuccess(true);
+                invalidateHttpCache('/api/whatsapp/knowledge');
                 await loadData();
                 setTimeout(() => setIndexSuccess(false), 3000);
             }
@@ -503,7 +506,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
                 formData.append('file', file);
                 formData.append('workspace_id', String(workspaceId));
 
-                const res = await fetch(`${API_BASE}/api/whatsapp/knowledge`, {
+                const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/knowledge`, {
                     method: 'POST',
                     credentials: 'include',
                     body: formData,
@@ -525,6 +528,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         }
 
         // Refresh data after all uploads complete
+        invalidateHttpCache('/api/whatsapp/knowledge');
         await loadData();
 
         // Reset the file input so the same files can be selected again
@@ -555,7 +559,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         setUploadError('');
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/knowledge`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/knowledge`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -572,6 +576,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
             setPendingUploads(prev => prev.filter(u => u.id !== pendingId));
 
             if (res.ok && data.success) {
+                invalidateHttpCache('/api/whatsapp/knowledge');
                 await loadData();
             } else {
                 console.error('Failed to add URL:', data.message || data.error);
@@ -592,7 +597,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         setUploadError('');
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/knowledge/preview-url`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/knowledge/preview-url`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -639,7 +644,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         setUploadError('');
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/knowledge`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/knowledge`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -656,6 +661,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
             setPendingUploads(prev => prev.filter(u => u.id !== pendingId));
 
             if (res.ok && data.success) {
+                invalidateHttpCache('/api/whatsapp/knowledge');
                 await loadData();
             } else {
                 console.error('Failed to add content:', data.message || data.error);
@@ -674,8 +680,8 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         try {
             // Use the new /doc/:doc_id endpoint for Qdrant doc_id
             const endpoint = typeof docId === 'string' && docId.includes('-')
-                ? `${API_BASE}/api/whatsapp/knowledge/doc/${docId}?workspace_id=${workspaceId}`
-                : `${API_BASE}/api/whatsapp/knowledge/${docId}?workspace_id=${workspaceId}`;
+                ? `${WHATSAPP_REST_API_PREFIX}/knowledge/doc/${docId}?workspace_id=${workspaceId}`
+                : `${WHATSAPP_REST_API_PREFIX}/knowledge/${docId}?workspace_id=${workspaceId}`;
 
             const res = await fetch(endpoint, {
                 method: 'DELETE',
@@ -683,6 +689,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
             });
 
             if (res.ok) {
+                invalidateHttpCache('/api/whatsapp/knowledge');
                 await loadData();
             } else {
                 console.error('Delete failed:', await res.text());
@@ -698,7 +705,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
 
         try {
             const res = await fetch(
-                `${API_BASE}/api/whatsapp/knowledge/chunk/${chunkId}?workspace_id=${workspaceId}`,
+                `${WHATSAPP_REST_API_PREFIX}/knowledge/chunk/${chunkId}?workspace_id=${workspaceId}`,
                 {
                     method: 'DELETE',
                     credentials: 'include',
@@ -709,6 +716,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
                 // Remove from local state
                 setChunks(prev => prev.filter(c => c.id !== chunkId));
                 // Also refresh the main data to update chunk counts
+                invalidateHttpCache('/api/whatsapp/knowledge');
                 await loadData();
             }
         } catch (err) {
@@ -724,7 +732,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         setTestResult(null);
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/knowledge/test`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/knowledge/test`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -755,7 +763,7 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         try {
             const searchParam = chunkSearch ? `&search=${encodeURIComponent(chunkSearch)}` : '';
             const res = await fetch(
-                `${API_BASE}/api/whatsapp/knowledge/debug/chunks?workspace_id=${workspaceId}&limit=200${searchParam}`,
+                `${WHATSAPP_REST_API_PREFIX}/knowledge/debug/chunks?workspace_id=${workspaceId}&limit=200${searchParam}`,
                 { credentials: 'include' }
             );
 

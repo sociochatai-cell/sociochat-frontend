@@ -3,9 +3,31 @@
 // Provides cached data with background polling and refresh capabilities
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { readCache, writeCache, removeCache, clearWhatsAppCache } from '../utils/waPersistentCache';
 
-// Simple in-memory cache
-const cache: Record<string, { data: any; timestamp: number }> = {};
+// L1 in-memory cache. Backed by a persistent L2 (localStorage) so data survives a
+// full page reload / reopening the tab — see waPersistentCache.ts.
+const cache: Record<string, { data: unknown; timestamp: number }> = {};
+
+/**
+ * Resolve a cache entry: L1 (memory) first, falling back to L2 (persistent storage).
+ * A persistent hit is promoted into L1 so subsequent reads are synchronous.
+ */
+function getEntry(key: string): { data: unknown; timestamp: number } | undefined {
+    if (cache[key]) return cache[key];
+    const persisted = readCache<unknown>(key);
+    if (persisted) {
+        cache[key] = { data: persisted.data, timestamp: persisted.ts };
+        return cache[key];
+    }
+    return undefined;
+}
+
+/** Write through to both L1 and L2. */
+function setEntry(key: string, data: unknown, timestamp: number): void {
+    cache[key] = { data, timestamp };
+    writeCache(key, data);
+}
 
 export interface UseDataCacheOptions<T> {
     key: string;
@@ -36,9 +58,8 @@ export function useDataCache<T>({
     onError,
     onSuccess,
 }: UseDataCacheOptions<T>): UseDataCacheResult<T> {
-    // Initialize from cache if available
-    const cachedEntry = cache[key];
-    const [data, setDataState] = useState<T | null>(cachedEntry?.data ?? null);
+    const cachedEntry = getEntry(key);
+    const [data, setDataState] = useState<T | null>((cachedEntry?.data as T) ?? null);
     const [isLoading, setIsLoading] = useState(!cachedEntry);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<Error | null>(null);
@@ -47,14 +68,19 @@ export function useDataCache<T>({
     const isMountedRef = useRef(true);
     const pollingRef = useRef<NodeJS.Timeout | null>(null);
     const fetchingRef = useRef(false);
+    const fetcherRef = useRef(fetcher);
+    const onErrorRef = useRef(onError);
+    const onSuccessRef = useRef(onSuccess);
 
-    // Fetch data function
-    const fetchData = useCallback(async (isRefresh = false) => {
-        if (fetchingRef.current) return;
-        if (!enabled) return;
+    fetcherRef.current = fetcher;
+    onErrorRef.current = onError;
+    onSuccessRef.current = onSuccess;
+
+    const runFetch = useCallback(async (isRefresh = false) => {
+        if (fetchingRef.current || !enabled) return;
 
         fetchingRef.current = true;
-        
+
         if (isRefresh) {
             setIsRefreshing(true);
         } else if (!cache[key]) {
@@ -62,23 +88,22 @@ export function useDataCache<T>({
         }
 
         try {
-            const result = await fetcher();
-            
+            const result = await fetcherRef.current();
+
             if (!isMountedRef.current) return;
 
-            // Update cache
             const now = Date.now();
-            cache[key] = { data: result, timestamp: now };
-            
+            setEntry(key, result, now);
+
             setDataState(result);
             setLastUpdated(now);
             setError(null);
-            onSuccess?.(result);
+            onSuccessRef.current?.(result);
         } catch (err) {
             if (!isMountedRef.current) return;
-            const error = err instanceof Error ? err : new Error('Unknown error');
-            setError(error);
-            onError?.(error);
+            const nextError = err instanceof Error ? err : new Error('Unknown error');
+            setError(nextError);
+            onErrorRef.current?.(nextError);
         } finally {
             if (isMountedRef.current) {
                 setIsLoading(false);
@@ -86,55 +111,50 @@ export function useDataCache<T>({
             }
             fetchingRef.current = false;
         }
-    }, [key, fetcher, enabled, onError, onSuccess]);
+    }, [key, enabled]);
 
-    // Manual refresh function
     const refresh = useCallback(async () => {
-        await fetchData(true);
-    }, [fetchData]);
+        await runFetch(true);
+    }, [runFetch]);
 
-    // Set data manually (useful for optimistic updates)
     const setData = useCallback((newData: T | ((prev: T | null) => T)) => {
         setDataState(prev => {
-            const updated = typeof newData === 'function' 
-                ? (newData as (prev: T | null) => T)(prev) 
+            const updated = typeof newData === 'function'
+                ? (newData as (prev: T | null) => T)(prev)
                 : newData;
-            
-            // Update cache
+
             const now = Date.now();
-            cache[key] = { data: updated, timestamp: now };
+            setEntry(key, updated, now);
             setLastUpdated(now);
-            
+
             return updated;
         });
     }, [key]);
 
-    // Initial fetch and polling setup
     useEffect(() => {
         isMountedRef.current = true;
 
         if (!enabled) {
             setIsLoading(false);
-            return;
+            return () => {
+                isMountedRef.current = false;
+            };
         }
 
-        // Check if cache is stale
-        const cachedEntry = cache[key];
-        const isStale = !cachedEntry || (Date.now() - cachedEntry.timestamp > staleTime);
+        const entry = getEntry(key);
+        const isStale = !entry || (Date.now() - entry.timestamp > staleTime);
 
         if (isStale) {
-            fetchData(!!cachedEntry); // isRefresh if we have cached data
+            void runFetch(!!entry);
         } else {
-            // Use cached data
-            setDataState(cachedEntry.data);
-            setLastUpdated(cachedEntry.timestamp);
+            setDataState(entry.data as T);
+            setLastUpdated(entry.timestamp);
             setIsLoading(false);
         }
 
-        // Set up polling
         if (pollInterval > 0) {
             pollingRef.current = setInterval(() => {
-                fetchData(true);
+                void runFetch(true);
             }, pollInterval);
         }
 
@@ -145,7 +165,7 @@ export function useDataCache<T>({
                 pollingRef.current = null;
             }
         };
-    }, [key, enabled, pollInterval, staleTime, fetchData]);
+    }, [key, enabled, pollInterval, staleTime, runFetch]);
 
     return {
         data,
@@ -158,20 +178,21 @@ export function useDataCache<T>({
     };
 }
 
-// Utility to clear cache
 export function clearCache(keyPattern?: string) {
     if (keyPattern) {
         Object.keys(cache).forEach(key => {
             if (key.includes(keyPattern)) {
                 delete cache[key];
+                removeCache(key);
             }
         });
+        clearWhatsAppCache(keyPattern);
     } else {
         Object.keys(cache).forEach(key => delete cache[key]);
+        clearWhatsAppCache();
     }
 }
 
-// Utility to get cached value
 export function getCachedValue<T>(key: string): T | null {
-    return cache[key]?.data ?? null;
+    return (getEntry(key)?.data as T) ?? null;
 }

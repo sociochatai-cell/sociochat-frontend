@@ -7,35 +7,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { API_BASE_URL } from "@/config";
+import { WHATSAPP_REST_API_PREFIX } from "@/config";
+import { requestWhatsAppAccountStatusPopup } from '@/whatsapp/utils/accountStatusPopup';
 
-// Facebook App ID fallback from environment (SocioChat global App).
-// Used when the tenant Meta config endpoint is unavailable or returns a blank app_id
-// (e.g. T0000 / unconfigured tenants behave exactly as before).
-const FALLBACK_FB_APP_ID = import.meta.env.VITE_FB_APP_ID || '1616370899364211';
-const FB_SDK_VERSION = 'v25.0'; // SDK init version — must match Meta app dashboard
-
-// Fetch the logged-in user's tenant Meta app_id (tenant's own app for custom tenants,
-// global env value for T0000 / unconfigured tenants). Never returns a secret.
-// Falls back to the env/default constant on any failure or blank value.
-async function fetchTenantAppId(): Promise<string> {
-    try {
-        const res = await fetch(`${API_BASE_URL}/api/tenant/meta-config`, {
-            method: 'GET',
-            credentials: 'include',
-        });
-        if (res.ok) {
-            const data = await res.json();
-            const appId = (data?.meta?.app_id || '').trim();
-            if (data?.success && appId) {
-                return appId;
-            }
-        }
-    } catch (err) {
-        console.warn('[facebook] Failed to fetch tenant Meta config, using fallback:', err);
-    }
-    return FALLBACK_FB_APP_ID;
-}
+// Facebook App ID from Meta Developer Portal
+const FB_APP_ID = '1782321995750055';
 
 interface FacebookLoginButtonProps {
     workspaceId: string;
@@ -83,25 +59,9 @@ export function FacebookLoginButton({
 }: FacebookLoginButtonProps) {
     const [loading, setLoading] = useState(false);
     const [fbReady, setFbReady] = useState(false);
-    // Resolved tenant Meta app_id. Null until fetched; falls back to env/default on failure.
-    const [appId, setAppId] = useState<string | null>(null);
 
-    // Resolve the tenant Meta app_id at runtime before SDK init.
+    // Load Facebook SDK
     useEffect(() => {
-        let cancelled = false;
-        void (async () => {
-            const resolved = await fetchTenantAppId();
-            if (cancelled) return;
-            setAppId(resolved);
-        })();
-        return () => { cancelled = true; };
-    }, []);
-
-    // Load Facebook SDK — gated until the tenant Meta app_id has resolved,
-    // so we never init with a stale/empty appId.
-    useEffect(() => {
-        if (!appId) return;
-
         // Check if SDK is already loaded
         const fb = getFB();
         if (fb) {
@@ -109,25 +69,18 @@ export function FacebookLoginButton({
             return;
         }
 
-        // Save any existing fbAsyncInit (another component may have set it)
-        const existingInit = (window as any).fbAsyncInit;
-
         // Define the callback for when SDK loads
         setFbAsyncInit(() => {
             const fb = getFB();
             if (fb) {
                 fb.init({
-                    appId: appId,
+                    appId: FB_APP_ID,
                     cookie: true,
                     xfbml: true,
-                    version: FB_SDK_VERSION
+                    version: 'v21.0'
                 });
                 setFbReady(true);
-                console.log('[facebook] Facebook SDK initialized (FacebookLoginButton)');
-                // Chain any previously-registered init
-                if (existingInit && typeof existingInit === 'function') {
-                    existingInit();
-                }
+                console.log('[facebook] Facebook SDK initialized');
             }
         });
 
@@ -141,19 +94,7 @@ export function FacebookLoginButton({
             script.crossOrigin = 'anonymous';
             document.body.appendChild(script);
         }
-    }, [appId]);
-
-    // Poll for FB SDK in case another component initialized it
-    useEffect(() => {
-        if (fbReady) return;
-        const interval = setInterval(() => {
-            if (getFB()) {
-                setFbReady(true);
-                clearInterval(interval);
-            }
-        }, 300);
-        return () => clearInterval(interval);
-    }, [fbReady]);
+    }, []);
 
     const handleFacebookLogin = useCallback(() => {
         if (!workspaceId) {
@@ -188,7 +129,7 @@ export function FacebookLoginButton({
 
                     // Send to backend to exchange for long-lived token and auto-connect WABA
                     fetch(
-                        `${API_BASE_URL}/api/whatsapp/oauth/facebook-login`,
+                        `${WHATSAPP_REST_API_PREFIX}/oauth/facebook-login`,
                         {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -203,23 +144,36 @@ export function FacebookLoginButton({
                         .then(data => {
                             if (data.success) {
                                 if (data.connected) {
-                                    // WABA was auto-discovered and connected!
-                                    toast({
-                                        title: '✓ WhatsApp Connected!',
-                                        description: `Connected: ${data.account?.display_phone_number || data.account?.phone_number_id}`,
-                                    });
-                                    // Redirect to dashboard after connection
-                                    setTimeout(() => {
-                                        window.location.href = '/dashboard';
-                                    }, 1000);
+                                    const sendPerm = data.send_permission;
+                                    if (sendPerm && sendPerm.ok === false) {
+                                        toast({
+                                            title: 'Connected — sending blocked',
+                                            description:
+                                                sendPerm.error ||
+                                                'Facebook login tokens cannot send on this partner WABA. Reconnect with a System User token via Manual Connection.',
+                                            variant: 'destructive',
+                                        });
+                                        if (Array.isArray(sendPerm.hints) && sendPerm.hints.length) {
+                                            console.warn('[facebook] Send permission hints:', sendPerm.hints);
+                                        }
+                                    } else {
+                                        toast({
+                                            title: '✓ WhatsApp Connected!',
+                                            description: `Connected: ${data.account?.display_phone_number || data.account?.phone_number_id}`,
+                                        });
+                                    }
+                                    // Trigger health diagnostic popup, then SPA navigate
+                                    requestWhatsAppAccountStatusPopup(workspaceId);
+                                    onSuccess?.(data.access_token || accessToken);
                                 } else {
                                     // Authenticated but no WABA found - need manual linking
                                     toast({
                                         title: 'Logged in successfully!',
                                         description: data.message || 'Please enter your WABA details manually.',
                                     });
-                                    // Store token for manual connect form
-                                    localStorage.setItem('fb_access_token', data.access_token);
+                                    // Pass the token to the handler in-memory; do NOT persist a
+                                    // high-privilege Meta token in localStorage (XSS-exfiltratable,
+                                    // and nothing reads it back).
                                     onSuccess?.(data.access_token || accessToken);
                                 }
                             } else {
@@ -250,8 +204,8 @@ export function FacebookLoginButton({
                 }
             },
             {
-                // WhatsApp Business required scopes (+ catalog_management & business_management for product catalogs)
-                scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,whatsapp_business_manage_events,catalog_management'
+                // WhatsApp Business required scopes
+                scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management'
             }
         );
     }, [workspaceId, fbReady, onSuccess, onError]);

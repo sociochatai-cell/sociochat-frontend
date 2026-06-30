@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { WHATSAPP_REST_API_PREFIX } from '@/config';
+import { cachedFetch } from '../../../utils/waPersistentCache';
 import { toast } from '@/hooks/use-toast';
-import { API_BASE_URL } from '@/config';
 import type { ApiNode, ApiKeyValue, ApiBranchRule, ApiButtonCaptureRule } from '../types';
 
 interface ApiNodeEditorProps {
@@ -61,7 +62,7 @@ export function ApiNodeEditor({ node, onUpdate, flowVariables, automationId, onO
                 customer_name: 'Test User',
                 ...(flowVariables || {}),
             };
-            const res = await fetch(`${API_BASE_URL}/api/whatsapp/interactive-automations/test-api-node`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/interactive-automations/test-api-node`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',

@@ -3,7 +3,7 @@
 // Left panel showing all conversations with filters and sorting
 // Uses singleton store - loads ONCE, never shows loading after initial load
 
-import { useState, useEffect, useMemo, useCallback, useSyncExternalStore } from 'react';
+import { useState, useEffect, useMemo, useCallback, useSyncExternalStore, useRef } from 'react';
 import { RefreshCw, MessageCircle, Users, Search, Filter, Flame, Clock, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,11 +17,12 @@ import {
   getConversationList,
   isInitialLoadComplete,
   isLoadingConversations,
-  loadConversationList,
   refreshConversations,
   removeConversation,
   loadMoreConversations,
   hasMoreConversations,
+  loadConversationsByCategoryFromDatabase,
+  subscribeInboxFilterReload,
 } from '../stores/inboxStore';
 import {
   DropdownMenu,
@@ -35,21 +36,29 @@ import {
 interface ConversationListProps {
   selectedConversationId: number | null;
   onSelectConversation: (conversation: Conversation) => void;
+  initialFilter?: FilterType;
+  autoSelectUnread?: boolean;
+  forceServerUnreadLoad?: boolean;
 }
 
-type FilterType = 'all' | 'unread' | 'active' | 'expired' | 'needs_reply';
+type FilterType = 'all' | 'unread' | 'active' | 'expired' | 'needs_reply' | 'human_required' | 'opted_out';
 
 const FILTERS: { key: FilterType; label: string; icon?: React.ReactNode }[] = [
   { key: 'all', label: 'All', icon: <Filter className="w-4 h-4" /> },
   { key: 'unread', label: 'Unread', icon: <MessageCircle className="w-4 h-4 text-primary" /> },
   { key: 'active', label: 'Active', icon: <CheckCircle className="w-4 h-4 text-green-500" /> },
   { key: 'needs_reply', label: 'Needs Reply', icon: <Flame className="w-4 h-4 text-orange-500" /> },
+  { key: 'human_required', label: 'Human Required', icon: <Flame className="w-4 h-4 text-red-500" /> },
+  { key: 'opted_out', label: 'Opted-out', icon: <Users className="w-4 h-4 text-slate-500" /> },
   { key: 'expired', label: 'Expired', icon: <Clock className="w-4 h-4 text-muted-foreground" /> },
 ];
 
 export function ConversationList({
   selectedConversationId,
   onSelectConversation,
+  initialFilter = 'all',
+  autoSelectUnread = false,
+  forceServerUnreadLoad = false,
 }: ConversationListProps) {
   // Subscribe to store using separate selectors to ensure referential stability
   const conversations = useSyncExternalStore(subscribeToConversations, getConversationList, getConversationList);
@@ -60,13 +69,40 @@ export function ConversationList({
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [activeFilter, setActiveFilter] = useState<FilterType>(initialFilter);
+  const [isDbLoading, setIsDbLoading] = useState(false);
+  const [dbReloadKey, setDbReloadKey] = useState(0);
+  const lastDbQueryKeyRef = useRef('');
 
-  // Load conversations ONCE on mount
   useEffect(() => {
-    console.log('📋 [ConversationList] Mounted, loading conversations...');
-    loadConversationList();
+    setActiveFilter(initialFilter);
+  }, [initialFilter]);
+
+  useEffect(() => {
+    return subscribeInboxFilterReload(() => {
+      lastDbQueryKeyRef.current = '';
+      setDbReloadKey((k) => k + 1);
+    });
   }, []);
+
+  useEffect(() => {
+    if (activeFilter !== 'human_required') return;
+
+    const queryKey = `human_required|${dbReloadKey}`;
+    if (lastDbQueryKeyRef.current === queryKey) return;
+    lastDbQueryKeyRef.current = queryKey;
+
+    setIsDbLoading(true);
+    loadConversationsByCategoryFromDatabase('human_required')
+      .catch((err) => {
+        console.error('Failed to load human_required conversations:', err);
+        toast.error('Failed to load human required conversations');
+      })
+      .finally(() => setIsDbLoading(false));
+  }, [activeFilter, dbReloadKey]);
+
+  // Conversations load from WhatsAppInbox — avoid duplicate fetch on mount
+  // (loadConversationList is called once at page level with in-flight dedupe)
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -115,6 +151,10 @@ export function ConversationList({
       (!conv.last_outbound_at || new Date(conv.last_inbound_at) > new Date(conv.last_outbound_at));
   };
 
+  const humanRequired = (conv: Conversation) => {
+    return Boolean(conv.human_required);
+  };
+
   // Filter and sort conversations
   const filteredConversations = useMemo(() => {
     // ── Phone-level dedup (safety net for legacy duplicate rows) ──
@@ -160,6 +200,12 @@ export function ConversationList({
       case 'needs_reply':
         result = result.filter(needsReply);
         break;
+      case 'human_required':
+        result = result.filter(humanRequired);
+        break;
+      case 'opted_out':
+        result = result.filter(conv => Boolean(conv.opted_out));
+        break;
     }
 
     // Sort: unread first, then by last message time, expired last
@@ -188,22 +234,51 @@ export function ConversationList({
     active: conversations.filter(c => c.is_session_open).length,
     expired: conversations.filter(c => !c.is_session_open && !c.closed_by_agent).length,
     needs_reply: conversations.filter(needsReply).length,
+    human_required: conversations.filter(humanRequired).length,
+    opted_out: conversations.filter(c => Boolean(c.opted_out)).length,
   }), [conversations]);
+
+  useEffect(() => {
+    if (!autoSelectUnread || selectedConversationId !== null || isLoading) {
+      return;
+    }
+
+    const firstUnread = filteredConversations.find((conv) => (conv.unread_count || 0) > 0);
+    if (firstUnread) {
+      onSelectConversation(firstUnread);
+    }
+  }, [autoSelectUnread, selectedConversationId, isLoading, filteredConversations, onSelectConversation]);
 
   // CRITICAL: Only show loading on very first load when we have NO data
   if (isLoading && conversations.length === 0 && !isInitialDone) {
+    const skeletonRows = Array.from({ length: 7 });
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-          <MessageCircle className="w-6 h-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+      <div className="h-full flex flex-col">
+        <div className="p-4 border-b bg-gradient-to-r from-transparent to-primary/5">
+          <div className="h-9 rounded-xl bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 animate-pulse" />
         </div>
-        <p className="text-sm text-muted-foreground animate-pulse">Loading conversations...</p>
+        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+          {skeletonRows.map((_, index) => (
+            <div key={index} className="rounded-2xl border bg-white/70 p-3 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 animate-pulse shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="h-4 w-28 rounded bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 animate-pulse" />
+                    <div className="h-5 w-9 rounded-full bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 animate-pulse" />
+                  </div>
+                  <div className="h-3 w-40 rounded bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 animate-pulse" />
+                  <div className="h-3 w-24 rounded bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 animate-pulse" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
-  if (conversations.length === 0 && isInitialDone) {
+  if (conversations.length === 0 && isInitialDone && !isDbLoading && activeFilter === 'all') {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-4 animate-pulse">
@@ -291,7 +366,15 @@ export function ConversationList({
                       {count > 0 && filter.key !== 'all' && (
                         <span className={cn(
                           "text-xs px-1.5 py-0.5 rounded-full font-medium",
-                          filter.key === 'needs_reply' ? "bg-orange-100 text-orange-600" : "bg-muted text-muted-foreground"
+                          filter.key === 'needs_reply'
+                            ? "bg-orange-100 text-orange-600"
+                            : filter.key === 'human_required'
+                              ? "bg-red-100 text-red-600"
+                            : filter.key === 'human_required'
+                              ? "bg-red-100 text-red-600"
+                              : filter.key === 'opted_out'
+                                ? "bg-slate-100 text-slate-600"
+                                : "bg-muted text-muted-foreground"
                         )}>
                           {count}
                         </span>

@@ -14,7 +14,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { API_BASE_URL } from '@/config';
+import { WHATSAPP_REST_API_PREFIX } from '@/config';
+import { cachedFetch } from '../../../utils/waPersistentCache';
 import type { AutomationFlow, FlowEdge, FlowNode, TriggerConfig, FlowConfig } from '../types';
 
 export interface GeneratedFlowDraft {
@@ -60,7 +61,7 @@ export function AiFlowGeneratorDialog({
         setGenerating(true);
         setError(null);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/whatsapp/interactive-automations/ai-generate`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/interactive-automations/ai-generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',

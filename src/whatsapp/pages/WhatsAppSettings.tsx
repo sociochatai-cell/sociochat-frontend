@@ -1,19 +1,19 @@
-﻿// WhatsApp Settings Page
+// WhatsApp Settings Page
 // ======================
 // Redesigned: User-friendly settings page for non-technical users
 // Follows multi-tenant SaaS patterns (Slack, HubSpot, Intercom style)
 
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { getWhatsAppAccounts } from '../api';
+import { getWhatsAppAccounts, retryWebhook } from '../api';
+import { fetchWithTimeout, FetchTimeoutError } from '@/lib/fetchWithTimeout';
 import { WhatsAppAccountCard } from '../components/WhatsAppAccountCard';
 import { SettingsLoadingScreen } from '../components/SettingsLoadingScreen';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AgentsManager from '@/agent_frontend/components/AgentsManager';
-import { useFeatureGate } from '@/hooks/useFeatureGate';
 import {
   ChevronDown,
   MessageCircle,
@@ -42,26 +42,32 @@ import {
   Edit2,
   Save,
   X,
-  HelpCircle,
-  Lock,
-  Sparkles
+  Loader2,
+  Bot,
+  ClipboardList,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import logo from '@/assets/sociovia_logo.png';
-import { API_BASE_URL } from "@/config";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 import { getNotificationSettings, updateNotificationSettings } from '@/whatsapp_automation/api/whatsappApi';
 import { setStoredAccountId } from '../utils/accountContext';
-// WhatsAppConnectSuccessPopup removed for standalone product
+import { getWorkspaceId, setWorkspaceId as setStoredWorkspaceId } from '../utils/workspaceContext';
+import WhatsAppConnectSuccessPopup from '@/components/WhatsAppConnectSuccessPopup';
+import { requestWhatsAppAccountStatusPopup } from '@/whatsapp/utils/accountStatusPopup';
+import { VerificationCenter } from './VerificationCenter';
+import { TrustCenter } from './TrustCenter';
+import { OperationalHealth } from './OperationalHealth';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { isWaOpsQaNavVisible } from '../utils/waOpsNavVisible';
+import { cachedFetch } from '../utils/waPersistentCache';
+
+const WA_SETTINGS_TABS = ['general', 'verification', 'trust', 'operator'] as const;
+type WaSettingsTab = (typeof WA_SETTINGS_TABS)[number];
+
+function normalizeWaTab(raw: string | null): WaSettingsTab {
+  const v = (raw || '').toLowerCase();
+  return (WA_SETTINGS_TABS as readonly string[]).includes(v) ? (v as WaSettingsTab) : 'general';
+}
 
 const API_BASE = API_BASE_URL;
 
@@ -75,15 +81,38 @@ interface WhatsAppAccount {
   workspace_id: string | null;
   waba_id: string;
   phone_number_id: string;
+  meta_business_id?: string | null;
   display_phone_number: string | null;
   verified_name: string | null;
   quality_score: string | null;
   messaging_limit: number | null;
   token_type: string;
   is_active: boolean;
-  is_coexistence?: boolean;
-  mps_limit?: number;
   created_at: string;
+}
+
+interface HealthCheckItem {
+  name: string;
+  status: 'healthy' | 'warning' | 'error' | 'critical';
+  message: string;
+  details?: Record<string, unknown>;
+  auto_fix_available?: boolean;
+  fixed?: boolean;
+  fix_result?: {
+    success?: boolean;
+    message?: string;
+    details?: Record<string, unknown>;
+  } | null;
+}
+
+interface AccountHealthReport {
+  success: boolean;
+  account_id: number;
+  overall_status: 'healthy' | 'warning' | 'error' | 'critical';
+  action_required?: string | null;
+  checks: HealthCheckItem[];
+  auto_fixes_applied?: number;
+  checked_at?: string;
 }
 
 // Debug Token Section Component - FOR TESTING ONLY
@@ -101,7 +130,7 @@ function DebugTokenSection({ accountId }: { accountId: number }) {
   const fetchDebugInfo = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/debug`, {
+      const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/debug`, {
         credentials: 'include'
       });
       const data = await res.json();
@@ -178,7 +207,7 @@ function DebugTokenSection({ accountId }: { accountId: number }) {
           {/* Access Token */}
           <div className="p-2 bg-white rounded border">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-muted-foreground">Access Token</p>
+              <p className="text-xs text-muted-foreground">Access Token (Permanent)</p>
               <div className="flex gap-1">
                 <Button
                   variant="ghost"
@@ -229,8 +258,10 @@ function DebugTokenSection({ accountId }: { accountId: number }) {
 // Notification Settings Component
 function NotificationSettingsSection({ accountId, workspaceId }: { accountId: number; workspaceId: string | null }) {
   const [notificationPhone, setNotificationPhone] = useState<string>('');
+  const [notificationEmail, setNotificationEmail] = useState<string>('');
   const [editMode, setEditMode] = useState(false);
-  const [editValue, setEditValue] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -244,8 +275,13 @@ function NotificationSettingsSection({ accountId, workspaceId }: { accountId: nu
           account_id: accountId,
           workspace_id: workspaceId || undefined
         });
-        if (result.success && result.notification_phone_number) {
-          setNotificationPhone(result.notification_phone_number);
+        if (result.success) {
+          if (result.notification_phone_number) {
+            setNotificationPhone(result.notification_phone_number);
+          }
+          if (result.notification_email) {
+            setNotificationEmail(result.notification_email);
+          }
         }
       } catch (err) {
         console.error('Failed to load notification settings:', err);
@@ -263,10 +299,12 @@ function NotificationSettingsSection({ accountId, workspaceId }: { accountId: nu
       const result = await updateNotificationSettings({
         account_id: accountId,
         workspace_id: workspaceId || undefined,
-        notification_phone_number: editValue
+        notification_phone_number: editPhone,
+        notification_email: editEmail,
       });
       if (result.success) {
         setNotificationPhone(result.notification_phone_number || '');
+        setNotificationEmail(result.notification_email || '');
         setEditMode(false);
       } else {
         setError(result.error || 'Failed to save');
@@ -279,14 +317,16 @@ function NotificationSettingsSection({ accountId, workspaceId }: { accountId: nu
   };
 
   const handleEdit = () => {
-    setEditValue(notificationPhone);
+    setEditPhone(notificationPhone);
+    setEditEmail(notificationEmail);
     setEditMode(true);
     setError(null);
   };
 
   const handleCancel = () => {
     setEditMode(false);
-    setEditValue('');
+    setEditPhone('');
+    setEditEmail('');
     setError(null);
   };
 
@@ -308,7 +348,7 @@ function NotificationSettingsSection({ accountId, workspaceId }: { accountId: nu
           <div>
             <CardTitle className="text-base">Notification Settings</CardTitle>
             <CardDescription className="text-sm">
-              Receive WhatsApp alerts about Meta/WhatsApp platform updates and account status
+              Phone for platform alerts; email for AI human-required escalations
             </CardDescription>
           </div>
         </div>
@@ -325,12 +365,173 @@ function NotificationSettingsSection({ accountId, workspaceId }: { accountId: nu
               <label className="text-sm font-medium text-gray-700 mb-1 block">
                 Notification Phone Number
               </label>
+              <Input
+                type="tel"
+                placeholder="919876543210 (with country code, no +)"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value.replace(/[^0-9]/g, ''))}
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Platform / Meta status alerts (WhatsApp)
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Escalation Email
+              </label>
+              <Input
+                type="email"
+                placeholder="team@yourcompany.com"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value.trim())}
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Receives email when AI cannot answer and a human must take over
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={saving}
+                className="gap-1 bg-green-600 hover:bg-green-700"
+              >
+                {saving ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCancel}
+                className="gap-1"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </Button>
+            </div>
+            {error && (
+              <p className="text-sm text-red-600 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {error}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Phone className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">
+                    {notificationPhone ? formatDisplayPhone(notificationPhone) : 'Phone not configured'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Meta / account status (WhatsApp)</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Bell className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">
+                    {notificationEmail || 'Email not configured'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">AI human-required escalations</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEdit}
+                className="gap-1"
+              >
+                <Edit2 className="w-4 h-4" />
+                {notificationPhone || notificationEmail ? 'Edit' : 'Add'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MetaBusinessIdSection({
+  account,
+  onSaved,
+}: {
+  account: WhatsAppAccount;
+  onSaved: () => void;
+}) {
+  const [editMode, setEditMode] = useState(false);
+  const [value, setValue] = useState(account.meta_business_id || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setValue(account.meta_business_id || '');
+    setEditMode(false);
+    setError(null);
+  }, [account.id, account.meta_business_id]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${account.id}/meta-business-id`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ meta_business_id: value }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        setError(data.error || 'Failed to save Meta Business Manager ID');
+        return;
+      }
+      setEditMode(false);
+      onSaved();
+    } catch (err) {
+      setError('Failed to save Meta Business Manager ID');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="border shadow-sm bg-white">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-blue-100">
+            <Building2 className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Meta Business Manager ID</CardTitle>
+            <CardDescription className="text-sm">
+              Required for WhatsApp catalog creation and connecting business-owned Meta catalogs
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {editMode ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Business Manager ID
+              </label>
               <div className="flex gap-2">
                 <Input
-                  type="tel"
-                  placeholder="919876543210 (with country code, no +)"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value.replace(/[^0-9]/g, ''))}
+                  value={value}
+                  onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="e.g. 123456789012345"
                   className="flex-1 font-mono"
                 />
                 <Button
@@ -339,17 +540,17 @@ function NotificationSettingsSection({ accountId, workspaceId }: { accountId: nu
                   disabled={saving}
                   className="gap-1 bg-green-600 hover:bg-green-700"
                 >
-                  {saving ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4" />
-                  )}
+                  {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   Save
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={handleCancel}
+                  onClick={() => {
+                    setValue(account.meta_business_id || '');
+                    setEditMode(false);
+                    setError(null);
+                  }}
                   className="gap-1"
                 >
                   <X className="w-4 h-4" />
@@ -357,7 +558,7 @@ function NotificationSettingsSection({ accountId, workspaceId }: { accountId: nu
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-1.5">
-                Enter the phone number with country code (e.g., 919876543210 for India)
+                Find this in Meta Business Settings or Commerce Manager. Use digits only.
               </p>
             </div>
             {error && (
@@ -368,28 +569,23 @@ function NotificationSettingsSection({ accountId, workspaceId }: { accountId: nu
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-3">
-              <Phone className="w-4 h-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">
-                  {notificationPhone ? formatDisplayPhone(notificationPhone) : 'Not configured'}
-                </p>
-                {notificationPhone && (
-                  <p className="text-xs text-muted-foreground">
-                    Receives alerts about Meta updates & account status changes
-                  </p>
-                )}
-              </div>
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium font-mono break-all">
+                {account.meta_business_id || 'Not configured'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Add this once, then the Catalog page can list and create Meta product catalogs.
+              </p>
             </div>
             <Button
               variant="outline"
               size="sm"
-              onClick={handleEdit}
-              className="gap-1"
+              onClick={() => setEditMode(true)}
+              className="gap-1 shrink-0"
             >
               <Edit2 className="w-4 h-4" />
-              {notificationPhone ? 'Edit' : 'Add Number'}
+              {account.meta_business_id ? 'Edit' : 'Add ID'}
             </Button>
           </div>
         )}
@@ -401,24 +597,49 @@ function NotificationSettingsSection({ accountId, workspaceId }: { accountId: nu
 export function WhatsAppSettings() {
   const navigate = useNavigate();
   const location = useLocation();
-  const agentGate = useFeatureGate('ai_chatbot_dashboard');
   const [searchParams] = useSearchParams();
+  const [settingsTab, setSettingsTab] = useState<WaSettingsTab>(() => normalizeWaTab(searchParams.get('wa_tab')));
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(true);
+  const [workspaceFetchError, setWorkspaceFetchError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [processingAction, setProcessingAction] = useState(false);
-  const [editingWorkspace, setEditingWorkspace] = useState(false);
-  const [workspaceNameInput, setWorkspaceNameInput] = useState('');
-  const [updatingWorkspace, setUpdatingWorkspace] = useState(false);
-  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+  const [migratingResources, setMigratingResources] = useState(false);
+  const [healthReport, setHealthReport] = useState<AccountHealthReport | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [fixActionLoading, setFixActionLoading] = useState<string | null>(null);
+  const [fixActionMessage, setFixActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const account = accounts[0]; // Primary account
+
+  const sendPermissionCheck = healthReport?.checks?.find((c) => c.name === 'messaging_send_permission');
+  const webhookSubscriptionCheck = healthReport?.checks?.find((c) => c.name === 'webhook_subscription');
+  const sendPermissionHints = (sendPermissionCheck?.details?.hints as string[] | undefined) || [];
 
   // Get base path from current location (agent or dashboard)
   const basePath = location.pathname.startsWith('/agent') ? '/agent' : '/dashboard';
+
+  useEffect(() => {
+    setSettingsTab(normalizeWaTab(searchParams.get('wa_tab')));
+  }, [searchParams]);
+
+  const handleSettingsTabChange = (value: string) => {
+    const next = normalizeWaTab(value);
+    setSettingsTab(next);
+    const params = new URLSearchParams(searchParams);
+    if (next === 'general') {
+      params.delete('wa_tab');
+    } else {
+      params.set('wa_tab', next);
+    }
+    const qs = params.toString();
+    navigate({ pathname: location.pathname, search: qs ? `?${qs}` : '' }, { replace: true });
+  };
 
   const [popupState, setPopupState] = useState<{
     isOpen: boolean;
@@ -450,6 +671,9 @@ export function WhatsAppSettings() {
       accountNumber,
       onClosed
     });
+    if (variant === 'connect') {
+      requestWhatsAppAccountStatusPopup(workspaceId || undefined);
+    }
   };
 
   const handlePopupClose = () => {
@@ -460,92 +684,247 @@ export function WhatsAppSettings() {
     }
   };
 
-  // Fetch workspaces
+  // Fetch workspaces (monolith :5000 / devtunnel -5000) — must finish or timeout so UI is not stuck
   useEffect(() => {
+    let cancelled = false;
+
     const fetchWorkspaces = async () => {
+      setLoadingWorkspaces(true);
+      setWorkspaceFetchError(null);
+
       try {
-        // Check auth: try storage first (fastest), then verify with API
-        let user = null;
-        const userStr = localStorage.getItem('sv_user') || sessionStorage.getItem('sv_user');
-        if (userStr) {
-          try { user = JSON.parse(userStr); } catch { }
-        }
-
-        // If no stored user, try API (needs Bearer token from sv_token in apiClient)
-        if (!user?.id) {
-          try {
-            const token = localStorage.getItem('sv_token') || sessionStorage.getItem('sv_token');
-            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
-
-            const meRes = await fetch(`${API_BASE}/api/me`, {
-              credentials: 'include',
-              headers
-            });
-            if (meRes.ok) {
-              const meData = await meRes.json();
-              user = meData.user || meData;
-              // Update storage
-              if (user?.id) {
-                localStorage.setItem('sv_user', JSON.stringify(user));
-                localStorage.setItem('sv_user_id', String(user.id));
-              }
-            }
-          } catch (e) {
-            console.log('Could not fetch user from /api/me');
+        let user: { id?: string | number } | null = null;
+        try {
+          const meRes = await fetchWithTimeout(
+            `${API_BASE}/api/me`,
+            { credentials: 'include' },
+            20_000,
+          );
+          if (meRes.ok) {
+            user = await meRes.json();
           }
+        } catch (e) {
+          console.warn('Could not fetch user from /api/me', e);
         }
 
         if (!user?.id) {
-          setError('Please log in to view settings');
-          setLoadingWorkspaces(false);
+          const userStr = localStorage.getItem('sv_user') || sessionStorage.getItem('sv_user');
+          user = userStr ? JSON.parse(userStr) : null;
+        }
+
+        if (!user?.id) {
+          if (!cancelled) {
+            setWorkspaceFetchError('Please log in to view settings.');
+            setError('Please log in to view settings');
+          }
           return;
         }
 
-        // Fetch workspaces with auth
-        const token = localStorage.getItem('sv_token') || sessionStorage.getItem('sv_token');
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        const userId = localStorage.getItem('sv_user_id');
-        if (userId) headers['X-User-Id'] = userId;
+        const wsUrl = `${API_BASE}/api/workspaces?user_id=${encodeURIComponent(String(user.id))}`;
+        const response = await fetchWithTimeout(wsUrl, { credentials: 'include' }, 25_000);
 
-        const response = await fetch(`${API_BASE}/api/workspaces`, {
-          credentials: 'include',
-          headers
-        });
-        const data = await response.json();
-        if (data.workspaces) {
-          setWorkspaces(data.workspaces);
-          const storedWsId = sessionStorage.getItem('sv_whatsapp_workspace_id') ||
-            localStorage.getItem('sv_whatsapp_workspace_id');
-          if (storedWsId && data.workspaces.some((w: Workspace) => String(w.id) === String(storedWsId))) {
-            setWorkspaceId(storedWsId);
-          } else if (data.workspaces.length > 0) {
-            setWorkspaceId(data.workspaces[0].id);
-            sessionStorage.setItem('sv_whatsapp_workspace_id', data.workspaces[0].id);
+        if (!response.ok) {
+          const errText = await response.text().catch(() => '');
+          console.error('Workspaces fetch failed:', response.status, errText);
+          if (!cancelled) {
+            const msg =
+              response.status === 502 || response.status === 503
+                ? 'Backend unavailable (502). Start the monolith on port 5000 and ensure devtunnel port 5000 is forwarded.'
+                : `Failed to load workspaces (${response.status}).`;
+            setWorkspaceFetchError(msg);
+            setError(msg);
           }
+          return;
+        }
+
+        const data = await response.json();
+        const rawList = data.workspaces ?? data.workspace ?? [];
+        const list = Array.isArray(rawList) ? rawList : rawList ? [rawList] : [];
+        const mapped: Workspace[] = list
+          .map((w: { id?: string | number; workspace_id?: string | number; business_name?: string; name?: string }) => ({
+            id: String(w.id ?? w.workspace_id ?? ''),
+            name: w.business_name || w.name || `Workspace ${w.id ?? w.workspace_id ?? ''}`,
+          }))
+          .filter((w: Workspace) => w.id);
+
+        if (cancelled) return;
+
+        setWorkspaces(mapped);
+        const storedWsId = getWorkspaceId();
+        if (storedWsId && mapped.some((w) => String(w.id) === String(storedWsId))) {
+          setWorkspaceId(storedWsId);
+        } else if (mapped.length > 0) {
+          setWorkspaceId(mapped[0].id);
+          setStoredWorkspaceId(mapped[0].id);
+        } else {
+          setWorkspaceFetchError('No workspaces found for this account.');
         }
       } catch (err) {
         console.error('Error fetching workspaces:', err);
-        setError('Failed to load workspaces');
+        if (cancelled) return;
+        const msg =
+          err instanceof FetchTimeoutError
+            ? 'Workspaces request timed out. Check monolith on port 5000 and devtunnel -5000.'
+            : 'Failed to load workspaces. Is the backend (port 5000) running?';
+        setWorkspaceFetchError(msg);
+        setError(msg);
       } finally {
-        setLoadingWorkspaces(false);
+        if (!cancelled) {
+          setLoadingWorkspaces(false);
+          const stored = getWorkspaceId();
+          if (stored && !workspaceId) {
+            setWorkspaceId(stored);
+          }
+        }
       }
     };
-    fetchWorkspaces();
+
+    void fetchWorkspaces();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const fetchAccounts = async (silent = false) => {
+    if (!workspaceId) {
+      if (!silent) setLoading(false);
+      return;
+    }
     try {
-      setError(null);
       if (!silent) setLoading(true);
-      const result = await getWhatsAppAccounts(workspaceId || undefined);
+      const result = await getWhatsAppAccounts(workspaceId);
       setAccounts(result.accounts || []);
+      if (!result.success && !silent) {
+        setError('Failed to load WhatsApp account (whatsapp-service on port 5005).');
+      }
     } catch (err) {
       setError('Failed to load WhatsApp account');
       console.error('Error fetching accounts:', err);
     } finally {
       if (!silent) setLoading(false);
+    }
+  };
+
+  const handleRetryWebhookSubscription = async () => {
+    if (!account?.id) return;
+    setFixActionLoading('webhook');
+    setFixActionMessage(null);
+    try {
+      const wsId = getWorkspaceId() || workspaceId || '';
+      const result = await retryWebhook(account.id, wsId);
+      if (result?.success) {
+        setFixActionMessage({
+          type: 'success',
+          text: result.message || 'Webhook subscription retry completed.',
+        });
+        await runHealthCheck(false);
+      } else {
+        setFixActionMessage({
+          type: 'error',
+          text: result?.error || result?.subscribe_result?.error?.message || 'Webhook retry failed.',
+        });
+      }
+    } catch {
+      setFixActionMessage({ type: 'error', text: 'Network error while retrying webhook subscription.' });
+    } finally {
+      setFixActionLoading(null);
+    }
+  };
+
+  const runHealthCheck = async (autoFix = false) => {
+    if (!account?.id) return;
+    setHealthLoading(true);
+    setHealthError(null);
+
+    try {
+      const response = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${account.id}/full-health-check`, {
+        method: autoFix ? 'POST' : 'GET',
+        credentials: 'include',
+      });
+      const data = await response.json();
+
+      if (!response.ok || data?.success === false) {
+        setHealthError(data?.error || 'Failed to run health check');
+        setHealthReport(null);
+        return;
+      }
+
+      setHealthReport(data as AccountHealthReport);
+      if (autoFix) {
+        fetchAccounts(true);
+      }
+    } catch (err) {
+      console.error('Health check failed:', err);
+      setHealthError('Failed to run health check');
+      setHealthReport(null);
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
+  const migrateResourcesToCurrentAccount = async (accountId: number) => {
+    if (migratingResources) return;
+
+    setMigratingResources(true);
+    try {
+      // Step 1: preview migration impact
+      const previewRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/migrate-resources`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ dry_run: true, include_active_sources: false }),
+      });
+      const previewData = await previewRes.json();
+
+      if (!previewRes.ok || previewData.success === false) {
+        alert(`Migration preview failed: ${previewData.error || 'Unknown error'}`);
+        return;
+      }
+
+      const summary = previewData.summary || {};
+      const templateCount = summary.templates?.migrated || 0;
+      const flowCount = summary.flows?.migrated || 0;
+      const triggerCount = summary.triggers?.migrated || 0;
+      const ruleCount = summary.automation_rules?.migrated || 0;
+      const visualCount = summary.visual_automations?.migrated || 0;
+      const faqCount = summary.faqs?.migrated || 0;
+      const dripCount = summary.drip_campaigns?.migrated || 0;
+
+      const confirmed = window.confirm(
+        `Migration Preview (from old/unlinked accounts):\n\n` +
+        `Templates: ${templateCount}\n` +
+        `Flows: ${flowCount}\n` +
+        `Triggers: ${triggerCount}\n` +
+        `Automation Rules: ${ruleCount}\n` +
+        `Interactive Automations: ${visualCount}\n` +
+        `FAQs: ${faqCount}\n` +
+        `Drip Campaigns: ${dripCount}\n\n` +
+        `Do you want to migrate these resources to the current linked account now?`
+      );
+
+      if (!confirmed) return;
+
+      // Step 2: execute migration
+      const runRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/migrate-resources`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ dry_run: false, include_active_sources: false }),
+      });
+      const runData = await runRes.json();
+
+      if (!runRes.ok || runData.success === false) {
+        alert(`Migration failed: ${runData.error || 'Unknown error'}`);
+        return;
+      }
+
+      alert('Migration completed successfully. Resources from old unlinked accounts were aligned to this account.');
+      fetchAccounts(true);
+    } catch (err) {
+      console.error('Resource migration failed:', err);
+      alert('Migration failed due to a network/server error.');
+    } finally {
+      setMigratingResources(false);
     }
   };
 
@@ -562,9 +941,16 @@ export function WhatsAppSettings() {
       }, 1000);
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('connected');
-      window.history.replaceState({}, '', `${window.location.pathname}?${newParams.toString()}`);
+      const qs = newParams.toString();
+      navigate({ pathname: location.pathname, search: qs ? `?${qs}` : '' }, { replace: true });
     }
-  }, [workspaceId, searchParams]);
+  }, [workspaceId, searchParams, navigate, location.pathname]);
+
+  // Diagnostics are intentionally manual-only (run on user click).
+  useEffect(() => {
+    setHealthReport(null);
+    setHealthError(null);
+  }, [account?.id]);
 
   // Sync account status
   const handleSync = async () => {
@@ -594,7 +980,48 @@ export function WhatsAppSettings() {
     return phone;
   };
 
-  const account = accounts[0]; // Primary account
+  const getStatusBadgeClass = (status?: string) => {
+    switch ((status || '').toLowerCase()) {
+      case 'healthy':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'warning':
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'critical':
+      case 'error':
+        return 'bg-red-100 text-red-800 border-red-200';
+      default:
+        return 'bg-gray-100 text-gray-700 border-gray-200';
+    }
+  };
+
+  const getCheckCardClass = (status?: string) => {
+    const base = 'rounded-lg border p-4 transition-all';
+    const normalized = (status || '').toLowerCase();
+
+    if (normalized === 'critical' || normalized === 'error') {
+      return `${base} border-red-300 bg-red-50 shadow-[0_0_0_2px_rgba(239,68,68,0.25)] animate-pulse`;
+    }
+    if (normalized === 'warning') {
+      return `${base} border-amber-300 bg-amber-50`;
+    }
+    if (normalized === 'healthy') {
+      return `${base} border-emerald-200 bg-emerald-50/60`;
+    }
+    return `${base} border-gray-200 bg-gray-50`;
+  };
+
+  const formatDetailValue = (value: unknown) => {
+    if (value === null || value === undefined || value === '') return 'n/a';
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
+
   // Show dashboard if we have ANY account, even if inactive (so user can re-link)
   const isConnected = accounts.length > 0;
   const workspaceName = workspaces.find(w => String(w.id) === String(workspaceId))?.name;
@@ -612,123 +1039,26 @@ export function WhatsAppSettings() {
   // ============================================================
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-green-50/20">
-      <div className="max-w-[1400px] mx-auto px-6 py-10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-green-50/30">
+      <div className="w-full px-6 py-6">
 
         {/* Simple Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-lg">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#25D366] to-[#128C7E] shadow-lg">
               <MessageCircle className="w-6 h-6 text-white" />
             </div>
-            <div className="flex-1">
+            <div>
               <h1 className="text-2xl font-bold text-gray-900">WhatsApp Settings</h1>
               <p className="text-sm text-muted-foreground">Manage your WhatsApp Business connection</p>
             </div>
-
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-10 w-10 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-full border shadow-sm bg-white"
-                    onClick={() => navigate(`${basePath}/whatsapp/guide`)}
-                  >
-                    <HelpCircle className="w-5 h-5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">Need help? View Guide</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           </div>
 
           {/* Workspace indicator */}
           {workspaceName && (
-            <div className="flex items-center gap-3 mt-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-white px-3 py-1.5 rounded-lg border shadow-sm">
-                <Building2 className="w-4 h-4 text-primary" />
-                {editingWorkspace ? (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={workspaceNameInput}
-                      onChange={(e) => setWorkspaceNameInput(e.target.value)}
-                      className="h-7 w-48 text-xs"
-                      autoFocus
-                    />
-                    <Button
-                      size="sm"
-                      className="h-7 px-2 bg-green-600 hover:bg-green-700"
-                      disabled={updatingWorkspace}
-                      onClick={async () => {
-                        if (!workspaceNameInput.trim()) return;
-                        setUpdatingWorkspace(true);
-                        try {
-                          const token = localStorage.getItem('sv_token') || sessionStorage.getItem('sv_token');
-                          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-                          if (token) headers['Authorization'] = `Bearer ${token}`;
-                          const userId = localStorage.getItem('sv_user_id');
-                          if (userId) headers['X-User-Id'] = userId;
-
-                          const res = await fetch(`${API_BASE}/api/workspaces/${workspaceId}`, {
-                            method: 'PUT',
-                            headers,
-                            credentials: 'include',
-                            body: JSON.stringify({ name: workspaceNameInput })
-                          });
-                          if (res.ok) {
-                            setEditingWorkspace(false);
-                            // Refresh workspaces to update UI everywhere
-                            const response = await fetch(`${API_BASE}/api/workspaces`, {
-                              credentials: 'include',
-                              headers
-                            });
-                            const data = await response.json();
-                            if (data.workspaces) setWorkspaces(data.workspaces);
-                          }
-                        } catch (err) {
-                          console.error('Failed to update workspace name:', err);
-                        } finally {
-                          setUpdatingWorkspace(false);
-                        }
-                      }}
-                    >
-                      {updatingWorkspace ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2"
-                      onClick={() => setEditingWorkspace(false)}
-                      disabled={updatingWorkspace}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <span>Workspace: <strong className="text-foreground">{workspaceName}</strong></span>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 ml-1 text-muted-foreground hover:text-primary"
-                            onClick={() => {
-                              setWorkspaceNameInput(workspaceName);
-                              setEditingWorkspace(true);
-                            }}
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Edit workspace name</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </>
-                )}
-              </div>
+            <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
+              <Building2 className="w-4 h-4" />
+              <span>Workspace: <strong className="text-foreground">{workspaceName}</strong></span>
             </div>
           )}
         </div>
@@ -741,9 +1071,25 @@ export function WhatsAppSettings() {
           </div>
         )}
 
-        {/* Loading State */}
-        {(loading || loadingWorkspaces) && (
+        {/* Loading State — only while bootstrapping; never block forever on pending API */}
+        {loadingWorkspaces && workspaces.length === 0 && !workspaceFetchError && (
           <SettingsLoadingScreen />
+        )}
+        {loading && !loadingWorkspaces && workspaceId && (
+          <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading WhatsApp account…
+          </div>
+        )}
+        {workspaceFetchError && workspaces.length === 0 && (
+          <div className="mb-6 p-4 bg-amber-50 text-amber-900 rounded-xl border border-amber-200">
+            <p className="font-medium mb-1">Could not load workspaces</p>
+            <p className="text-sm">{workspaceFetchError}</p>
+            <p className="text-xs mt-2 text-amber-800">
+              Dev setup: UI on tunnel <strong>8080</strong>, monolith on <strong>5000</strong>, WhatsApp API on{' '}
+              <strong>5005</strong>. Start both backends and forward all three ports.
+            </p>
+          </div>
         )}
 
         {/* ============================================================ */}
@@ -773,7 +1119,7 @@ export function WhatsAppSettings() {
               <Button
                 size="lg"
                 onClick={() => navigate(`${basePath}/whatsapp/setup`)}
-                className="bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-brand-700 hover:to-brand-800 text-white gap-2 px-8 shadow-lg"
+                className="bg-gradient-to-r from-[#25D366] to-[#128C7E] hover:from-[#128C7E] hover:to-[#075E54] text-white gap-2 px-8 shadow-lg"
               >
                 <Zap className="w-5 h-5" />
                 Get Started
@@ -809,27 +1155,6 @@ export function WhatsAppSettings() {
                   </div>
                 </div>
               </div>
-
-              {/* Coexistence Mode Callout */}
-              <div className="mt-10 p-6 bg-blue-50 rounded-xl border border-blue-200 max-w-lg mx-auto">
-                <div className="flex items-center gap-3 mb-2">
-                  <Phone className="w-5 h-5 text-blue-600" />
-                  <h3 className="font-semibold text-sm text-blue-900">Already using WhatsApp Business App?</h3>
-                </div>
-                <p className="text-xs text-blue-700 mb-4">
-                  Connect your existing WhatsApp Business App account to use it alongside
-                  SocioChat. Keep your phone active while automating messages through Cloud API.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`${basePath}/whatsapp/setup?mode=coexistence`)}
-                  className="border-blue-300 text-blue-700 hover:bg-blue-100"
-                >
-                  <Phone className="w-4 h-4 mr-2" />
-                  Connect Existing Account
-                </Button>
-              </div>
             </CardContent>
           </Card>
         )}
@@ -838,127 +1163,488 @@ export function WhatsAppSettings() {
         {/* CONNECTED STATE */}
         {/* ============================================================ */}
         {!loading && !loadingWorkspaces && isConnected && account && (
-          <div className="space-y-6">
-            {/* Account Status Card */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            {/* Left Sidebar - Navigation */}
+            <div className="lg:col-span-3 space-y-6">
+              <Card className="border shadow-sm bg-slate-50/50">
+                <CardContent className="p-3">
+                  <p className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Menu</p>
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => navigate(`${basePath}/whatsapp/inbox`)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition-all text-left group"
+                    >
+                      <div className="p-1.5 rounded-md bg-green-100 group-hover:bg-green-200 transition-colors">
+                        <Inbox className="w-4 h-4 text-green-700" />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">Inbox</span>
+                    </button>
 
-            {/* Account Status Card */}
-            <WhatsAppAccountCard
-              account={account}
-              onUpdate={() => fetchAccounts(true)}
-              onSync={handleSync}
-              isSyncing={syncing}
-              onPopupTrigger={handlePopupTrigger}
-            />
+                    <button
+                      onClick={() => navigate(`${basePath}/whatsapp/templates`)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition-all text-left group"
+                    >
+                      <div className="p-1.5 rounded-md bg-blue-100 group-hover:bg-blue-200 transition-colors">
+                        <FileText className="w-4 h-4 text-blue-700" />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">Templates</span>
+                    </button>
 
-            {/* Notification Settings */}
-            <NotificationSettingsSection accountId={account.id} workspaceId={workspaceId} />
+                    <button
+                      onClick={() => navigate(`${basePath}/whatsapp/bulk`)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition-all text-left group"
+                    >
+                      <div className="p-1.5 rounded-md bg-purple-100 group-hover:bg-purple-200 transition-colors">
+                        <BarChart3 className="w-4 h-4 text-purple-700" />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">Bulk Messages</span>
+                    </button>
 
-            {/* Connection Details (Collapsible) */}
-            <Card className="border shadow-sm bg-white">
-              <CardHeader
-                className="cursor-pointer hover:bg-gray-50 transition-colors"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Settings className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <CardTitle className="text-base">Connection Details</CardTitle>
-                      <CardDescription className="text-sm">Technical information for advanced users</CardDescription>
-                    </div>
+                    <button
+                      onClick={() => navigate(`${basePath}/whatsapp/automation`)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition-all text-left group"
+                    >
+                      <div className="p-1.5 rounded-md bg-orange-100 group-hover:bg-orange-200 transition-colors">
+                        <Zap className="w-4 h-4 text-orange-700" />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">Automation</span>
+                    </button>
+
+                    <button
+                      onClick={() => navigate(`${basePath}/whatsapp/interactive-automation`)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition-all text-left group"
+                    >
+                      <div className="p-1.5 rounded-md bg-orange-100 group-hover:bg-orange-200 transition-colors">
+                        <Bot className="w-4 h-4 text-orange-700" />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">Conversational Flows</span>
+                    </button>
+
+                    <button
+                      onClick={() => navigate(`${basePath}/whatsapp/flows`)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition-all text-left group"
+                    >
+                      <div className="p-1.5 rounded-md bg-emerald-100 group-hover:bg-emerald-200 transition-colors">
+                        <ClipboardList className="w-4 h-4 text-emerald-700" />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">WhatsApp Forms</span>
+                    </button>
+
+                    <button
+                      onClick={() => navigate(`${basePath}/whatsapp/coexistence`)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition-all text-left group"
+                    >
+                      <div className="p-1.5 rounded-md bg-teal-100 group-hover:bg-teal-200 transition-colors">
+                        <Phone className="w-4 h-4 text-teal-700" />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">Coexistence</span>
+                    </button>
                   </div>
-                  <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
-                </div>
-              </CardHeader>
+                </CardContent>
+              </Card>
 
-              {showAdvanced && (
-                <CardContent className="border-t pt-6">
-                  <div className="space-y-4">
-                    {/* Account Details */}
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-xs text-muted-foreground mb-1">Business Account ID (WABA ID)</p>
-                        <p className="font-mono text-sm select-all">{account.waba_id}</p>
+              {/* Help Card in sidebar */}
+              <Card className="border shadow-sm bg-gradient-to-br from-gray-50 to-white">
+                <CardContent className="p-4">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <Info className="w-4 h-4 text-muted-foreground" />
+                      <p className="font-medium text-sm">Need help?</p>
+                    </div>
+                    <Button variant="outline" size="sm" className="w-full justify-start gap-2" onClick={() => navigate(`${basePath}/whatsapp/guide`)}>
+                      <ExternalLink className="w-3 h-3" />
+                      View Guide
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Content */}
+            <div className="lg:col-span-9 space-y-6">
+              <Tabs value={settingsTab} onValueChange={handleSettingsTabChange} className="w-full">
+                <TabsList className="mb-4 bg-white border shadow-sm">
+                  <TabsTrigger value="general">General</TabsTrigger>
+                  <TabsTrigger value="verification">Verification Center</TabsTrigger>
+                  <TabsTrigger value="trust">Trust Timeline</TabsTrigger>
+                  <TabsTrigger value="operator">Operator Tools</TabsTrigger>
+                </TabsList>
+                {isWaOpsQaNavVisible(location.search) && (
+                  <Alert className="mb-4 border-dashed border-amber-300 bg-amber-50/80">
+                    <AlertTitle className="text-sm">Phase 7–9 QA shortcuts</AlertTitle>
+                    <AlertDescription className="text-xs space-y-2 pt-1">
+                      <p className="text-muted-foreground">
+                        Stable deep links (also work when pasted). Enable this panel in staging with{' '}
+                        <code className="rounded bg-white px-1">?wa_qa=1</code> or{' '}
+                        <code className="rounded bg-white px-1">localStorage.sociovia_wa_ops_nav = &quot;1&quot;</code>.
+                      </p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1">
+                        <RouterLink className="text-primary underline" to={`${basePath}/whatsapp/ops/onboarding`}>
+                          Onboarding lifecycle
+                        </RouterLink>
+                        <RouterLink className="text-primary underline" to={`${basePath}/whatsapp/ops/verification`}>
+                          Verification center
+                        </RouterLink>
+                        <RouterLink className="text-primary underline" to={`${basePath}/whatsapp/ops/trust`}>
+                          Trust center
+                        </RouterLink>
+                        <RouterLink className="text-primary underline" to={`${basePath}/whatsapp/ops/operator`}>
+                          Operational health
+                        </RouterLink>
+                        <RouterLink className="text-primary underline" to={`${basePath}/whatsapp/ops/warmup`}>
+                          Warmup / safe mode (operator)
+                        </RouterLink>
+                        <RouterLink className="text-primary underline" to={`${basePath}/whatsapp/automation`}>
+                          Restriction banner (automation)
+                        </RouterLink>
                       </div>
-                      <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-xs text-muted-foreground mb-1">Phone Number ID</p>
-                        <p className="font-mono text-sm select-all">{account.phone_number_id}</p>
-                      </div>
-                      <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-xs text-muted-foreground mb-1">Token Type</p>
-                        <p className="font-medium text-sm capitalize">{account.token_type === 'long_lived' ? 'Long-Lived (~60 days)' : account.token_type === 'permanent' ? 'Permanent' : account.token_type || 'Unknown'}</p>
-                      </div>
-                      <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-xs text-muted-foreground mb-1">Connected On</p>
-                        <p className="font-medium text-sm">
-                          {new Date(account.created_at).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </p>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
+                <TabsContent value="general" className="space-y-6 mt-0">
+              {/* Account Status Card */}
+              <WhatsAppAccountCard
+                account={account}
+                onUpdate={() => fetchAccounts(true)}
+                onSync={handleSync}
+                isSyncing={syncing}
+                onPopupTrigger={handlePopupTrigger}
+              />
+
+              <MetaBusinessIdSection
+                account={account}
+                onSaved={() => fetchAccounts(true)}
+              />
+
+              {/* Notification Settings */}
+              <NotificationSettingsSection accountId={account.id} workspaceId={workspaceId} />
+
+              {/* Connection Details (Collapsible) */}
+              <Card className="border shadow-sm bg-white">
+                <CardHeader
+                  className="cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Settings className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <CardTitle className="text-base">Connection Details</CardTitle>
+                        <CardDescription className="text-sm">Technical information for advanced users</CardDescription>
                       </div>
                     </div>
+                    <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+                  </div>
+                </CardHeader>
 
-                    {/* Debug Token Section */}
-                    <DebugTokenSection accountId={account.id} />
-
-                    {/* Permissions Summary */}
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Shield className="w-4 h-4 text-blue-600" />
-                        <p className="font-medium text-sm text-blue-900">Granted Permissions</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {['Send Messages', 'Manage Templates', 'View Analytics', 'Receive Webhooks'].map((perm) => (
-                          <span key={perm} className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded text-xs border border-blue-200">
-                            <CheckCircle className="w-3 h-3 text-green-500" />
-                            {perm}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="pt-4 border-t space-y-4">
-                      {/* Unlink/Link Toggle */}
-                      <div className="flex items-center justify-between p-4 bg-amber-50 rounded-lg border border-amber-200">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${account.is_active ? 'bg-amber-100' : 'bg-gray-100'}`}>
-                            {account.is_active ? <Pause className="w-4 h-4 text-amber-600" /> : <Play className="w-4 h-4 text-green-600" />}
-                          </div>
+                {showAdvanced && (
+                  <CardContent className="border-t pt-6">
+                    <div className="space-y-4">
+                      {/* WhatsApp Health & Error Diagnostics */}
+                      <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="font-medium text-sm">
-                              {account.is_active ? 'Unlink Account' : 'Link Account'}
+                            <p className="font-medium text-sm flex items-center gap-2">
+                              <Shield className="w-4 h-4 text-slate-700" />
+                              WhatsApp Health & Error Diagnostics
                             </p>
-                            <p className="text-xs text-muted-foreground">
-                              {account.is_active
-                                ? 'Pause all messaging, templates & flows'
-                                : 'Resume account activity'}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Checks token validity, webhook subscription, phone status, and Meta-side errors before messaging starts.
                             </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => runHealthCheck(false)}
+                              disabled={healthLoading}
+                              className="gap-2"
+                            >
+                              {healthLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                              Run Check
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => runHealthCheck(true)}
+                              disabled={healthLoading}
+                              className="gap-2 bg-slate-900 hover:bg-slate-800 text-white"
+                            >
+                              {healthLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Settings className="w-4 h-4" />}
+                              Auto-Fix & Recheck
+                            </Button>
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={processingAction}
-                          onClick={() => {
-                            if (account.is_active) {
-                              // Show confirmation dialog before unlinking
-                              setShowUnlinkConfirm(true);
-                            } else {
-                              // Link directly (no confirmation needed)
-                              (async () => {
-                                if (processingAction) return;
-                                setProcessingAction(true);
-                                try {
-                                  const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${account.id}/toggle-status`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    credentials: 'include',
-                                    body: JSON.stringify({ is_active: true })
-                                  });
-                                  if (res.ok) {
+
+                        {healthError && (
+                          <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 flex items-start gap-2 shadow-[0_0_0_2px_rgba(239,68,68,0.2)] animate-pulse">
+                            <AlertCircle className="w-4 h-4 mt-0.5" />
+                            <span>{healthError}</span>
+                          </div>
+                        )}
+
+                        {healthReport && (
+                          <>
+                            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusBadgeClass(healthReport.overall_status)}`}>
+                                {healthReport.overall_status === 'healthy' ? 'Status OK' : `Status ${healthReport.overall_status.toUpperCase()}`}
+                              </span>
+                              {healthReport.checked_at && (
+                                <span className="text-xs text-muted-foreground">
+                                  Checked at: {new Date(healthReport.checked_at).toLocaleString()}
+                                </span>
+                              )}
+                              {!!healthReport.auto_fixes_applied && (
+                                <span className="text-xs text-emerald-700 font-medium">
+                                  Auto fixes applied: {healthReport.auto_fixes_applied}
+                                </span>
+                              )}
+                            </div>
+
+                            {!!healthReport.action_required && (
+                              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                                <span className="font-medium">Action required:</span> {healthReport.action_required}
+                              </div>
+                            )}
+
+                            {(sendPermissionCheck?.status === 'critical' ||
+                              webhookSubscriptionCheck?.status === 'critical' ||
+                              webhookSubscriptionCheck?.status === 'warning') && (
+                              <div className="rounded-lg border border-red-200 bg-red-50/80 p-4 space-y-3">
+                                <div className="flex items-start gap-2">
+                                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+                                  <div>
+                                    <p className="font-semibold text-sm text-red-900">Fix connection issues</p>
+                                    <p className="text-sm text-red-800 mt-1">
+                                      Facebook Login stores a personal user token. Partner WABAs (Trusthomes) require a{' '}
+                                      <strong>System User</strong> token from Sociovia Business Manager to send messages and
+                                      manage webhooks.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {sendPermissionCheck?.message && (
+                                  <p className="text-xs text-red-700 font-mono bg-white/70 rounded px-2 py-1.5 border border-red-100">
+                                    {sendPermissionCheck.message}
+                                  </p>
+                                )}
+
+                                {sendPermissionHints.length > 0 && (
+                                  <ol className="list-decimal list-inside text-sm text-red-900 space-y-1">
+                                    {sendPermissionHints.map((hint, i) => (
+                                      <li key={i}>{hint}</li>
+                                    ))}
+                                  </ol>
+                                )}
+
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  <Button
+                                    size="sm"
+                                    className="bg-red-700 hover:bg-red-800 text-white"
+                                    onClick={() => navigate(`${basePath}/whatsapp/setup?manual=1`)}
+                                  >
+                                    Reconnect with System User token
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-red-300"
+                                    onClick={handleRetryWebhookSubscription}
+                                    disabled={fixActionLoading === 'webhook'}
+                                  >
+                                    {fixActionLoading === 'webhook' ? (
+                                      <RefreshCw className="w-4 h-4 animate-spin mr-1" />
+                                    ) : null}
+                                    Retry webhook subscription
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => runHealthCheck(false)}
+                                    disabled={healthLoading}
+                                  >
+                                    Re-run health check
+                                  </Button>
+                                </div>
+
+                                {fixActionMessage && (
+                                  <p
+                                    className={`text-xs ${fixActionMessage.type === 'success' ? 'text-emerald-800' : 'text-red-800'}`}
+                                  >
+                                    {fixActionMessage.text}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
+                            <div className="space-y-3">
+                              {healthReport.checks?.map((check) => {
+                                const detailEntries = Object.entries(check.details || {});
+                                return (
+                                  <div key={check.name} className={getCheckCardClass(check.status)}>
+                                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                      <div className="font-medium text-sm capitalize">{check.name.replace(/_/g, ' ')}</div>
+                                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getStatusBadgeClass(check.status)}`}>
+                                        {check.status.toUpperCase()}
+                                      </span>
+                                    </div>
+
+                                    <p className="text-sm text-slate-700">{check.message}</p>
+
+                                    {!!detailEntries.length && (
+                                      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        {detailEntries.map(([key, value]) => (
+                                          <div key={`${check.name}-${key}`} className="rounded border border-slate-200 bg-white px-2 py-1.5">
+                                            <div className="text-[11px] text-muted-foreground uppercase tracking-wide">{key}</div>
+                                            <div className="text-xs font-mono break-all text-slate-700">{formatDetailValue(value)}</div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {check.fix_result && (
+                                      <div className={`mt-3 rounded border px-2.5 py-2 text-xs ${check.fix_result.success ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
+                                        <span className="font-semibold">Auto-fix:</span> {check.fix_result.message || (check.fix_result.success ? 'Applied' : 'Failed')}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+
+                        {!healthError && !healthReport && (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                            Click Run Check to view all Meta-side and account-side issues.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Account Details */}
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <p className="text-xs text-muted-foreground mb-1">Business Account ID (WABA ID)</p>
+                          <p className="font-mono text-sm select-all">{account.waba_id}</p>
+                        </div>
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <p className="text-xs text-muted-foreground mb-1">Phone Number ID</p>
+                          <p className="font-mono text-sm select-all">{account.phone_number_id}</p>
+                        </div>
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <p className="text-xs text-muted-foreground mb-1">Token Type</p>
+                          <p className="font-medium text-sm capitalize">{account.token_type || 'Permanent'}</p>
+                        </div>
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <p className="text-xs text-muted-foreground mb-1">Connected On</p>
+                          <p className="font-medium text-sm">
+                            {new Date(account.created_at).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Debug Token Section */}
+                      <DebugTokenSection accountId={account.id} />
+
+                      {/* Permissions Summary */}
+                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Shield className="w-4 h-4 text-blue-600" />
+                          <p className="font-medium text-sm text-blue-900">Granted Permissions</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {['Send Messages', 'Manage Templates', 'View Analytics', 'Receive Webhooks'].map((perm) => (
+                            <span key={perm} className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded text-xs border border-blue-200">
+                              <CheckCircle className="w-3 h-3 text-green-500" />
+                              {perm}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="pt-4 border-t space-y-4">
+                        {/* Resource Migration (old account -> current) */}
+                        <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-blue-100">
+                              <RefreshCw className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm text-blue-900">Align Resources to Current Account</p>
+                              <p className="text-xs text-blue-700/90">
+                                Migrates templates, flows, triggers, automations, FAQs, and drip campaigns from old unlinked accounts.
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={migratingResources || processingAction}
+                            onClick={() => migrateResourcesToCurrentAccount(account.id)}
+                            className="border-blue-300 text-blue-700 hover:bg-blue-100 gap-2"
+                          >
+                            {migratingResources ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                            {migratingResources ? 'Migrating...' : 'Preview & Migrate'}
+                          </Button>
+                        </div>
+
+                        {/* Unlink/Link Toggle */}
+                        <div className="flex items-center justify-between p-4 bg-amber-50 rounded-lg border border-amber-200">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${account.is_active ? 'bg-amber-100' : 'bg-gray-100'}`}>
+                              {account.is_active ? <Pause className="w-4 h-4 text-amber-600" /> : <Play className="w-4 h-4 text-green-600" />}
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">
+                                {account.is_active ? 'Unlink Account' : 'Link Account'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {account.is_active
+                                  ? 'Pause all messaging, templates & flows'
+                                  : 'Resume account activity'}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={processingAction}
+                            onClick={async () => {
+                              if (processingAction) return;
+
+                              // Show confirmation for Unlink action
+                              if (account.is_active) {
+                                if (!confirm('Are you sure you want to unlink this account? All messaging, templates, and flows will be paused until you link it again.')) {
+                                  return;
+                                }
+                              }
+
+                              setProcessingAction(true);
+                              try {
+                                const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${account.id}/toggle-status`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  credentials: 'include',
+                                  body: JSON.stringify({ is_active: !account.is_active })
+                                });
+                                if (res.ok) {
+                                  // Show unlink animation popup
+                                  if (account.is_active) {
+                                    handlePopupTrigger(
+                                      'unlink',
+                                      'Account Unlinked',
+                                      'All messaging has been paused. You can link it again anytime.',
+                                      account.verified_name || 'WhatsApp Business',
+                                      account.display_phone_number || undefined,
+                                      () => fetchAccounts()
+                                    );
+                                  } else {
+                                    // Show connect animation for linking
                                     handlePopupTrigger(
                                       'connect',
                                       'Account Linked',
@@ -968,140 +1654,103 @@ export function WhatsAppSettings() {
                                       () => fetchAccounts()
                                     );
                                   }
-                                } catch (err) {
-                                  console.error('Failed to toggle account status:', err);
-                                } finally {
-                                  setProcessingAction(false);
                                 }
-                              })();
-                            }
-                          }}
-                          className={account.is_active
-                            ? 'border-amber-300 text-amber-700 hover:bg-amber-100 gap-2'
-                            : 'border-green-300 text-green-700 hover:bg-green-100 gap-2'
-                          }
-                        >
-                          {processingAction ? <RefreshCw className="w-4 h-4 animate-spin" /> : (account.is_active ? <Link2Off className="w-4 h-4" /> : <Link className="w-4 h-4" />)}
-                          {account.is_active ? 'Unlink' : 'Link'}
-                        </Button>
-
-                        {/* Unlink Confirmation Dialog */}
-                        <AlertDialog open={showUnlinkConfirm} onOpenChange={setShowUnlinkConfirm}>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle className="flex items-center gap-2 text-amber-700">
-                                <AlertCircle className="w-5 h-5" />
-                                Unlink WhatsApp Account?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription className="space-y-2">
-                                <p>
-                                  You are about to unlink <strong>{account.verified_name || 'WhatsApp Business'}</strong>
-                                  {account.display_phone_number ? ` (${account.display_phone_number})` : ''}.
-                                </p>
-                                <ul className="list-disc pl-5 space-y-1 text-sm">
-                                  <li>All messaging will be paused immediately</li>
-                                  <li>Templates and flows will stop working</li>
-                                  <li>Incoming messages will not be received</li>
-                                  <li>Your data will be preserved &mdash; you can re-link anytime</li>
-                                </ul>
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                className="bg-amber-600 hover:bg-amber-700 text-white"
-                                onClick={async () => {
-                                  setProcessingAction(true);
-                                  try {
-                                    const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${account.id}/toggle-status`, {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      credentials: 'include',
-                                      body: JSON.stringify({ is_active: false })
-                                    });
-                                    if (res.ok) {
-                                      // Refresh accounts list first, then show popup
-                                      await fetchAccounts(true);
-                                      handlePopupTrigger(
-                                        'unlink',
-                                        'Account Unlinked',
-                                        'All messaging has been paused. You can link it again anytime.',
-                                        account.verified_name || 'WhatsApp Business',
-                                        account.display_phone_number || undefined,
-                                        () => fetchAccounts()
-                                      );
-                                    }
-                                  } catch (err) {
-                                    console.error('Failed to unlink account:', err);
-                                  } finally {
-                                    setProcessingAction(false);
-                                  }
-                                }}
-                              >
-                                Yes, Unlink Account
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-
-                      {/* Delete Account - Danger Zone */}
-                      <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-red-100">
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm text-red-900">Delete Account</p>
-                            <p className="text-xs text-red-600/80">
-                              Permanently remove account and all conversation data
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={processingAction}
-                          onClick={async () => {
-                            if (processingAction) return;
-
-                            setProcessingAction(true);
-                            const accountName = account.verified_name || 'WhatsApp Business';
-                            const accountNumber = account.display_phone_number || undefined;
-                            try {
-                              const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${account.id}`, {
-                                method: 'DELETE',
-                                credentials: 'include'
-                              });
-                              if (res.ok) {
-                                // Show delete animation popup
-                                handlePopupTrigger(
-                                  'delete',
-                                  'Account Deleted',
-                                  'All account data has been permanently removed.',
-                                  accountName,
-                                  accountNumber,
-                                  () => navigate(basePath)
-                                );
+                              } catch (err) {
+                                console.error('Failed to toggle account status:', err);
+                              } finally {
+                                setProcessingAction(false);
                               }
-                            } catch (err) {
-                              console.error('Failed to delete account:', err);
-                            } finally {
-                              setProcessingAction(false);
+                            }}
+                            className={account.is_active
+                              ? 'border-amber-300 text-amber-700 hover:bg-amber-100 gap-2'
+                              : 'border-green-300 text-green-700 hover:bg-green-100 gap-2'
                             }
-                          }}
-                          className="border-red-300 text-red-600 hover:bg-red-100 gap-2"
-                        >
-                          {processingAction ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                          Delete
-                        </Button>
+                          >
+                            {processingAction ? <RefreshCw className="w-4 h-4 animate-spin" /> : (account.is_active ? <Link2Off className="w-4 h-4" /> : <Link className="w-4 h-4" />)}
+                            {account.is_active ? 'Unlink' : 'Link'}
+                          </Button>
+                        </div>
+
+                        {/* Delete Account - Danger Zone */}
+                        <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-red-100">
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm text-red-900">Delete Account</p>
+                              <p className="text-xs text-red-600/80">
+                                Permanently remove account and all conversation data
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={processingAction}
+                            onClick={async () => {
+                              if (processingAction) return;
+
+                              if (!confirm('Are you sure? This will delete all conversations, messages, and data for this account. This action cannot be undone.')) {
+                                return;
+                              }
+
+                              setProcessingAction(true);
+                              const accountName = account.verified_name || 'WhatsApp Business';
+                              const accountNumber = account.display_phone_number || undefined;
+                              try {
+                                const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${account.id}`, {
+                                  method: 'DELETE',
+                                  credentials: 'include'
+                                });
+                                const payload = await res.json().catch(() => ({}));
+                                if (res.ok && payload?.success !== false) {
+                                  // Show delete animation popup
+                                  handlePopupTrigger(
+                                    'delete',
+                                    'Account Deleted',
+                                    'All account data has been permanently removed.',
+                                    accountName,
+                                    accountNumber,
+                                    () => fetchAccounts()
+                                  );
+                                } else {
+                                  const errorMessage = payload?.error || 'Failed to delete account';
+                                  alert(`Delete failed: ${errorMessage}`);
+                                }
+                              } catch (err) {
+                                console.error('Failed to delete account:', err);
+                                alert('Delete failed due to a network/server error.');
+                              } finally {
+                                setProcessingAction(false);
+                              }
+                            }}
+                            className="border-red-300 text-red-600 hover:bg-red-100 gap-2"
+                          >
+                            {processingAction ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            Delete
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
+                  </CardContent>
+                )}
+              </Card>
+                </TabsContent>
 
+                <TabsContent value="verification" className="mt-0">
+                  <VerificationCenter accountId={account.id} />
+                </TabsContent>
+
+                <TabsContent value="trust" className="mt-0">
+                  <TrustCenter accountId={account.id} />
+                </TabsContent>
+
+                <TabsContent value="operator" className="mt-0">
+                  <OperationalHealth accountId={account.id} />
+                </TabsContent>
+              </Tabs>
+            </div>
           </div>
         )}
 
@@ -1118,64 +1767,46 @@ export function WhatsAppSettings() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {!agentGate.allowed ? (
-                <LockedFeatureBanner
-                  title="AI Agents"
-                  description={`AI agent accounts and the chatbot dashboard are available on ${agentGate.requiredPlanLabel} and above plans. Upgrade to unlock.`}
-                  level={agentGate.requiredPlanLabel || 'Growth'}
-                  onUnlock={() => navigate('/subscription')}
-                />
-              ) : (
-                <Tabs defaultValue={String(workspaces[0]?.id || '')} className="w-full">
-                  {workspaces.length > 1 && (
-                    <div className="overflow-x-auto pb-2 mb-4">
-                      <TabsList className="inline-flex w-max">
-                        {workspaces.map((ws) => (
-                          <TabsTrigger key={ws.id} value={String(ws.id)} className="whitespace-nowrap">
-                            {ws.name}
-                          </TabsTrigger>
-                        ))}
-                      </TabsList>
-                    </div>
-                  )}
-                  {workspaces.map((ws) => (
-                    <TabsContent key={ws.id} value={String(ws.id)}>
-                      <AgentsManager workspaceId={Number(ws.id)} />
-                    </TabsContent>
-                  ))}
-                </Tabs>
-              )}
+              <Tabs defaultValue={String(workspaces[0]?.id || '')} className="w-full">
+                {workspaces.length > 1 && (
+                  <div className="overflow-x-auto pb-2 mb-4">
+                    <TabsList className="inline-flex w-max">
+                      {workspaces.map((ws) => (
+                        <TabsTrigger key={ws.id} value={String(ws.id)} className="whitespace-nowrap">
+                          {ws.name}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </div>
+                )}
+                {workspaces.map((ws) => (
+                  <TabsContent key={ws.id} value={String(ws.id)}>
+                    <AgentsManager workspaceId={Number(ws.id)} />
+                  </TabsContent>
+                ))}
+              </Tabs>
             </CardContent>
           </Card>
         )}
 
         {/* Footer */}
-        <div className="mt-16 text-center">
+        <div className="mt-12 text-center">
           <p className="text-xs text-muted-foreground/60 flex items-center justify-center gap-2">
-            <img src={logo} alt="SocioChat" className="w-4 h-4 opacity-50" />
+            <img src={logo} alt="Sociovia" className="w-4 h-4 opacity-50" />
             Powered by Meta WhatsApp Business Platform
           </p>
         </div>
-        {/* WhatsAppConnectSuccessPopup removed for standalone product */}
+        <WhatsAppConnectSuccessPopup
+          isOpen={popupState.isOpen}
+          onClose={handlePopupClose}
+          variant={popupState.variant}
+          title={popupState.title}
+          subtitle={popupState.subtitle}
+          accountName={popupState.accountName}
+          accountNumber={popupState.accountNumber}
+          duration={3000} // Longer duration for connection flair
+        />
       </div>
     </div>
   );
-}
-
-function LockedFeatureBanner({ title, description, level, onUnlock }: { title: string, description: string, level: string, onUnlock: () => void }) {
-    return (
-        <Card className="border-dashed border-2 border-slate-300 bg-slate-50 p-12 text-center shadow-none">
-            <div className="flex flex-col items-center justify-center max-w-lg mx-auto">
-                <div className="bg-white p-4 rounded-full shadow-sm mb-6 animate-pulse">
-                    <Lock className="w-10 h-10 text-slate-400" />
-                </div>
-                <h3 className="text-2xl font-bold text-slate-800 mb-3">{title} is Locked</h3>
-                <p className="text-slate-500 mb-8 text-lg">{description}</p>
-                <Button onClick={onUnlock} size="lg" className="bg-slate-900 text-white hover:bg-slate-800 shadow-lg hover:shadow-xl transition-all">
-                    <Sparkles className="w-4 h-4 mr-2 text-yellow-400" />
-                    Unlock {level} Plan
-                </Button>
-            </div>
-        </Card>
-    );
 }

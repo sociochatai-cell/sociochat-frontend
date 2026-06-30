@@ -32,7 +32,8 @@ import {
   CheckCircle,
   Pencil
 } from 'lucide-react';
-import { API_BASE_URL } from '@/config';
+import { WHATSAPP_API_BASE_URL } from '@/config';
+import { getWorkspaceId } from '../../utils/workspaceContext';
 import { cachedFetch } from '../../utils/waPersistentCache';
 
 import { StepCard } from './StepCard';
@@ -59,7 +60,7 @@ import type {
 } from './types';
 import { cn } from '@/lib/utils';
 
-const API_BASE = API_BASE_URL;
+const API_BASE = WHATSAPP_API_BASE_URL;
 
 // =============================================================================
 // Main Component
@@ -101,8 +102,7 @@ export function FlowBuilderV2() {
 
   // Account state
   const [accountId, setAccountId] = useState<number | null>(null);
-  const workspaceId = localStorage.getItem('sv_whatsapp_workspace_id') ||
-    sessionStorage.getItem('sv_whatsapp_workspace_id');
+  const workspaceId = getWorkspaceId();
 
   // ==========================================================================
   // INITIALIZATION
@@ -170,7 +170,7 @@ export function FlowBuilderV2() {
         description: 'Failed to load flow',
         variant: 'destructive'
       });
-      navigate('/dashboard/flows');
+      navigate('/dashboard/whatsapp/flows');
     } finally {
       setLoading(false);
     }
@@ -436,24 +436,22 @@ export function FlowBuilderV2() {
   // SAVE & PUBLISH
   // ==========================================================================
 
-  const saveDraft = async (): Promise<number | null> => {
-    // Bail if a request is already in flight (prevents concurrent / rapid-repeat submits)
-    if (saving || publishing) return null;
-
+  const saveDraft = async () => {
     if (!state.name.trim()) {
       toast({
         title: 'Name required',
         description: 'Please enter a flow name',
         variant: 'destructive'
       });
-      return null;
+      return;
     }
 
     try {
       setSaving(true);
 
-      // Convert visual model to Meta JSON (screen IDs sanitized for Meta)
-      const { flowJson, entryScreenId } = visualToMetaJSON(state);
+      // Convert visual model to Meta JSON
+      const flowJson = visualToMetaJSON(state);
+      const entryScreenId = flowJson.screens[0]?.id || 'WELCOME';
 
       const payload = {
         account_id: accountId,
@@ -476,16 +474,6 @@ export function FlowBuilderV2() {
 
       const data = await res.json();
 
-      // Handle 409 (name already exists) with a clear message
-      if (res.status === 409 || (data && data.code === 'DUPLICATE_NAME')) {
-        toast({
-          title: 'Duplicate name',
-          description: `A flow named "${state.name}" already exists — rename it or open the existing flow to edit.`,
-          variant: 'destructive'
-        });
-        return null;
-      }
-
       if (data.success) {
         setState(prev => ({
           ...prev,
@@ -500,12 +488,10 @@ export function FlowBuilderV2() {
 
         // Update URL if new flow
         if (!state.id && data.flow.id) {
-          navigate(`/dashboard/flows/${data.flow.id}/edit`, { replace: true });
+          navigate(`/dashboard/whatsapp/flows/${data.flow.id}/edit`, { replace: true });
         }
-
-        return data.flow.id;
       } else {
-        throw new Error(data.message || data.error || 'Failed to save');
+        throw new Error(data.error || 'Failed to save');
       }
     } catch (err: any) {
       toast({
@@ -513,16 +499,12 @@ export function FlowBuilderV2() {
         description: err.message || 'Something went wrong',
         variant: 'destructive'
       });
-      return null;
     } finally {
       setSaving(false);
     }
   };
 
   const publishFlow = async () => {
-    // Bail if a request is already in flight (prevents concurrent / rapid-repeat submits)
-    if (saving || publishing) return;
-
     // Validate first
     const hints = validateFlow(state);
     if (hasErrors(hints)) {
@@ -534,13 +516,12 @@ export function FlowBuilderV2() {
       return;
     }
 
-    // Save first if dirty (use the returned id to avoid the stale-closure race)
-    let flowId = state.id;
-    if (state.isDirty || !flowId) {
-      flowId = await saveDraft();
+    // Save first if dirty
+    if (state.isDirty || !state.id) {
+      await saveDraft();
     }
 
-    if (!flowId) {
+    if (!state.id) {
       toast({
         title: 'Save required',
         description: 'Please save the flow first',
@@ -552,7 +533,7 @@ export function FlowBuilderV2() {
     try {
       setPublishing(true);
 
-      const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flowId}/publish`, {
+      const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${state.id}/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -573,10 +554,10 @@ export function FlowBuilderV2() {
 
         // Redirect to flows list
         setTimeout(() => {
-          navigate('/dashboard/flows');
+          navigate('/dashboard/whatsapp/flows');
         }, 1500);
       } else {
-        throw new Error(data.message || data.error || 'Publish failed');
+        throw new Error(data.error || 'Publish failed');
       }
     } catch (err: any) {
       toast({
@@ -606,7 +587,7 @@ export function FlowBuilderV2() {
     return (
       <TemplateSelector
         onSelectTemplate={initFromTemplate}
-        onBack={() => navigate('/dashboard/flows')}
+        onBack={() => navigate('/dashboard/whatsapp/flows')}
       />
     );
   }
@@ -640,7 +621,7 @@ export function FlowBuilderV2() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate('/dashboard/flows')}
+            onClick={() => navigate('/dashboard/whatsapp/flows')}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Flows
@@ -701,7 +682,7 @@ export function FlowBuilderV2() {
             variant="outline"
             size="sm"
             onClick={saveDraft}
-            disabled={saving || publishing || !state.isDirty}
+            disabled={saving || !state.isDirty}
           >
             {saving ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -715,7 +696,7 @@ export function FlowBuilderV2() {
           <Button
             size="sm"
             onClick={publishFlow}
-            disabled={saving || publishing || errorCount > 0 || state.status === 'published'}
+            disabled={publishing || errorCount > 0 || state.status === 'published'}
             className="bg-green-600 hover:bg-green-700"
           >
             {publishing ? (

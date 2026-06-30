@@ -6,10 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, RefreshCw, Send, CheckCheck, Eye, MessageSquare, StopCircle, Users, BarChart } from 'lucide-react';
 import { toast } from 'sonner';
-import { API_ENDPOINT } from '@/config';
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { cachedFetch } from '../utils/waPersistentCache';
 import { ResponsiveContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line } from 'recharts';
 
-const API_BASE = API_ENDPOINT;
+const API_BASE = API_BASE_URL;
 
 interface SummaryStats {
     enrollment: {
@@ -69,25 +70,25 @@ export default function DripAnalyticsPage() {
             // (Assuming existing endpoint or using simplified check. For now just fetching analytics)
 
             // 1. Summary
-            const resSummary = await fetch(`${API_BASE}/whatsapp/drip-campaigns/${id}/analytics/summary`, { credentials: 'include' });
+            const resSummary = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/drip-campaigns/${id}/analytics/summary`);
             if (resSummary.ok) {
                 setSummary(await resSummary.json());
             }
 
             // 2. Daily
-            const resDaily = await fetch(`${API_BASE}/whatsapp/drip-campaigns/${id}/analytics/daily`, { credentials: 'include' });
+            const resDaily = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/drip-campaigns/${id}/analytics/daily`);
             if (resDaily.ok) {
                 setDailyStats(await resDaily.json());
             }
 
             // 3. Funnel
-            const resFunnel = await fetch(`${API_BASE}/whatsapp/drip-campaigns/${id}/analytics/funnel`, { credentials: 'include' });
+            const resFunnel = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/drip-campaigns/${id}/analytics/funnel`);
             if (resFunnel.ok) {
                 setFunnel(await resFunnel.json());
             }
 
             // 4. Enrollments (first page)
-            const resEnrollments = await fetch(`${API_BASE}/whatsapp/drip-campaigns/${id}/analytics/enrollments?per_page=10`, { credentials: 'include' });
+            const resEnrollments = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/drip-campaigns/${id}/analytics/enrollments?per_page=10`);
             if (resEnrollments.ok) {
                 const data = await resEnrollments.json();
                 setEnrollments(data.enrollments);
@@ -108,7 +109,7 @@ export default function DripAnalyticsPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard/drip-analytics')}>
+                    <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard/whatsapp/drip-analytics')}>
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <div>

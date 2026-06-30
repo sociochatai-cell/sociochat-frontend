@@ -16,12 +16,14 @@ interface InteractiveComposerProps {
   headerText: string;
   bodyText: string;
   footerText: string;
+  buttonText?: string; // For list type - the button text
   buttons: InteractiveButton[];
   sections: ListSection[];
   onInteractiveTypeChange: (value: InteractiveType) => void;
   onHeaderTextChange: (value: string) => void;
   onBodyTextChange: (value: string) => void;
   onFooterTextChange: (value: string) => void;
+  onButtonTextChange?: (value: string) => void; // For list button text
   onButtonsChange: (buttons: InteractiveButton[]) => void;
   onSectionsChange: (sections: ListSection[]) => void;
 }
@@ -31,19 +33,21 @@ export default function InteractiveComposer({
   headerText,
   bodyText,
   footerText,
+  buttonText = "Options",
   buttons,
   sections,
   onInteractiveTypeChange,
   onHeaderTextChange,
   onBodyTextChange,
   onFooterTextChange,
+  onButtonTextChange,
   onButtonsChange,
   onSectionsChange,
 }: InteractiveComposerProps) {
   
   // Button handlers
   const addButton = () => {
-    if (buttons.length >= 3) return;
+    if (buttons.length >= 10) return;
     const newButton: InteractiveButton = {
       id: `btn_${Date.now()}`,
       title: '',
@@ -131,7 +135,7 @@ export default function InteractiveComposer({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="button">Reply Buttons (max 3)</SelectItem>
+              <SelectItem value="button">Reply Buttons (max 10)</SelectItem>
               <SelectItem value="list">List Menu (max 10 sections)</SelectItem>
             </SelectContent>
           </Select>
@@ -147,7 +151,7 @@ export default function InteractiveComposer({
             value={headerText}
             onChange={(e) => onHeaderTextChange(e.target.value)}
             placeholder="Header text"
-            maxLength={60}
+            maxLength={100}
           />
         </div>
 
@@ -177,7 +181,7 @@ export default function InteractiveComposer({
             value={footerText}
             onChange={(e) => onFooterTextChange(e.target.value)}
             placeholder="Footer text"
-            maxLength={60}
+            maxLength={100}
           />
         </div>
 
@@ -185,13 +189,13 @@ export default function InteractiveComposer({
         {interactiveType === 'button' && (
           <div className="space-y-3 border-t pt-4">
             <div className="flex items-center justify-between">
-              <Label>Reply Buttons ({buttons.length}/3)</Label>
+              <Label>Reply Buttons ({buttons.length}/10)</Label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={addButton}
-                disabled={buttons.length >= 3}
+                disabled={buttons.length >= 10}
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Add Button
@@ -213,13 +217,20 @@ export default function InteractiveComposer({
                       placeholder="Button ID"
                       className="w-32 font-mono text-xs"
                     />
-                    <Input
-                      value={button.title}
-                      onChange={(e) => updateButton(index, 'title', e.target.value)}
-                      placeholder="Button Title"
-                      className="flex-1"
-                      maxLength={20}
-                    />
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Button Title *</Label>
+                        <span className={`text-[10px] ${button.title.length >= 20 ? 'text-amber-600 font-bold' : 'text-muted-foreground'}`}>
+                          {button.title.length}/20
+                        </span>
+                      </div>
+                      <Input
+                        value={button.title}
+                        onChange={(e) => updateButton(index, 'title', e.target.value)}
+                        placeholder="Button Title"
+                        maxLength={20}
+                      />
+                    </div>
                     <Button
                       type="button"
                       variant="ghost"
@@ -239,6 +250,23 @@ export default function InteractiveComposer({
         {/* List Type UI */}
         {interactiveType === 'list' && (
           <div className="space-y-3 border-t pt-4">
+            {/* List Button Text */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="listButtonText">List Button Text *</Label>
+                <span className={`text-[10px] ${buttonText.length >= 20 ? 'text-amber-600 font-bold' : 'text-muted-foreground'}`}>
+                  {buttonText.length}/20
+                </span>
+              </div>
+              <Input
+                id="listButtonText"
+                value={buttonText}
+                onChange={(e) => onButtonTextChange?.(e.target.value)}
+                placeholder="E.g., 'Options', 'Choose One', 'Select'"
+                maxLength={20}
+              />
+            </div>
+
             <div className="flex items-center justify-between">
               <Label>List Sections ({sections.length}/10)</Label>
               <Button
@@ -262,13 +290,21 @@ export default function InteractiveComposer({
                 {sections.map((section, sectionIndex) => (
                   <div key={sectionIndex} className="border rounded-md p-3 space-y-3">
                     <div className="flex items-center gap-2">
-                      <Input
-                        value={section.title}
-                        onChange={(e) => updateSectionTitle(sectionIndex, e.target.value)}
-                        placeholder="Section Title"
-                        className="flex-1 font-medium"
-                        maxLength={24}
-                      />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between px-1">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Section Title</Label>
+                          <span className={`text-[10px] ${section.title?.length >= 24 ? 'text-amber-600 font-bold' : 'text-muted-foreground'}`}>
+                            {section.title?.length || 0}/24
+                          </span>
+                        </div>
+                        <Input
+                          value={section.title}
+                          onChange={(e) => updateSectionTitle(sectionIndex, e.target.value)}
+                          placeholder="Section Title"
+                          className="font-medium h-8"
+                          maxLength={24}
+                        />
+                      </div>
                       <Button
                         type="button"
                         variant="ghost"
@@ -284,21 +320,37 @@ export default function InteractiveComposer({
                     <div className="space-y-2 pl-4">
                       {section.rows.map((row, rowIndex) => (
                         <div key={rowIndex} className="flex items-start gap-2 p-2 bg-muted/30 rounded">
-                          <div className="flex-1 space-y-1">
-                            <Input
-                              value={row.title}
-                              onChange={(e) => updateRow(sectionIndex, rowIndex, 'title', e.target.value)}
-                              placeholder="Row Title"
-                              className="text-sm"
-                              maxLength={24}
-                            />
-                            <Input
-                              value={row.description || ''}
-                              onChange={(e) => updateRow(sectionIndex, rowIndex, 'description', e.target.value)}
-                              placeholder="Description (optional)"
-                              className="text-xs"
-                              maxLength={72}
-                            />
+                          <div className="flex-1 space-y-2">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between px-1">
+                                <Label className="text-[10px] font-semibold text-muted-foreground">Row Title *</Label>
+                                <span className={`text-[9px] ${row.title.length >= 24 ? 'text-amber-600 font-bold' : 'text-muted-foreground'}`}>
+                                  {row.title.length}/24
+                                </span>
+                              </div>
+                              <Input
+                                value={row.title}
+                                onChange={(e) => updateRow(sectionIndex, rowIndex, 'title', e.target.value)}
+                                placeholder="Row Title"
+                                className="text-sm h-8"
+                                maxLength={24}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between px-1">
+                                <Label className="text-[10px] font-semibold text-muted-foreground">Description (optional)</Label>
+                                <span className={`text-[9px] ${(row.description || '').length >= 72 ? 'text-amber-600 font-bold' : 'text-muted-foreground'}`}>
+                                  {(row.description || '').length}/72
+                                </span>
+                              </div>
+                              <Input
+                                value={row.description || ''}
+                                onChange={(e) => updateRow(sectionIndex, rowIndex, 'description', e.target.value)}
+                                placeholder="Description (optional)"
+                                className="text-xs h-7"
+                                maxLength={72}
+                              />
+                            </div>
                           </div>
                           <Button
                             type="button"

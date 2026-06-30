@@ -17,6 +17,12 @@
 import { Conversation, ConversationMessage } from '../types';
 import { getConversations, getConversationMessages } from '../api';
 import { isSseHealthy } from '../hooks/useWhatsAppRealtime';
+import { getWorkspaceId } from '../utils/workspaceContext';
+import { readCache, writeCache, clearWhatsAppCache } from '../utils/waPersistentCache';
+
+// How many conversations to persist for the instant-reopen snapshot.
+const SNAPSHOT_LIMIT = 50;
+const snapshotKey = (wsId: string) => `inbox_snapshot_${wsId}`;
 
 // ============================================================
 // Types
@@ -75,6 +81,85 @@ const store: InboxStore = {
 
 // Throttle interval (minimum time between API fetches)
 const FETCH_THROTTLE_MS = 30000; // 30 seconds
+
+let conversationLoadPromise: Promise<void> | null = null;
+let conversationLoadWorkspace: string | null = null;
+
+const messageLoadPromises = new Map<number, Promise<ConversationMessage[]>>();
+
+// ============================================================
+// Persistent snapshot (instant reopen)
+// ============================================================
+
+interface InboxSnapshot {
+  order: number[];
+  convs: Conversation[];
+}
+
+/**
+ * Populate the store from the persisted snapshot so the inbox list paints
+ * immediately on a fresh reload, before the network round-trip completes.
+ * Returns true if anything was hydrated.
+ */
+function hydrateConversationsFromCache(wsId: string): boolean {
+  if (!wsId) return false;
+  const snap = readCache<InboxSnapshot>(snapshotKey(wsId));
+  if (!snap?.data?.convs?.length) return false;
+
+  snap.data.convs.forEach((c) => store.conversations.set(c.id, c));
+  store.conversationOrder = snap.data.order.filter((id) => store.conversations.has(id));
+  conversationListCache = null;
+  notifyConversationSubscribers();
+  console.log('⚡ [InboxStore] Hydrated', snap.data.convs.length, 'conversations from cache');
+  return true;
+}
+
+/** Persist a capped snapshot of the current conversation list for instant reopen. */
+function persistConversationSnapshot(wsId: string | null | undefined): void {
+  if (!wsId) return;
+  const order = store.conversationOrder.slice(0, SNAPSHOT_LIMIT);
+  const convs = order
+    .map((id) => store.conversations.get(id))
+    .filter((c): c is Conversation => c !== undefined);
+  if (convs.length === 0) return;
+  writeCache<InboxSnapshot>(snapshotKey(wsId), { order, convs });
+}
+
+const filterReloadListeners = new Set<() => void>();
+
+export function subscribeInboxFilterReload(callback: () => void): () => void {
+  filterReloadListeners.add(callback);
+  return () => filterReloadListeners.delete(callback);
+}
+
+function notifyInboxFilterReload(): void {
+  filterReloadListeners.forEach((cb) => cb());
+}
+
+export function requestInboxFilterReload(): void {
+  notifyInboxFilterReload();
+}
+
+/** Clears human escalation flags in the local inbox store (after agent reply). */
+export const HUMAN_ESCALATION_CLEAR_PATCH: Partial<Conversation> = {
+  human_required: false,
+  human_required_reason: null,
+  human_required_at: null,
+  needs_attention: false,
+  needs_attention_reason: null,
+  needs_attention_at: null,
+};
+
+export function clearHumanEscalationLocally(
+  conversationId: number,
+  extra?: Partial<Conversation>,
+): void {
+  updateConversationLocally(conversationId, {
+    ...HUMAN_ESCALATION_CLEAR_PATCH,
+    ...extra,
+  });
+  requestInboxFilterReload();
+}
 
 // ============================================================
 // Subscription Methods
@@ -164,15 +249,16 @@ export function hasMoreMessagesFor(conversationId: number): boolean {
  * Load conversations - Initial load
  */
 export async function loadConversationList(workspaceId?: string): Promise<void> {
-  // Get workspace_id if not provided
-  const wsId = workspaceId || localStorage.getItem('sv_whatsapp_workspace_id') || sessionStorage.getItem('sv_whatsapp_workspace_id') || null;
+  const wsId = workspaceId || getWorkspaceId();
 
-  // If already loaded for the SAME workspace, skip
   if (store.isInitialLoadDone && store.workspaceId === wsId) {
     return;
   }
 
-  // If workspace changed, clear and reload
+  if (conversationLoadPromise && conversationLoadWorkspace === wsId) {
+    return conversationLoadPromise;
+  }
+
   if (store.isInitialLoadDone && store.workspaceId !== wsId) {
     console.log('🔄 [InboxStore] Workspace changed from', store.workspaceId, 'to', wsId, '- clearing and reloading');
     store.conversations.clear();
@@ -181,49 +267,80 @@ export async function loadConversationList(workspaceId?: string): Promise<void> 
     store.messagesFullyLoaded.clear();
     store.conversationOffset = 0;
     store.hasMoreConversations = true;
+    store.isInitialLoadDone = false;
     conversationListCache = null;
   }
 
-  // Prevent concurrent loads
-  if (store.isLoadingConversations) return;
+  conversationLoadWorkspace = wsId || null;
 
-  // Only show loading on very first load
-  if (!store.isInitialLoadDone) {
-    store.isLoadingConversations = true;
-    notifyConversationSubscribers();
+  // Instant paint from persisted snapshot (survives a full page reload).
+  if (!store.isInitialLoadDone && store.conversations.size === 0) {
+    hydrateConversationsFromCache(wsId || '');
   }
 
-  console.log('🔄 [InboxStore] Loading initial conversations for workspace:', wsId);
+  conversationLoadPromise = (async () => {
+    if (!store.isInitialLoadDone) {
+      // Only show the blocking loading state when we have nothing cached to paint.
+      store.isLoadingConversations = store.conversations.size === 0;
+      notifyConversationSubscribers();
+    }
+
+    console.log('🔄 [InboxStore] Loading initial conversations for workspace:', wsId);
+
+    try {
+      const limit = 50;
+      const isWorkspaceChange =
+        store.isInitialLoadDone && store.workspaceId !== wsId;
+      const isFirstLoad = !store.isInitialLoadDone;
+
+      const result = await getConversations(
+        limit,
+        0,
+        undefined,
+        undefined,
+        wsId || undefined,
+        false,
+      );
+
+      if (isFirstLoad || isWorkspaceChange) {
+        store.conversations.clear();
+        store.conversationOrder = [];
+      }
+      conversationListCache = null;
+
+      result.conversations.forEach(conv => {
+        store.conversations.set(conv.id, conv);
+        if (!store.conversationOrder.includes(conv.id)) {
+          store.conversationOrder.push(conv.id);
+        }
+      });
+
+      store.workspaceId = wsId;
+      store.isInitialLoadDone = true;
+      store.lastFetchTime = Date.now();
+
+      store.conversationOffset = result.conversations.length;
+      store.hasMoreConversations = result.conversations.length === limit;
+
+      persistConversationSnapshot(wsId);
+
+      console.log('✅ [InboxStore] Loaded', result.conversations.length, 'conversations, hasMore:', store.hasMoreConversations);
+
+    } catch (err) {
+      console.error('❌ [InboxStore] Failed to load conversations:', err);
+    } finally {
+      store.isLoadingConversations = false;
+      notifyConversationSubscribers();
+    }
+  })();
 
   try {
-    const limit = 50;
-    const result = await getConversations(limit, 0, undefined, undefined, wsId || undefined);
-
-    // Clear and rebuild store
-    store.conversations.clear();
-    store.conversationOrder = [];
-    conversationListCache = null;
-
-    result.conversations.forEach(conv => {
-      store.conversations.set(conv.id, conv);
-      store.conversationOrder.push(conv.id);
-    });
-
-    store.workspaceId = wsId;
-    store.isInitialLoadDone = true;
-    store.lastFetchTime = Date.now();
-
-    // Pagination updates
-    store.conversationOffset = result.conversations.length;
-    store.hasMoreConversations = result.conversations.length === limit;
-
-    console.log('✅ [InboxStore] Loaded', result.conversations.length, 'conversations, hasMore:', store.hasMoreConversations);
-
-  } catch (err) {
-    console.error('❌ [InboxStore] Failed to load conversations:', err);
+    await conversationLoadPromise;
   } finally {
-    store.isLoadingConversations = false;
-    notifyConversationSubscribers();
+    if (conversationLoadWorkspace === wsId) {
+      conversationLoadPromise = null;
+      conversationLoadWorkspace = null;
+    }
   }
 }
 
@@ -239,7 +356,15 @@ export async function loadMoreConversations(): Promise<void> {
   try {
     const limit = 50;
     // Use offset from store
-    const result = await getConversations(limit, store.conversationOffset, undefined, undefined, store.workspaceId);
+    const result = await getConversations(
+      limit,
+      store.conversationOffset,
+      undefined,
+      undefined,
+      store.workspaceId,
+      false,
+      'all',
+    );
 
     if (result.conversations.length > 0) {
       result.conversations.forEach(conv => {
@@ -271,80 +396,70 @@ export async function loadMoreConversations(): Promise<void> {
  * Load messages for a conversation (Initial)
  */
 export async function loadMessagesFor(conversationId: number): Promise<ConversationMessage[]> {
-  // Return cached if FULLY loaded from API (not just SSE messages)
   if (store.messagesFullyLoaded.has(conversationId)) {
     return store.messages.get(conversationId) || [];
   }
 
-  // Skip for new conversations (id: 0)
   if (!conversationId || conversationId === 0) return [];
 
-  // Prevent concurrent loads for same conversation
-  if (store.loadingMessageIds.has(conversationId)) {
-    return store.messages.get(conversationId) || [];
+  const inFlight = messageLoadPromises.get(conversationId);
+  if (inFlight) {
+    return inFlight;
   }
 
-  store.loadingMessageIds.add(conversationId);
-  notifyMessageSubscribers(conversationId);
+  const promise = (async (): Promise<ConversationMessage[]> => {
+    store.loadingMessageIds.add(conversationId);
+    notifyMessageSubscribers(conversationId);
 
-  console.log('🔄 [InboxStore] Loading messages for conversation:', conversationId);
+    console.log('🔄 [InboxStore] Loading messages for conversation:', conversationId);
 
-  try {
-    const limit = 50;
-    const messages = await getConversationMessages(conversationId, limit); // Default is latest
+    try {
+      const limit = 50;
+      const messages = await getConversationMessages(conversationId, limit);
 
-    // Get any SSE messages that arrived before/during API load
-    const existingMessages = store.messages.get(conversationId) || [];
+      const existingMessages = store.messages.get(conversationId) || [];
 
-    // Merge: API messages + any new SSE messages not in API response
-    const apiMessageIds = new Set(messages.map(m => m.id));
-    const apiMessageWamids = new Set(messages.filter(m => m.wamid).map(m => m.wamid));
-    const newSseMessages = existingMessages.filter(m =>
-      !apiMessageIds.has(m.id) &&
-      !(m.wamid && apiMessageWamids.has(m.wamid))
-    );
+      const apiMessageIds = new Set(messages.map(m => m.id));
+      const apiMessageWamids = new Set(messages.filter(m => m.wamid).map(m => m.wamid));
+      const newSseMessages = existingMessages.filter(m =>
+        !apiMessageIds.has(m.id) &&
+        !(m.wamid && apiMessageWamids.has(m.wamid))
+      );
 
-    // Combine and sort by timestamp
-    const allMessages = [...messages, ...newSseMessages].sort((a, b) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
+      const allMessages = [...messages, ...newSseMessages].sort((a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
 
-    store.messages.set(conversationId, allMessages);
-    store.messagesFullyLoaded.add(conversationId); // Initial load done
+      store.messages.set(conversationId, allMessages);
+      store.messagesFullyLoaded.add(conversationId);
 
-    // Pagination tracking
-    if (messages.length > 0) {
-      // Assuming messages are returned oldest to newest by default API, OR newest first?
-      // Actually typical chat API returns newest first (desc). 
-      // If our API returns DESC, then the LAST item is the OLDEST.
-      // If ASC, FIRST is OLDEST.
-      // Assuming backend returns newest first for page 1, but let's check sorting.
-      // The API sorts messages usually by created_at DESC for limit.
-      // So the LAST message in the array is the oldest one fetched.
-      // Or if sorted ASC locally, the FIRST message in `messages` array is the oldest.
-
-      // Use the oldest *numeric* ID for pagination
-      // (String IDs might be temporary/SSE and not valid for backend cursors)
-      const oldest = allMessages.find(m => typeof m.id === 'number');
-      if (oldest) {
-        store.oldestMessageId.set(conversationId, oldest.id as number);
+      if (messages.length > 0) {
+        const oldest = allMessages.find(m => typeof m.id === 'number');
+        if (oldest) {
+          store.oldestMessageId.set(conversationId, oldest.id as number);
+        }
+        store.hasMoreMessages.set(conversationId, messages.length === limit);
+      } else {
+        store.hasMoreMessages.set(conversationId, false);
       }
 
-      // If we got fewer than limit, we reached the end
-      store.hasMoreMessages.set(conversationId, messages.length === limit);
-    } else {
-      store.hasMoreMessages.set(conversationId, false);
+      console.log('✅ [InboxStore] Loaded', messages.length, 'messages. hasMore:', store.hasMoreMessages.get(conversationId));
+      return allMessages;
+
+    } catch (err) {
+      console.error('❌ [InboxStore] Failed to load messages:', err);
+      return store.messages.get(conversationId) || [];
+    } finally {
+      store.loadingMessageIds.delete(conversationId);
+      notifyMessageSubscribers(conversationId);
     }
+  })();
 
-    console.log('✅ [InboxStore] Loaded', messages.length, 'messages. hasMore:', store.hasMoreMessages.get(conversationId));
-    return allMessages;
-
-  } catch (err) {
-    console.error('❌ [InboxStore] Failed to load messages:', err);
-    return store.messages.get(conversationId) || [];
+  messageLoadPromises.set(conversationId, promise);
+  try {
+    return await promise;
   } finally {
-    store.loadingMessageIds.delete(conversationId);
-    notifyMessageSubscribers(conversationId);
+    messageLoadPromises.delete(conversationId);
   }
 }
 
@@ -414,9 +529,55 @@ export async function refreshConversations(): Promise<void> {
     return;
   }
 
-  // Force reload by temporarily clearing the flag
-  store.isInitialLoadDone = false;
-  await loadConversationList(store.workspaceId || undefined);
+  const wsId = store.workspaceId || getWorkspaceId() || undefined;
+  if (!wsId) return;
+
+  try {
+    const result = await getConversations(50, 0, undefined, undefined, wsId, false, 'all');
+    for (const conv of result.conversations) {
+      store.conversations.set(conv.id, conv);
+      if (!store.conversationOrder.includes(conv.id)) {
+        store.conversationOrder.unshift(conv.id);
+      }
+    }
+    store.lastFetchTime = Date.now();
+    conversationListCache = null;
+    persistConversationSnapshot(wsId);
+    notifyConversationSubscribers();
+  } catch (err) {
+    console.error('❌ [InboxStore] refreshConversations failed:', err);
+  }
+}
+
+export async function loadConversationsByCategoryFromDatabase(
+  category: 'all' | 'unread' | 'active' | 'expired' | 'needs_reply' | 'human_required' | 'opted_out',
+  workspaceId?: string,
+  search?: string
+): Promise<{ rows: Conversation[]; total: number }> {
+  const wsId = workspaceId || store.workspaceId || getWorkspaceId() || undefined;
+  if (!wsId) return { rows: [], total: 0 };
+
+  const result = await getConversations(50, 0, undefined, undefined, wsId, false, category, search, true);
+  const rows = result.conversations || [];
+
+  for (const conv of rows) {
+    store.conversations.set(conv.id, conv);
+    if (!store.conversationOrder.includes(conv.id)) {
+      store.conversationOrder.push(conv.id);
+    }
+  }
+
+  store.conversationOrder.sort((a, b) => {
+    const aConv = store.conversations.get(a);
+    const bConv = store.conversations.get(b);
+    const aTime = aConv?.last_message_at ? new Date(aConv.last_message_at).getTime() : 0;
+    const bTime = bConv?.last_message_at ? new Date(bConv.last_message_at).getTime() : 0;
+    return bTime - aTime;
+  });
+
+  conversationListCache = null;
+  notifyConversationSubscribers();
+  return { rows, total: Number(result.total_count || rows.length || 0) };
 }
 
 // ============================================================
@@ -430,13 +591,14 @@ export function updateConversationLocally(conversationId: number, updates: Parti
   console.log('🔄 [InboxStore] updateConversationLocally:', { conversationId, updates });
 
   const existing = store.conversations.get(conversationId);
-  if (!existing) {
-    console.warn('⚠️ [InboxStore] Conversation not found for update:', conversationId);
-    return;
-  }
 
-  const updated = { ...existing, ...updates };
+  const updated = existing
+    ? { ...existing, ...updates }
+    : ({ id: conversationId, ...updates } as Conversation);
   store.conversations.set(conversationId, updated);
+  if (!store.conversationOrder.includes(conversationId)) {
+    store.conversationOrder.unshift(conversationId);
+  }
 
   // Move to top if there's a new message
   if (updates.last_message_at) {
@@ -450,6 +612,10 @@ export function updateConversationLocally(conversationId: number, updates: Parti
   conversationListCache = null;
   console.log('🔔 [InboxStore] Notifying', store.conversationSubscribers.size, 'subscribers');
   notifyConversationSubscribers();
+
+  if (updates.human_required === true || updates.human_required === false) {
+    notifyInboxFilterReload();
+  }
 }
 
 /**
@@ -502,14 +668,23 @@ export function addMessageLocally(conversationId: number, message: ConversationM
 export function updateMessageStatusLocally(
   conversationId: number,
   messageId: string | number,
-  status: ConversationMessage['status']
+  status: ConversationMessage['status'],
+  errorDetails?: Pick<ConversationMessage, 'error_code' | 'error_message'>
 ): void {
   const messages = store.messages.get(conversationId);
   if (!messages) return;
 
-  const updated = messages.map(msg =>
-    (msg.id === messageId || msg.wamid === messageId) ? { ...msg, status } : msg
-  );
+  const updated = messages.map(msg => {
+    if (msg.id === messageId || msg.wamid === messageId) {
+      return {
+        ...msg,
+        status,
+        error_code: errorDetails?.error_code ?? msg.error_code,
+        error_message: errorDetails?.error_message ?? msg.error_message,
+      };
+    }
+    return msg;
+  });
 
   store.messages.set(conversationId, updated);
   notifyMessageSubscribers(conversationId);
@@ -555,6 +730,10 @@ export function removeConversation(conversationId: number): void {
 export function clearInboxStore(): void {
   console.log('🧹 [InboxStore] Clearing all cached data');
 
+  // Drop the entire persisted WhatsApp cache on account/workspace switch so one
+  // account's data (conversations, templates, flows, catalog, …) never bleeds into another.
+  clearWhatsAppCache();
+
   store.conversations.clear();
   store.conversationOrder = [];
   store.messages.clear();
@@ -598,14 +777,20 @@ export function startPolling(activeConversationId: number | null, intervalMs = 5
   const tick = async () => {
     if (!store.isInitialLoadDone || !store.workspaceId) return;
 
-    // NOTE: We intentionally do NOT skip polling even when SSE appears healthy.
-    // Dev tunnels and reverse proxies often buffer SSE streams, causing status
-    // updates (delivered/read) to never reach the client. Polling is cheap and
-    // ensures the UI stays in sync.
+    // Skip polling when SSE is delivering events (saves API calls in production)
+    if (isSseHealthy()) return;
 
     try {
       // ── 1. Poll conversations ──
-      const { conversations: fresh } = await getConversations(50, 0, undefined, undefined, store.workspaceId);
+      const { conversations: fresh } = await getConversations(
+        50,
+        0,
+        undefined,
+        undefined,
+        store.workspaceId,
+        false,
+        'all',
+      );
 
       let conversationsChanged = false;
 
@@ -645,7 +830,7 @@ export function startPolling(activeConversationId: number | null, intervalMs = 5
 
       // ── 2. Poll messages for active conversation ──
       const activeId = _pollingActiveConvId;
-      if (activeId && activeId > 0) {
+      if (activeId && activeId > 0 && !store.loadingMessageIds.has(activeId)) {
         const freshMsgs = await getConversationMessages(activeId, 50);
         const currentMsgs = store.messages.get(activeId) || [];
 
@@ -666,13 +851,13 @@ export function startPolling(activeConversationId: number | null, intervalMs = 5
           notifyMessageSubscribers(activeId);
         }
 
-        // Also update statuses for existing messages
+        // Also update statuses for existing messages (match by id OR wamid)
         for (const fm of freshMsgs) {
-          if (fm.wamid && knownWamids.has(fm.wamid)) {
-            const existing = currentMsgs.find(m => m.wamid === fm.wamid);
-            if (existing && existing.status !== fm.status) {
-              updateMessageStatusLocally(activeId, fm.wamid, fm.status);
-            }
+          const existing = currentMsgs.find(m =>
+            m.id === fm.id || (m.wamid && fm.wamid && m.wamid === fm.wamid)
+          );
+          if (existing && existing.status !== fm.status) {
+            updateMessageStatusLocally(activeId, fm.wamid || fm.id, fm.status);
           }
         }
       }

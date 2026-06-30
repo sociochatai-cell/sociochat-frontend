@@ -4,11 +4,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FileText, User, Clock, ExternalLink, RefreshCw, Download } from 'lucide-react';
-import { API_BASE_URL } from '@/config';
+import { WHATSAPP_REST_API_PREFIX } from '@/config';
 import { cachedFetch } from '../../utils/waPersistentCache';
 import { cn } from '@/lib/utils';
-
-const API_PREFIX = `${API_BASE_URL}/api/whatsapp`;
 
 interface Submission {
   id: number;
@@ -32,10 +30,10 @@ export function SubmissionsTab({ accountId }: { accountId: string | null }) {
     if (!accountId) return;
     setLoading(true);
     try {
-      const r = await cachedFetch(`${API_PREFIX}/flows/submissions?account_id=${accountId}&page=${page}&per_page=20`);
+      const r = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/flows/submissions?account_id=${accountId}&page=${page}&per_page=20`);
       const j = await r.json();
       if (j.success) { setSubs(j.submissions || []); setTotal(j.total || 0); }
-    } catch { /* ignore */ } finally { setLoading(false); }
+    } catch { } finally { setLoading(false); }
   }, [accountId, page]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
@@ -76,6 +74,7 @@ export function SubmissionsTab({ accountId }: { accountId: string | null }) {
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-3.5 h-3.5 mr-1" />Export</Button>
         </div>
       </div>
+      {/* KPI row */}
       <div className="grid grid-cols-3 gap-3">
         {[{ l: 'Total', v: total, c: 'from-blue-500/10' }, { l: 'Received', v: subs.filter(s => s.status === 'received').length, c: 'from-amber-500/10' }, { l: 'Confirmed', v: subs.filter(s => s.status === 'confirmed').length, c: 'from-green-500/10' }].map(({ l, v, c }) => (
           <Card key={l} className={cn("bg-gradient-to-br", c, "to-transparent")}><CardContent className="p-3">
@@ -83,6 +82,7 @@ export function SubmissionsTab({ accountId }: { accountId: string | null }) {
           </CardContent></Card>
         ))}
       </div>
+      {/* Table */}
       <Card><CardContent className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -91,12 +91,12 @@ export function SubmissionsTab({ accountId }: { accountId: string | null }) {
             </tr></thead>
             <tbody>
               {subs.map(s => (
-                <tr key={s.id} className="border-b hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => s.conversation_id && navigate(`/dashboard/inbox?conversation=${s.conversation_id}`)}>
+                <tr key={s.id} className="border-b hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => s.conversation_id && navigate(`/dashboard/whatsapp/inbox?conversation=${s.conversation_id}`)}>
                   <td className="py-2.5 px-3"><div className="flex items-center gap-2"><div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center"><User className="w-3.5 h-3.5 text-primary" /></div><span className="font-mono text-xs">{s.wa_id || '—'}</span></div></td>
                   <td className="py-2.5 px-3"><Badge variant="outline" className={cn("text-xs", sc(s.status))}>{s.status}</Badge></td>
                   <td className="py-2.5 px-3 text-muted-foreground"><div className="flex items-center gap-1"><Clock className="w-3 h-3" />{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : '—'}</div></td>
                   <td className="py-2.5 px-3"><div className="max-w-[200px] truncate text-xs text-muted-foreground">{s.response_json ? Object.entries(s.response_json).slice(0, 2).map(([k, v]) => `${k}: ${v}`).join(' · ') : '—'}</div></td>
-                  <td className="py-2.5 px-3">{s.conversation_id ? <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={e => { e.stopPropagation(); navigate(`/dashboard/inbox?conversation=${s.conversation_id}`); }}><ExternalLink className="w-3 h-3" />Open</Button> : <span className="text-xs text-muted-foreground">—</span>}</td>
+                  <td className="py-2.5 px-3">{s.conversation_id ? <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={e => { e.stopPropagation(); navigate(`/dashboard/whatsapp/inbox?conversation=${s.conversation_id}`); }}><ExternalLink className="w-3 h-3" />Open</Button> : <span className="text-xs text-muted-foreground">—</span>}</td>
                 </tr>
               ))}
             </tbody>

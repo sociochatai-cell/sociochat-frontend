@@ -51,7 +51,12 @@ const toMetaSafeScreenId = (source: string, fallbackLabel: string): string => {
 };
 
 export const generateScreenId = (title: string): string => {
-  return toMetaSafeScreenId(title, 'SCREEN').slice(0, 20);
+  // Convert title to uppercase snake_case, max 20 chars
+  return title
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 20) || `SCREEN_${generateId().slice(0, 8)}`;
 };
 
 // =============================================================================
@@ -69,7 +74,7 @@ export const getFieldIcon = (type: FieldType): string => {
     radio: '🔘',
     checkbox: '☑️',
     date: '📅',
-    time: '⏰'
+    time: '🕐'
   };
   return icons[type] || '📝';
 };
@@ -85,10 +90,20 @@ export const getFieldLabel = (type: FieldType): string => {
     radio: 'Single Choice',
     checkbox: 'Multiple Choice',
     date: 'Date',
-    time: 'Time'
+    time: 'Time Slot'
   };
   return labels[type] || 'Text';
 };
+
+// Default time slots for appointment booking (1-hour intervals, full day)
+// Meta Dropdown supports max 20 data-source options
+const DEFAULT_TIME_SLOTS = [
+  '6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM',
+  '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM',
+  '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM',
+  '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM',
+  '10:00 PM', '11:00 PM', '12:00 AM'
+];
 
 export const createDefaultField = (type: FieldType): Field => {
   const baseField: Field = {
@@ -101,6 +116,12 @@ export const createDefaultField = (type: FieldType): Field => {
   // Add default options for selection types
   if (type === 'dropdown' || type === 'radio' || type === 'checkbox') {
     baseField.options = ['Option 1', 'Option 2', 'Option 3'];
+  }
+
+  // Add default time slots for time type
+  if (type === 'time') {
+    baseField.options = [...DEFAULT_TIME_SLOTS];
+    baseField.label = 'Preferred Time Slot';
   }
 
   return baseField;
@@ -125,10 +146,18 @@ export const createDefaultStep = (isFirst: boolean = false, isFinal: boolean = f
 };
 
 // =============================================================================
-// VISUAL → META JSON TRANSFORM
+// FIELD NAME SANITIZATION (Meta requires letters + underscores only)
 // =============================================================================
 
+/**
+ * Convert a visual-builder field ID into a Meta-safe component `name`.
+ * Meta Flow JSON component names must:
+ *   - Start with a letter or underscore
+ *   - Contain only letters (a-z, A-Z), digits removed, underscores
+ *   - Not be empty
+ */
 const toMetaSafeFieldName = (fieldId: string, fieldLabel: string, index: number): string => {
+  // Try deriving from the label first (more readable)
   const fromLabel = (fieldLabel || '')
     .toLowerCase()
     .replace(/[^a-z_]+/g, '_')
@@ -139,6 +168,7 @@ const toMetaSafeFieldName = (fieldId: string, fieldLabel: string, index: number)
     return fromLabel;
   }
 
+  // Fallback: sanitize the ID by stripping numbers and special chars
   const fromId = (fieldId || '')
     .toLowerCase()
     .replace(/[^a-z_]+/g, '_')
@@ -149,15 +179,82 @@ const toMetaSafeFieldName = (fieldId: string, fieldLabel: string, index: number)
     return fromId;
   }
 
+  // Ultimate fallback: positional name
   return `field_${String.fromCharCode(97 + (index % 26))}`;
 };
 
-export interface MetaFlowExport {
-  flowJson: MetaFlowJSON;
-  entryScreenId: string;
-}
+// =============================================================================
+// VISUAL → META JSON TRANSFORM
+// =============================================================================
 
-export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
+/**
+ * Map field types to Meta Flow JSON data schema types.
+ * Meta-confirmed behavior:
+ *   TextInput(text/email/phone) → string
+ *   TextInput(number)           → number  (Meta validates this!)
+ *   TextArea                    → string
+ *   Dropdown / RadioButtonsGroup→ string  (selected option ID)
+ *   CheckboxGroup               → array   (selected option IDs)
+ *   DatePicker                  → string  (YYYY-MM-DD)
+ */
+const getMetaDataType = (field: Field): string => {
+  if (field.type === 'number') return 'number';
+  if (field.type === 'checkbox') return 'array';
+  return 'string';
+};
+
+const buildDataSchema = (fields: Field[], fieldNameMap: Map<string, string>): MetaScreen['data'] => {
+  const schema: MetaScreen['data'] = {};
+  fields.forEach(field => {
+    if (!field.id) return;
+    const metaName = fieldNameMap.get(field.id) || field.id;
+    const dataType = getMetaDataType(field);
+
+    if (dataType === 'array') {
+      schema[metaName] = {
+        type: 'array',
+        items: { type: 'string' },
+        __example__: [] as any
+      };
+    } else if (dataType === 'number') {
+      schema[metaName] = {
+        type: 'number',
+        __example__: 0 as any
+      };
+    } else {
+      schema[metaName] = {
+        type: 'string',
+        __example__: field.label || metaName
+      };
+    }
+  });
+  return schema;
+};
+
+const buildActionPayload = (
+  priorFields: Field[],
+  currentFields: Field[],
+  fieldNameMap: Map<string, string>
+): Record<string, string> => {
+  const payload: Record<string, string> = {};
+
+  priorFields.forEach(field => {
+    if (!field.id) return;
+    const metaName = fieldNameMap.get(field.id) || field.id;
+    payload[metaName] = '${data.' + metaName + '}';
+  });
+
+  currentFields.forEach(field => {
+    if (!field.id) return;
+    const metaName = fieldNameMap.get(field.id) || field.id;
+    payload[metaName] = '${form.' + metaName + '}';
+  });
+
+  return payload;
+};
+
+export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowJSON => {
+  // Map visual step IDs to Meta-safe screen IDs so Meta validation always passes.
   const stepIdToScreenId: Record<string, string> = {};
   const usedScreenIds = new Set<string>();
   const baseCounts: Record<string, number> = {};
@@ -175,6 +272,7 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
     stepIdToScreenId[step.id] = next;
   });
 
+  // Build a global map from visual field ID → Meta-safe field name
   const fieldNameMap = new Map<string, string>();
   const usedFieldNames = new Set<string>();
   let fieldCounter = 0;
@@ -183,9 +281,10 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
     step.fields.forEach(field => {
       if (!field.id || fieldNameMap.has(field.id)) return;
       let metaName = toMetaSafeFieldName(field.id, field.label, fieldCounter);
+      // Ensure uniqueness
       while (usedFieldNames.has(metaName)) {
         fieldCounter++;
-        metaName = `${toMetaSafeFieldName(field.id, field.label, fieldCounter)}_${String.fromCharCode(97 + (fieldCounter % 26))}`;
+        metaName = toMetaSafeFieldName(field.id, field.label, fieldCounter) + '_' + String.fromCharCode(97 + (fieldCounter % 26));
       }
       usedFieldNames.add(metaName);
       fieldNameMap.set(field.id, metaName);
@@ -193,21 +292,29 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
     });
   });
 
-  // Fields collected on PRIOR screens. WhatsApp Flows only expose a field via
-  // ${form.X} on the screen that owns it, so to deliver every answer to the
-  // final `complete` we must thread data forward: each screen declares prior
-  // fields in its `data` schema and re-forwards them (plus its own) in the
-  // Footer action payload.
-  const carriedFields: string[] = [];
+  const fieldsBeforeStep: Field[][] = [];
+  const seenFields: Field[] = [];
+
+  state.steps.forEach(step => {
+    fieldsBeforeStep.push([...seenFields]);
+    step.fields.forEach(field => {
+      if (field.id && !seenFields.some(existing => existing.id === field.id)) {
+        seenFields.push(field);
+      }
+    });
+  });
 
   const screens: MetaScreen[] = state.steps.map((step, index) => {
     const children: MetaComponent[] = [];
+    const priorFields = fieldsBeforeStep[index] || [];
 
+    // Add title as TextHeading
     children.push({
       type: 'TextHeading',
       text: step.title
     });
 
+    // Add message as TextBody (if exists)
     if (step.message && step.message.trim()) {
       children.push({
         type: 'TextBody',
@@ -215,21 +322,14 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
       });
     }
 
-    const ownFields: string[] = [];
+    // Convert fields to Meta components (with sanitized names)
     step.fields.forEach(field => {
       children.push(fieldToMetaComponent(field, fieldNameMap));
-      const metaName = fieldNameMap.get(field.id);
-      if (metaName) ownFields.push(metaName);
     });
 
-    // Forward everything collected so far: prior-screen fields via ${data.X}
-    // (declared in this screen's `data`), this screen's fields via ${form.X}.
-    const payload: Record<string, string> = {};
-    carriedFields.forEach(name => { payload[name] = `\${data.${name}}`; });
-    ownFields.forEach(name => { payload[name] = `\${form.${name}}`; });
-
+    // Add Footer (button) for non-terminal screens
     if (!step.isFinal) {
-      const nextStep = step.button.goesToStepId
+      const nextStep = step.button.goesToStepId 
         ? state.steps.find(s => s.id === step.button.goesToStepId)
         : state.steps[index + 1];
 
@@ -244,7 +344,7 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
               || (state.steps[index + 1]?.id && stepIdToScreenId[state.steps[index + 1].id])
               || 'COMPLETE'
           },
-          payload
+          payload: buildActionPayload(priorFields, step.fields, fieldNameMap)
         }
       });
     } else {
@@ -253,34 +353,27 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
         label: step.button.label || 'Done',
         'on-click-action': {
           name: 'complete',
-          payload
+          payload: buildActionPayload(priorFields, step.fields, fieldNameMap)
         }
       });
     }
 
-    // Prior fields must be declared as this screen's input data so ${data.X}
-    // resolves. The entry screen has none.
-    const dataSchema: Record<string, { type: string; __example__?: string }> = {};
-    carriedFields.forEach(name => { dataSchema[name] = { type: 'string', __example__: 'example' }; });
+    const data = buildDataSchema(priorFields, fieldNameMap);
 
-    const screen: MetaScreen = {
+    return {
       id: stepIdToScreenId[step.id] || 'SCREEN',
       title: step.title,
       ...(step.isFinal && { terminal: true }),
       ...(step.isFinal && { success: true }),
-      ...(carriedFields.length > 0 && { data: dataSchema }),
+      ...(Object.keys(data).length > 0 && { data }),
       layout: {
         type: 'SingleColumnLayout',
         children
       }
     };
-
-    // This screen's fields become available to all subsequent screens.
-    carriedFields.push(...ownFields);
-
-    return screen;
   });
 
+  // Auto-generate routing model
   const routing_model: Record<string, string[]> = {};
   state.steps.forEach((step, index) => {
     const currentScreenId = stepIdToScreenId[step.id] || toMetaSafeScreenId(step.id, step.title || `STEP_${index + 1}`);
@@ -292,17 +385,11 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
     }
   });
 
-  const entryScreenId = state.steps[0]?.id
-    ? (stepIdToScreenId[state.steps[0].id] || 'WELCOME')
-    : 'WELCOME';
-
+  // Static flows: do NOT include data_api_version (triggers endpoint requirement)
   return {
-    flowJson: {
-      version: '7.3',
-      screens,
-      routing_model
-    },
-    entryScreenId
+    version: '7.3',
+    screens,
+    routing_model
   };
 };
 
@@ -314,6 +401,7 @@ const fieldToMetaComponent = (field: Field, fieldNameMap: Map<string, string>): 
     required: field.required
   };
 
+  // Helper: generate data-source IDs that are Meta-safe (letters + underscores only)
   const safeDataSource = (options: string[] | undefined) =>
     (options || []).map((opt, i) => ({
       id: `opt_${String.fromCharCode(97 + (i % 26))}${i >= 26 ? String.fromCharCode(97 + Math.floor(i / 26)) : ''}`,
@@ -352,47 +440,16 @@ const fieldToMetaComponent = (field: Field, fieldNameMap: Map<string, string>): 
     case 'date':
       return { type: 'DatePicker', ...baseProps };
     case 'time':
-      // WhatsApp Flows has no time picker, so a time field becomes a Dropdown
-      // of real clock slots. The option id is "HH:MM" (24h) so the backend can
-      // schedule an exact-time reminder; the title is the friendly label.
+      // Time slots rendered as Dropdown (Meta has no native TimePicker)
       return {
         type: 'Dropdown',
         ...baseProps,
-        'data-source': field.options && field.options.length
-          ? timeOptionsToDataSource(field.options)
-          : generateTimeSlots()
+        'data-source': safeDataSource(field.options)
       };
     default:
       return { type: 'TextInput', ...baseProps, 'input-type': 'text' };
   }
 };
-
-// Default selectable times: 09:00 → 17:00 every 30 minutes.
-const generateTimeSlots = (
-  startHour = 9,
-  endHour = 17,
-  stepMinutes = 30
-): Array<{ id: string; title: string }> => {
-  const slots: Array<{ id: string; title: string }> = [];
-  for (let mins = startHour * 60; mins <= endHour * 60; mins += stepMinutes) {
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    const id = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    const period = h < 12 ? 'AM' : 'PM';
-    const h12 = h % 12 === 0 ? 12 : h % 12;
-    slots.push({ id, title: `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}` });
-  }
-  return slots;
-};
-
-// Map user-provided time strings to a data-source, keeping a "HH:MM" id when
-// the option already looks like a 24h clock time; otherwise fall back to index.
-const timeOptionsToDataSource = (options: string[]): Array<{ id: string; title: string }> =>
-  options.map((opt, i) => {
-    const match = String(opt).match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-    const id = match ? `${match[1].padStart(2, '0')}:${match[2]}` : `opt_${i}`;
-    return { id, title: opt };
-  });
 
 // =============================================================================
 // META JSON → VISUAL TRANSFORM
@@ -465,14 +522,10 @@ const metaComponentToField = (component: MetaComponent): Field => {
     case 'TextArea':
       baseField.type = 'textarea';
       break;
-    case 'Dropdown': {
-      const ds = component['data-source'] || [];
-      // A Dropdown whose option ids are all "HH:MM" is a time field.
-      const looksLikeTime = ds.length > 0 && ds.every(o => /^([01]\d|2[0-3]):[0-5]\d$/.test(o.id));
-      baseField.type = looksLikeTime ? 'time' : 'dropdown';
-      baseField.options = ds.map(o => o.title);
+    case 'Dropdown':
+      baseField.type = 'dropdown';
+      baseField.options = component['data-source']?.map(ds => ds.title) || [];
       break;
-    }
     case 'RadioButtonsGroup':
       baseField.type = 'radio';
       baseField.options = component['data-source']?.map(ds => ds.title) || [];

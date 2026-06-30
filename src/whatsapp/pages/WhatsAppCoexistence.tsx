@@ -14,7 +14,7 @@
  * - Error monitoring panel
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,8 +48,19 @@ import {
 import { API_BASE_URL } from '@/config';
 import { getWorkspaceId } from '../utils/workspaceContext';
 import { toast } from '@/hooks/use-toast';
-import { ConnectWhatsAppButton } from '../components/ConnectWhatsAppButton';
-import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  createOnboardingSession,
+  extractEmbeddedSignupCode,
+  formatConnectExchangeError,
+  hasEmbeddedSignupAssets,
+  mergeEmbeddedSignupAssets,
+  parseEmbeddedSignupMessage,
+  postEmbeddedSignupEvent,
+  isCoexistenceFinishEvent,
+  waitForEmbeddedSignupAssets,
+  type EmbeddedSignupAssets,
+} from '@/whatsapp/utils/embeddedSignupSession';
 
 const API_BASE = API_BASE_URL;
 
@@ -109,8 +120,18 @@ interface CoexistenceError {
 // Helper Functions
 // ============================================================
 
+// Coexistence API lives on whatsapp-api (same as WHATSAPP_API_BASE)
+import { WHATSAPP_API_BASE_URL } from '@/config';
+
+const COEXISTENCE_API_BASE = (
+  import.meta.env.VITE_COEXISTENCE_API_BASE ||
+  import.meta.env.VITE_WHATSAPP_API_BASE ||
+  WHATSAPP_API_BASE_URL ||
+  ''
+).toString().replace(/\/$/, '');
+
 async function coexistenceApi(path: string, options?: RequestInit) {
-  const url = `${API_BASE}/api/whatsapp/coexistence${path}`;
+  const url = `${COEXISTENCE_API_BASE}/api/whatsapp/coexistence${path}`;
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -124,8 +145,18 @@ async function coexistenceApi(path: string, options?: RequestInit) {
   if (!contentType.includes('application/json')) {
     throw new Error(`Server returned ${res.status} — coexistence endpoint not available`);
   }
-  return res.json();
+  const data = await res.json();
+  if (!res.ok && !data.error) {
+    data.success = false;
+    data.error = `Connection failed (HTTP ${res.status})`;
+  }
+  return data;
 }
+
+const FB_APP_ID = import.meta.env.VITE_FB_APP_ID || '1782321995750055';
+const WHATSAPP_CONFIG_ID = import.meta.env.VITE_WHATSAPP_CONFIG_ID || '1210552324305744';
+const FB_GRAPH_VERSION =
+  import.meta.env.VITE_FB_API_VERSION || import.meta.env.VITE_WHATSAPP_API_VERSION || 'v25.0';
 
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return 'Never';
@@ -139,6 +170,100 @@ function timeAgo(dateStr: string | null): string {
   if (diffHours < 24) return `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
   return `${diffDays}d ago`;
+}
+
+/** Map backend /status coexistence_accounts[] → single account for UI */
+function resolveCoexistenceAccount(data: {
+  account?: CoexistenceAccount;
+  coexistence_accounts?: CoexistenceAccount[];
+}): CoexistenceAccount | null {
+  if (data.account) return data.account;
+  const list = data.coexistence_accounts;
+  if (!list?.length) return null;
+  return list[0];
+}
+
+function mapDeviceActivityRow(row: {
+  account_id: number;
+  last_echo_at: string | null;
+  device_status: string;
+  days_since_echo?: number | null;
+}): DeviceActivity {
+  const days = row.days_since_echo;
+  let message = 'No mobile activity recorded yet';
+  if (days != null) {
+    if (days <= 5) message = 'Mobile app is active';
+    else if (days <= 10) message = 'Mobile app has been idle — open WhatsApp Business on your phone';
+    else if (days <= 20) message = 'Mobile activity at risk — keep the app open';
+    else message = 'Mobile app appears inactive — coexistence may stop working';
+  }
+  const status = row.device_status;
+  const device_status: DeviceActivity['device_status'] =
+    status === 'attention' ? 'warning' :
+    status === 'active' || status === 'warning' || status === 'critical' ? status :
+    'unknown';
+  return {
+    last_echo_at: row.last_echo_at,
+    device_status,
+    minutes_since_last_echo: row.last_echo_at
+      ? Math.floor((Date.now() - new Date(row.last_echo_at).getTime()) / 60000)
+      : null,
+    message,
+  };
+}
+
+function mapRateLimitResponse(
+  data: { mps_limit?: number; tokens_available?: number },
+  account: CoexistenceAccount,
+): RateLimitInfo {
+  const cap = Number(data.mps_limit ?? account.mps_limit ?? 5);
+  const tokens = Number(data.tokens_available ?? cap);
+  const used = Math.max(0, cap - tokens);
+  return {
+    mps_limit: cap,
+    tokens_available: tokens,
+    capacity: cap,
+    usage_percent: cap > 0 ? Math.min(100, Math.round((used / cap) * 100)) : 0,
+    messages_sent_last_hour: 0,
+  };
+}
+
+function mapHistorySyncRow(row: {
+  sync_status?: string;
+  history_sync_completed?: boolean;
+  conversations_count?: number;
+  messages_count?: number;
+  paired_at?: string | null;
+}): HistorySyncInfo {
+  return {
+    sync_status: row.sync_status || 'idle',
+    history_sync_completed: !!row.history_sync_completed,
+    conversations_synced: row.conversations_count ?? 0,
+    messages_synced: row.messages_count ?? 0,
+    last_sync_at: row.paired_at ?? null,
+  };
+}
+
+function mapCoexistenceErrorRow(row: {
+  type?: string;
+  error_code?: string | number;
+  error_message?: string;
+  is_critical?: boolean;
+  timestamp?: string | null;
+}): CoexistenceError {
+  const rawCode = row.error_code ?? 0;
+  const code = typeof rawCode === 'string' ? parseInt(rawCode, 10) || 0 : Number(rawCode);
+  const title =
+    row.type === 'message_failed' ? 'Message delivery failed' :
+    row.type === 'webhook_error' ? 'Webhook error' :
+    'API error';
+  return {
+    code,
+    title,
+    message: row.error_message || String(row.error_code || 'Unknown error'),
+    timestamp: row.timestamp || '',
+    severity: row.is_critical ? 'critical' : code ? 'warning' : 'info',
+  };
 }
 
 // ============================================================
@@ -191,6 +316,9 @@ function NotConnectedView({
 }) {
   const [connecting, setConnecting] = useState(false);
   const [fbReady, setFbReady] = useState(false);
+  const sessionAssetsRef = useRef<EmbeddedSignupAssets>({});
+  const onboardingSessionRef = useRef<{ sessionId?: string; resumeToken?: string }>({});
+  const { user } = useAuth();
 
   // Load Facebook SDK (same as ConnectWhatsAppButton)
   useEffect(() => {
@@ -199,11 +327,15 @@ function NotConnectedView({
       return;
     }
     window.fbAsyncInit = function () {
+      if (!FB_APP_ID) {
+        console.error('[coexistence] VITE_FB_APP_ID is not set');
+        return;
+      }
       window.FB.init({
-        appId: import.meta.env.VITE_FB_APP_ID || '1616370899364211',
+        appId: FB_APP_ID,
         cookie: true,
         xfbml: true,
-        version: 'v23.0',
+        version: FB_GRAPH_VERSION,
       });
       setFbReady(true);
     };
@@ -218,22 +350,19 @@ function NotConnectedView({
     }
   }, []);
 
-  // Listen for WA_EMBEDDED_SIGNUP session events from Meta
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (typeof event.origin === 'string' && !event.origin.endsWith('facebook.com')) return;
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'WA_EMBEDDED_SIGNUP') {
-          console.log('[coexistence] WA_EMBEDDED_SIGNUP event:', data);
-          if (data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
-            console.log('[coexistence] Coexistence onboarding completed - WABA:', data.data?.waba_id);
-          } else if (data.event === 'CANCEL') {
-            console.log('[coexistence] User cancelled at step:', data.data?.current_step);
-          }
-        }
-      } catch {
-        // Non-JSON message, ignore
+      const parsed = parseEmbeddedSignupMessage(event);
+      if (!parsed) return;
+      sessionAssetsRef.current = mergeEmbeddedSignupAssets(sessionAssetsRef.current, parsed);
+      console.log('[coexistence] WA_EMBEDDED_SIGNUP assets:', sessionAssetsRef.current);
+      const sid = onboardingSessionRef.current.sessionId;
+      if (sid && parsed.event) {
+        void postEmbeddedSignupEvent(sid, parsed.event, {
+          business_id: parsed.business_id,
+          waba_id: parsed.waba_id,
+          phone_number_id: parsed.phone_number_id,
+        });
       }
     };
     window.addEventListener('message', handleMessage);
@@ -251,29 +380,88 @@ function NotConnectedView({
       return;
     }
 
+    if (!FB_APP_ID || !WHATSAPP_CONFIG_ID) {
+      toast({
+        title: 'Configuration error',
+        description: 'Set VITE_FB_APP_ID and VITE_WHATSAPP_CONFIG_ID.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setConnecting(true);
+    sessionAssetsRef.current = {};
+    onboardingSessionRef.current = {};
+
+    if (user?.id) {
+      onboardingSessionRef.current = await createOnboardingSession(workspaceId, user.id, {
+        isCoexistence: true,
+        configId: WHATSAPP_CONFIG_ID,
+      });
+    }
 
     // Launch Facebook Embedded Signup flow with WhatsApp Business App onboarding (coexistence)
     window.FB.login(
       function (response: any) {
-        if (response.authResponse?.code) {
-          // Got auth code — send to coexistence connect endpoint
+        void (async () => {
+        console.log('[coexistence] FB.login response:', response);
+
+        const authCode = extractEmbeddedSignupCode(response.authResponse);
+        if (authCode) {
+          const assets = await waitForEmbeddedSignupAssets(() => sessionAssetsRef.current, 30000);
+          if (!hasEmbeddedSignupAssets(assets)) {
+            toast({
+              title: 'Complete Meta onboarding',
+              description:
+                'Facebook logged in, but WhatsApp account IDs were not received. ' +
+                'Finish the coexistence popup (select your WhatsApp Business number), then click Connect again.',
+              variant: 'destructive',
+            });
+            setConnecting(false);
+            return;
+          }
+          const session = onboardingSessionRef.current;
           coexistenceApi('/connect', {
             method: 'POST',
             body: JSON.stringify({
-              code: response.authResponse.code,
+              code: authCode,
               workspace_id: workspaceId,
+              ...(assets.business_id ? { business_id: assets.business_id } : {}),
+              ...(assets.waba_id ? { waba_id: assets.waba_id } : {}),
+              ...(assets.phone_number_id ? { phone_number_id: assets.phone_number_id } : {}),
+              ...(session.sessionId ? { onboarding_session_id: session.sessionId } : {}),
+              ...(session.resumeToken ? { resume_token: session.resumeToken } : {}),
+              ...(isCoexistenceFinishEvent(assets.event)
+                ? {
+                    is_coexistence_finish: true,
+                    embedded_signup_event: assets.event,
+                  }
+                : {}),
             }),
           })
             .then((data) => {
               if (data.success) {
                 toast({
-                  title: 'Connection Started!',
-                  description: 'Your coexistence account is being set up. Complete the QR pairing to activate.',
+                  title: 'Coexistence connected',
+                  description:
+                    data.message ||
+                    'Sync started. Keep WhatsApp Business app open while contacts and history import.',
+                });
+                onConnected();
+              } else if (data.error_code === 'COEXISTENCE_PROVISIONING_INCOMPLETE' && data.account) {
+                toast({
+                  title: 'Connected — sync pending',
+                  description: data.error || 'Webhook subscribe or sync initiation needs attention.',
+                  variant: 'destructive',
                 });
                 onConnected();
               } else {
-                toast({ title: 'Error', description: data.error || 'Failed to connect', variant: 'destructive' });
+                const hint = data.hint ? ` ${data.hint}` : '';
+                toast({
+                  title: 'Error',
+                  description: formatConnectExchangeError(data) + hint,
+                  variant: 'destructive',
+                });
               }
             })
             .catch((err: any) => {
@@ -281,42 +469,27 @@ function NotConnectedView({
             })
             .finally(() => setConnecting(false));
         } else if (response.authResponse?.accessToken) {
-          // FB.login returned an access token directly
-          coexistenceApi('/connect', {
-            method: 'POST',
-            body: JSON.stringify({
-              access_token: response.authResponse.accessToken,
-              workspace_id: workspaceId,
-            }),
-          })
-            .then((data) => {
-              if (data.success) {
-                toast({
-                  title: 'Connection Started!',
-                  description: 'Your coexistence account is being set up.',
-                });
-                onConnected();
-              } else {
-                toast({ title: 'Error', description: data.error || 'Failed to connect', variant: 'destructive' });
-              }
-            })
-            .catch((err: any) => {
-              toast({ title: 'Connection Error', description: err.message, variant: 'destructive' });
-            })
-            .finally(() => setConnecting(false));
+          toast({
+            title: 'Complete Meta onboarding',
+            description:
+              'Meta returned a Facebook login only — finish the WhatsApp Business coexistence steps in the popup, then click Connect again.',
+            variant: 'destructive',
+          });
+          setConnecting(false);
         } else {
           toast({ title: 'Cancelled', description: 'WhatsApp connection was cancelled', variant: 'destructive' });
           setConnecting(false);
         }
+        })();
       },
       {
-        config_id: import.meta.env.VITE_WHATSAPP_CONFIG_ID || '1684758789571645',
+        config_id: WHATSAPP_CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
         extras: {
           setup: {},
           featureType: 'whatsapp_business_app_onboarding',
-          sessionInfoVersion: '3',
+          sessionInfoVersion: '4',
         },
       }
     );
@@ -326,7 +499,7 @@ function NotConnectedView({
     <div className="space-y-8">
       {/* Hero Section */}
       <div className="text-center py-8">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 mb-6">
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#25D366] to-[#128C7E] mb-6">
           <Smartphone className="w-10 h-10 text-white" />
         </div>
         <h2 className="text-2xl font-bold mb-3">WhatsApp Coexistence Mode</h2>
@@ -466,9 +639,10 @@ function ConnectedDashboard({
   const fetchDeviceActivity = useCallback(async () => {
     setLoadingStates(s => ({ ...s, device: true }));
     try {
-      const data = await coexistenceApi(`/device-activity?account_id=${account.id}&workspace_id=${workspaceId}`);
+      const data = await coexistenceApi(`/device-activity?workspace_id=${workspaceId}`);
       if (data.success) {
-        setDeviceActivity(data.device_activity);
+        const row = (data.devices || []).find((d: { account_id: number }) => d.account_id === account.id);
+        if (row) setDeviceActivity(mapDeviceActivityRow(row));
       }
     } catch { /* silent */ }
     setLoadingStates(s => ({ ...s, device: false }));
@@ -477,20 +651,23 @@ function ConnectedDashboard({
   const fetchRateLimit = useCallback(async () => {
     setLoadingStates(s => ({ ...s, rateLimit: true }));
     try {
-      const data = await coexistenceApi(`/rate-limit?account_id=${account.id}&workspace_id=${workspaceId}`);
+      const data = await coexistenceApi(
+        `/rate-limit?phone_number_id=${encodeURIComponent(account.phone_number_id)}`,
+      );
       if (data.success) {
-        setRateLimitInfo(data.rate_limit);
+        setRateLimitInfo(mapRateLimitResponse(data, account));
       }
     } catch { /* silent */ }
     setLoadingStates(s => ({ ...s, rateLimit: false }));
-  }, [account.id, workspaceId]);
+  }, [account, workspaceId]);
 
   const fetchHistorySync = useCallback(async () => {
     setLoadingStates(s => ({ ...s, historySync: true }));
     try {
-      const data = await coexistenceApi(`/history-sync?account_id=${account.id}&workspace_id=${workspaceId}`);
+      const data = await coexistenceApi(`/history-sync?workspace_id=${workspaceId}`);
       if (data.success) {
-        setHistorySyncInfo(data.history_sync);
+        const row = (data.accounts || []).find((a: { account_id: number }) => a.account_id === account.id);
+        if (row) setHistorySyncInfo(mapHistorySyncRow(row));
       }
     } catch { /* silent */ }
     setLoadingStates(s => ({ ...s, historySync: false }));
@@ -499,9 +676,9 @@ function ConnectedDashboard({
   const fetchErrors = useCallback(async () => {
     setLoadingStates(s => ({ ...s, errors: true }));
     try {
-      const data = await coexistenceApi(`/errors?account_id=${account.id}&workspace_id=${workspaceId}`);
+      const data = await coexistenceApi(`/errors?workspace_id=${workspaceId}&limit=50`);
       if (data.success) {
-        setErrors(data.errors || []);
+        setErrors((data.errors || []).map(mapCoexistenceErrorRow));
       }
     } catch { /* silent */ }
     setLoadingStates(s => ({ ...s, errors: false }));
@@ -1131,8 +1308,8 @@ export function WhatsAppCoexistence() {
     try {
       const data = await coexistenceApi(`/status?workspace_id=${workspaceId}`);
 
-      if (data.success && data.account) {
-        setAccount(data.account);
+      if (data.success) {
+        setAccount(resolveCoexistenceAccount(data));
       } else {
         setAccount(null);
       }
@@ -1199,7 +1376,6 @@ export function WhatsAppCoexistence() {
   }
 
   return (
-    <WhatsAppConnectionGuard feature="Coexistence">
     <div className="container mx-auto max-w-4xl py-8 px-4">
       <Card>
         <CardHeader>
@@ -1235,7 +1411,6 @@ export function WhatsAppCoexistence() {
         </CardContent>
       </Card>
     </div>
-    </WhatsAppConnectionGuard>
   );
 }
 

@@ -12,19 +12,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RefreshCw, Plus, Database, Upload, ArrowLeft, Trash2, FileSpreadsheet, Users, Link2, Edit, CloudDownload, Settings, MessageCircle } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
-import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
-import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
-
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').toString().replace(/\/$/, '');
-
-const datasetFetchInit = (extra: RequestInit = {}): RequestInit => ({
-    credentials: 'include',
-    ...extra,
-    headers: {
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        ...(extra.headers || {}),
-    },
-});
+import { getWorkspaceId } from '../utils/workspaceContext';
+import { cachedFetch } from '../utils/waPersistentCache';
+import { WHATSAPP_REST_API_PREFIX } from "@/config";
 
 interface Dataset {
     id: number;
@@ -53,7 +43,9 @@ interface PreviewData {
 
 export default function WhatsAppDatasets() {
     const { toast } = useToast();
-    const [workspaceId, setWorkspaceId] = useState<string | null>(getWorkspaceId());
+    const [workspaceId] = useState<string | null>(
+        getWorkspaceId()
+    );
 
     const [datasets, setDatasets] = useState<Dataset[]>([]);
     const [loading, setLoading] = useState(false);
@@ -70,7 +62,6 @@ export default function WhatsAppDatasets() {
     const [csvPreview, setCsvPreview] = useState<PreviewData | null>(null);
     const [csvColumnMapping, setCsvColumnMapping] = useState<Record<string, string>>({});
     const csvInputRef = useRef<HTMLInputElement>(null);
-    const uploadInputRef = useRef<HTMLInputElement>(null);
 
     // Google Sheets Import State
     const [sheetUrl, setSheetUrl] = useState("");
@@ -92,14 +83,8 @@ export default function WhatsAppDatasets() {
     const [contactsSelectedRows, setContactsSelectedRows] = useState<Set<number>>(new Set());
 
     // External CRM State
-    const [externalCrm, setExternalCrm] = useState<'hubspot' | 'pipedrive' | 'sociovia'>('sociovia');
+    const [externalCrm, setExternalCrm] = useState<'hubspot' | 'pipedrive'>('hubspot');
     const [externalApiKey, setExternalApiKey] = useState("");
-    const [socioviaApiKey, setSocioviaApiKey] = useState("");
-    const [socioviaCrmUrl, setSocioviaCrmUrl] = useState("https://sociovia-backend-362038465411.europe-west1.run.app");
-    const [socioviaWorkspaceId, setSocioviaWorkspaceId] = useState("");
-    const [socioviaDataType, setSocioviaDataType] = useState<'leads' | 'contacts' | 'deals'>('contacts');
-    const [socioviaPreview, setSocioviaPreview] = useState<PreviewData | null>(null);
-    const [loadingSocioviaPreview, setLoadingSocioviaPreview] = useState(false);
 
     // Selection State for Imports
     const [sheetsSelectedRows, setSheetsSelectedRows] = useState<Set<number>>(new Set());
@@ -127,13 +112,6 @@ export default function WhatsAppDatasets() {
 
 
     useEffect(() => {
-        const resolvedWorkspaceId = getWorkspaceId();
-        if (resolvedWorkspaceId && resolvedWorkspaceId !== workspaceId) {
-            setWorkspaceId(resolvedWorkspaceId);
-        }
-    }, [workspaceId]);
-
-    useEffect(() => {
         if (!workspaceId) return;
         fetchDatasets();
     }, [workspaceId]);
@@ -155,30 +133,16 @@ export default function WhatsAppDatasets() {
     }, [createTab, crmWorkspaceId]);
 
     const fetchDatasets = async () => {
-        if (!workspaceId) {
-            toast({
-                title: 'No workspace selected',
-                description: 'Select a workspace from the dashboard before managing datasets.',
-                variant: 'destructive',
-            });
-            return;
-        }
         setLoading(true);
         try {
-            const res = await fetch(
-                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
-                datasetFetchInit()
-            );
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/workspaces/${workspaceId}/datasets`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
             const data = await res.json();
             if (data.success) {
                 setDatasets(data.data);
-            } else {
-                toast({ title: 'Error', description: data.error || 'Failed to load datasets', variant: 'destructive' });
             }
-        } catch (e) {
-            console.error(e);
-            toast({ title: 'Error', description: 'Failed to load datasets', variant: 'destructive' });
-        }
+        } catch (e) { console.error(e); }
         finally { setLoading(false); }
     };
 
@@ -188,17 +152,14 @@ export default function WhatsAppDatasets() {
         if (!newName) return;
         setCreating(true);
         try {
-            const res = await fetch(
-                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
-                datasetFetchInit({
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    // Seed default columns so the manual Add-Row form renders real
-                    // inputs. Without columns the form falls back to a dead placeholder
-                    // input and saves empty rows. Users can add/rename via Manage Columns.
-                    body: JSON.stringify({ name: newName, description: newDesc, columns: ['name', 'phone'] }),
-                })
-            );
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/workspaces/${workspaceId}/datasets`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ name: newName, description: newDesc })
+            });
             const data = await res.json();
             if (data.success) {
                 toast({ title: "Dataset Created", description: "You can now add data manually or import." });
@@ -207,10 +168,7 @@ export default function WhatsAppDatasets() {
             } else {
                 toast({ title: "Error", description: data.error, variant: "destructive" });
             }
-        } catch (e) {
-            console.error(e);
-            toast({ title: "Error", description: "Failed to create dataset", variant: "destructive" });
-        }
+        } catch (e) { console.error(e); }
         finally { setCreating(false); }
     };
 
@@ -220,10 +178,11 @@ export default function WhatsAppDatasets() {
         formData.append('file', file);
 
         try {
-            const res = await fetch(
-                `${API_BASE}/api/whatsapp/csv/preview`,
-                datasetFetchInit({ method: 'POST', body: formData })
-            );
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/csv/preview`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: formData
+            });
             const data = await res.json();
             if (data.success) {
                 setCsvPreview(data);
@@ -244,14 +203,11 @@ export default function WhatsAppDatasets() {
         setCreating(true);
         try {
             // First create the dataset
-            const createRes = await fetch(
-                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
-                datasetFetchInit({
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newName, description: newDesc }),
-                })
-            );
+            const createRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/workspaces/${workspaceId}/datasets`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ name: newName, description: newDesc })
+            });
             const createData = await createRes.json();
             if (!createData.success) throw new Error(createData.error);
 
@@ -261,10 +217,11 @@ export default function WhatsAppDatasets() {
             formData.append('column_mapping', JSON.stringify(csvColumnMapping));
             formData.append('replace', 'true');
 
-            const uploadRes = await fetch(
-                `${API_BASE}/api/whatsapp/datasets/${createData.data.id}/upload-mapped`,
-                datasetFetchInit({ method: 'POST', body: formData })
-            );
+            const uploadRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${createData.data.id}/upload-mapped`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: formData
+            });
             const uploadData = await uploadRes.json();
             if (uploadData.success) {
                 toast({ title: "Dataset Created", description: `Imported ${uploadData.rows_added} rows from CSV.` });
@@ -282,7 +239,7 @@ export default function WhatsAppDatasets() {
         if (!sheetUrl) return;
         setLoadingSheetsPreview(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/sheets/preview`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/sheets/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ sheet_url: sheetUrl, sheet_name: sheetName })
@@ -310,19 +267,16 @@ export default function WhatsAppDatasets() {
         setCreating(true);
         try {
             // Create dataset
-            const createRes = await fetch(
-                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
-                datasetFetchInit({
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newName, description: newDesc }),
-                })
-            );
+            const createRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/workspaces/${workspaceId}/datasets`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ name: newName, description: newDesc })
+            });
             const createData = await createRes.json();
             if (!createData.success) throw new Error(createData.error);
 
             // Import from sheets
-            const importRes = await fetch(`${API_BASE}/api/whatsapp/datasets/${createData.data.id}/import-sheets`, {
+            const importRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${createData.data.id}/import-sheets`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ sheet_url: sheetUrl, sheet_name: sheetName, column_mapping: sheetsColumnMapping, replace: true })
@@ -344,7 +298,7 @@ export default function WhatsAppDatasets() {
         if (!crmWorkspaceId) return;
         setLoadingCrmPreview(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/crm/preview`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/crm/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ source: crmSource, workspace_id: crmWorkspaceId })
@@ -372,19 +326,16 @@ export default function WhatsAppDatasets() {
         setCreating(true);
         try {
             // Create dataset
-            const createRes = await fetch(
-                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
-                datasetFetchInit({
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newName, description: newDesc }),
-                })
-            );
+            const createRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/workspaces/${workspaceId}/datasets`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ name: newName, description: newDesc })
+            });
             const createData = await createRes.json();
             if (!createData.success) throw new Error(createData.error);
 
             // Import from CRM
-            const importRes = await fetch(`${API_BASE}/api/whatsapp/datasets/${createData.data.id}/import-crm`, {
+            const importRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${createData.data.id}/import-crm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ source: crmSource, workspace_id: crmWorkspaceId, column_mapping: crmColumnMapping, replace: true })
@@ -406,7 +357,7 @@ export default function WhatsAppDatasets() {
         if (!workspaceId) return;
         setLoadingContactsPreview(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/crm/preview`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/crm/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ source: 'whatsapp_contacts', workspace_id: workspaceId })
@@ -430,19 +381,16 @@ export default function WhatsAppDatasets() {
         setCreating(true);
         try {
             // Create dataset
-            const createRes = await fetch(
-                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
-                datasetFetchInit({
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newName, description: newDesc }),
-                })
-            );
+            const createRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/workspaces/${workspaceId}/datasets`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ name: newName, description: newDesc })
+            });
             const createData = await createRes.json();
             if (!createData.success) throw new Error(createData.error);
 
             // Import from WhatsApp Contacts
-            const importRes = await fetch(`${API_BASE}/api/whatsapp/datasets/${createData.data.id}/import-crm`, {
+            const importRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${createData.data.id}/import-crm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ source: 'whatsapp_contacts', workspace_id: workspaceId, replace: true })
@@ -465,20 +413,17 @@ export default function WhatsAppDatasets() {
         setCreating(true);
         try {
             // Create dataset
-            const createRes = await fetch(
-                `${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`,
-                datasetFetchInit({
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newName, description: newDesc }),
-                })
-            );
+            const createRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/workspaces/${workspaceId}/datasets`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ name: newName, description: newDesc })
+            });
             const createData = await createRes.json();
             if (!createData.success) throw new Error(createData.error);
 
             // Import from external CRM
             const endpoint = externalCrm === 'hubspot' ? 'import-hubspot' : 'import-pipedrive';
-            const importRes = await fetch(`${API_BASE}/api/whatsapp/datasets/${createData.data.id}/${endpoint}`, {
+            const importRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${createData.data.id}/${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ api_key: externalApiKey, replace: true })
@@ -486,67 +431,6 @@ export default function WhatsAppDatasets() {
             const importData = await importRes.json();
             if (importData.success) {
                 toast({ title: "Dataset Created", description: `Imported ${importData.rows_added} contacts from ${externalCrm}.` });
-                resetCreateDialog();
-                fetchDatasets();
-            } else {
-                toast({ title: "Import Failed", description: importData.error, variant: "destructive" });
-            }
-        } catch (e: any) {
-            toast({ title: "Error", description: e.message, variant: "destructive" });
-        } finally { setCreating(false); }
-    };
-
-    const handleSocioviaPreview = async () => {
-        if (!socioviaCrmUrl || !socioviaWorkspaceId) return;
-        setLoadingSocioviaPreview(true);
-        try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/crm/preview`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ source: socioviaDataType, workspace_id: socioviaWorkspaceId, crm_url: socioviaCrmUrl })
-            });
-            const data = await res.json();
-            if (data.success) {
-                setSocioviaPreview(data);
-            } else {
-                toast({ title: "Error", description: data.error, variant: "destructive" });
-            }
-        } catch (e) {
-            toast({ title: "Error", description: "Failed to connect to Sociovia CRM", variant: "destructive" });
-        } finally { setLoadingSocioviaPreview(false); }
-    };
-
-    const handleCreateFromSociovia = async () => {
-        if (!newName || !socioviaCrmUrl || !socioviaWorkspaceId) return;
-        if (!workspaceId) {
-            toast({ title: "Error", description: "No workspace selected. Please select a workspace first.", variant: "destructive" });
-            return;
-        }
-        setCreating(true);
-        try {
-            const createRes = await fetch(`${API_BASE}/api/whatsapp/workspaces/${workspaceId}/datasets`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ name: newName, description: newDesc, source_type: 'sociovia' })
-            });
-            const createData = await createRes.json();
-            console.log('Dataset creation response:', createData);
-            if (!createData.success) throw new Error(createData.error || 'Failed to create dataset');
-
-            const datasetId = createData.data?.id;
-            if (!datasetId) {
-                throw new Error('Dataset was created but no ID was returned. Please try again.');
-            }
-
-            const importRes = await fetch(`${API_BASE}/api/whatsapp/datasets/${datasetId}/import-sociovia`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ crm_url: socioviaCrmUrl, workspace_id: socioviaWorkspaceId, data_type: socioviaDataType, replace: true })
-            });
-            const importData = await importRes.json();
-            console.log('Sociovia import response:', importData);
-            if (importData.success) {
-                toast({ title: "Dataset Created", description: `Imported ${importData.rows_added} ${socioviaDataType} from Sociovia CRM.` });
                 resetCreateDialog();
                 fetchDatasets();
             } else {
@@ -574,9 +458,6 @@ export default function WhatsAppDatasets() {
         setContactsPreview(null);
         setContactsSelectedRows(new Set());
         setExternalApiKey("");
-        setSocioviaCrmUrl("");
-        setSocioviaWorkspaceId("");
-        setSocioviaPreview(null);
     };
 
     // ========== DETAIL VIEW HANDLERS ==========
@@ -584,10 +465,9 @@ export default function WhatsAppDatasets() {
     const loadDatasetDetails = async (id: number) => {
         setLoading(true);
         try {
-            const res = await fetch(
-                `${API_BASE}/api/whatsapp/datasets/${id}`,
-                datasetFetchInit()
-            );
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
             const data = await res.json();
             if (data.success) {
                 setDatasetDetails(data.data);
@@ -601,10 +481,9 @@ export default function WhatsAppDatasets() {
 
     const loadRows = async (datasetId: number, page: number) => {
         try {
-            const res = await fetch(
-                `${API_BASE}/api/whatsapp/datasets/${datasetId}/rows?page=${page}&limit=50`,
-                datasetFetchInit()
-            );
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${datasetId}/rows?page=${page}&limit=50`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
             const data = await res.json();
             if (data.success) {
                 setAllRows(data.data);
@@ -619,7 +498,7 @@ export default function WhatsAppDatasets() {
     const handleAddRow = async () => {
         if (!selectedDataset) return;
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/rows`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${selectedDataset.id}/rows`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ data: newRowData })
@@ -641,7 +520,7 @@ export default function WhatsAppDatasets() {
     const handleUpdateRow = async () => {
         if (!selectedDataset || !editingRow) return;
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/rows/${editingRow.id}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${selectedDataset.id}/rows/${editingRow.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ data: editingRow.data })
@@ -663,7 +542,7 @@ export default function WhatsAppDatasets() {
         if (!selectedDataset) return;
         if (!confirm("Delete this row?")) return;
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/rows/${rowId}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${selectedDataset.id}/rows/${rowId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
@@ -681,14 +560,11 @@ export default function WhatsAppDatasets() {
     const handleAddColumn = async () => {
         if (!selectedDataset || !newColumnName.trim()) return;
         try {
-            const res = await fetch(
-                `${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/columns`,
-                datasetFetchInit({
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ column_name: newColumnName.trim() }),
-                })
-            );
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${selectedDataset.id}/columns`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ column_name: newColumnName.trim() })
+            });
             const data = await res.json();
             if (data.success) {
                 toast({ title: "Column Added", description: `Added column "${newColumnName}"` });
@@ -706,10 +582,10 @@ export default function WhatsAppDatasets() {
         if (!selectedDataset) return;
         if (!confirm(`Remove column "${columnName}"? This will delete data from all rows.`)) return;
         try {
-            const res = await fetch(
-                `${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/columns/${encodeURIComponent(columnName)}`,
-                datasetFetchInit({ method: 'DELETE' })
-            );
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${selectedDataset.id}/columns/${encodeURIComponent(columnName)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
             const data = await res.json();
             if (data.success) {
                 toast({ title: "Column Removed" });
@@ -727,7 +603,7 @@ export default function WhatsAppDatasets() {
         setUploading(true);
         try {
             const endpoint = selectedDataset.source_type === 'google_sheets'
-                ? `${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/sync-sheets`
+                ? `${WHATSAPP_REST_API_PREFIX}/datasets/${selectedDataset.id}/sync-sheets`
                 : null;
 
             if (!endpoint) {
@@ -736,7 +612,7 @@ export default function WhatsAppDatasets() {
                 return;
             }
 
-            const res = await fetch(endpoint, {
+            const res = await cachedFetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ replace: true })
@@ -762,10 +638,11 @@ export default function WhatsAppDatasets() {
         formData.append('file', file);
 
         try {
-            const res = await fetch(
-                `${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}/upload?replace=true`,
-                datasetFetchInit({ method: 'POST', body: formData })
-            );
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${selectedDataset.id}/upload?replace=true`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: formData
+            });
             const data = await res.json();
             if (data.success) {
                 toast({ title: "Upload Successful", description: `Added ${data.rows_added} rows.` });
@@ -785,7 +662,7 @@ export default function WhatsAppDatasets() {
         if (!selectedDataset) return;
         if (!confirm(`Delete dataset "${selectedDataset.name}" and all its rows?`)) return;
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/datasets/${selectedDataset.id}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${selectedDataset.id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
@@ -809,7 +686,6 @@ export default function WhatsAppDatasets() {
             crm: { label: "CRM", variant: "default" },
             hubspot: { label: "HubSpot", variant: "default" },
             pipedrive: { label: "Pipedrive", variant: "default" },
-            sociovia: { label: "Sociovia CRM", variant: "default" },
         };
         const badge = badges[sourceType] || { label: sourceType || "Unknown", variant: "outline" as const };
         return <Badge variant={badge.variant}>{badge.label}</Badge>;
@@ -820,7 +696,6 @@ export default function WhatsAppDatasets() {
     // ========== DETAIL VIEW ==========
     if (selectedDataset && datasetDetails) {
         return (
-            <WhatsAppConnectionGuard feature="Datasets">
             <div className="p-6 space-y-6">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -949,23 +824,17 @@ export default function WhatsAppDatasets() {
                                 )}
 
                                 {/* Upload CSV */}
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={uploading}
-                                    onClick={() => uploadInputRef.current?.click()}
-                                >
+                                <Button variant="outline" size="sm" className="relative" disabled={uploading}>
                                     <Upload className="mr-1 h-4 w-4" />
                                     {uploading ? "Uploading..." : "Upload CSV"}
+                                    <input
+                                        type="file"
+                                        accept=".csv"
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                        onChange={handleFileUpload}
+                                        disabled={uploading}
+                                    />
                                 </Button>
-                                <input
-                                    ref={uploadInputRef}
-                                    type="file"
-                                    accept=".csv"
-                                    className="hidden"
-                                    onChange={handleFileUpload}
-                                    disabled={uploading}
-                                />
                             </div>
                         </div>
                         <CardDescription>
@@ -1064,13 +933,11 @@ export default function WhatsAppDatasets() {
                     </CardContent>
                 </Card>
             </div>
-            </WhatsAppConnectionGuard>
         );
     }
 
     // ========== LIST VIEW ==========
     return (
-        <WhatsAppConnectionGuard feature="Datasets">
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
                 <div>
@@ -1093,8 +960,8 @@ export default function WhatsAppDatasets() {
                     </DialogHeader>
 
                     <Tabs value={createTab} onValueChange={(v) => setCreateTab(v as any)}>
-                        <TabsList className="flex flex-wrap h-auto w-full bg-muted p-1">
-                            <TabsTrigger value="manual" className="flex-1">
+                        <TabsList className="grid w-full grid-cols-6">
+                            <TabsTrigger value="manual">
                                 <Edit className="h-4 w-4 mr-1" /> Manual
                             </TabsTrigger>
                             <TabsTrigger value="csv">
@@ -1109,7 +976,7 @@ export default function WhatsAppDatasets() {
                             <TabsTrigger value="crm">
                                 <Users className="h-4 w-4 mr-1" /> CRM
                             </TabsTrigger>
-                            <TabsTrigger value="external" className="flex-1">
+                            <TabsTrigger value="external">
                                 <Link2 className="h-4 w-4 mr-1" /> External
                             </TabsTrigger>
                         </TabsList>
@@ -1467,50 +1334,52 @@ export default function WhatsAppDatasets() {
 
                                         {/* Preview Table with Row Selection */}
                                         {crmPreview.preview_rows && crmPreview.preview_rows.length > 0 && (
-                                            <div className="border rounded mt-2 w-full h-[300px] overflow-auto">
-                                                <Table className="min-w-max">
-                                                    <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-                                                        <TableRow>
-                                                            <TableHead className="w-8">
-                                                                <Checkbox
-                                                                    checked={crmSelectedRows.size === crmPreview.preview_rows.length}
-                                                                    onCheckedChange={(checked) => {
-                                                                        if (checked) {
-                                                                            setCrmSelectedRows(new Set(crmPreview.preview_rows!.map((_, i) => i)));
-                                                                        } else {
-                                                                            setCrmSelectedRows(new Set());
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            </TableHead>
-                                                            {crmPreview.fields?.map((field: string) => (
-                                                                <TableHead key={field} className="text-xs">{field}</TableHead>
-                                                            ))}
-                                                        </TableRow>
-                                                    </TableHeader>
-                                                    <TableBody>
-                                                        {crmPreview.preview_rows.map((row: Record<string, any>, idx: number) => (
-                                                            <TableRow key={idx} className={crmSelectedRows.has(idx) ? "bg-muted/30" : ""}>
-                                                                <TableCell className="w-8">
+                                            <div className="border rounded overflow-hidden mt-2">
+                                                <ScrollArea className="max-h-48">
+                                                    <Table>
+                                                        <TableHeader>
+                                                            <TableRow>
+                                                                <TableHead className="w-8">
                                                                     <Checkbox
-                                                                        checked={crmSelectedRows.has(idx)}
+                                                                        checked={crmSelectedRows.size === crmPreview.preview_rows.length}
                                                                         onCheckedChange={(checked) => {
-                                                                            const newSet = new Set(crmSelectedRows);
-                                                                            if (checked) newSet.add(idx);
-                                                                            else newSet.delete(idx);
-                                                                            setCrmSelectedRows(newSet);
+                                                                            if (checked) {
+                                                                                setCrmSelectedRows(new Set(crmPreview.preview_rows!.map((_, i) => i)));
+                                                                            } else {
+                                                                                setCrmSelectedRows(new Set());
+                                                                            }
                                                                         }}
                                                                     />
-                                                                </TableCell>
+                                                                </TableHead>
                                                                 {crmPreview.fields?.map((field: string) => (
-                                                                    <TableCell key={field} className="text-xs max-w-32 truncate">
-                                                                        {row[field] || '-'}
-                                                                    </TableCell>
+                                                                    <TableHead key={field} className="text-xs">{field}</TableHead>
                                                                 ))}
                                                             </TableRow>
-                                                        ))}
-                                                    </TableBody>
-                                                </Table>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {crmPreview.preview_rows.map((row: Record<string, any>, idx: number) => (
+                                                                <TableRow key={idx} className={crmSelectedRows.has(idx) ? "bg-muted/30" : ""}>
+                                                                    <TableCell className="w-8">
+                                                                        <Checkbox
+                                                                            checked={crmSelectedRows.has(idx)}
+                                                                            onCheckedChange={(checked) => {
+                                                                                const newSet = new Set(crmSelectedRows);
+                                                                                if (checked) newSet.add(idx);
+                                                                                else newSet.delete(idx);
+                                                                                setCrmSelectedRows(newSet);
+                                                                            }}
+                                                                        />
+                                                                    </TableCell>
+                                                                    {crmPreview.fields?.map((field: string) => (
+                                                                        <TableCell key={field} className="text-xs max-w-32 truncate">
+                                                                            {row[field] || '-'}
+                                                                        </TableCell>
+                                                                    ))}
+                                                                </TableRow>
+                                                            ))}
+                                                        </TableBody>
+                                                    </Table>
+                                                </ScrollArea>
                                             </div>
                                         )}
                                     </div>
@@ -1529,128 +1398,40 @@ export default function WhatsAppDatasets() {
                             <div className="grid gap-4">
                                 <div className="grid gap-2">
                                     <Label>Dataset Name *</Label>
-                                    <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Sociovia Contacts" />
+                                    <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. HubSpot Contacts" />
                                 </div>
                                 <div className="grid gap-2">
                                     <Label>External CRM</Label>
-                                    <Select value={externalCrm} onValueChange={(v) => { setExternalCrm(v as any); setSocioviaPreview(null); }}>
+                                    <Select value={externalCrm} onValueChange={(v) => setExternalCrm(v as 'hubspot' | 'pipedrive')}>
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="sociovia">Sociovia CRM</SelectItem>
                                             <SelectItem value="hubspot">HubSpot</SelectItem>
                                             <SelectItem value="pipedrive">Pipedrive</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
-
-                                {/* Sociovia CRM Section */}
-                                {externalCrm === 'sociovia' && (
-                                    <>
-                                        <div className="grid gap-2">
-                                            <Label>Sociovia API Key (optional)</Label>
-                                            <Input
-                                                type="password"
-                                                value={socioviaApiKey}
-                                                onChange={(e) => setSocioviaApiKey(e.target.value)}
-                                                placeholder="Enter API Key to verify"
-                                            />
-                                            <p className="text-xs text-muted-foreground">
-                                                Sociovia API authentication will be required soon.
-                                            </p>
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label>Workspace ID *</Label>
-                                            <Input
-                                                value={socioviaWorkspaceId}
-                                                onChange={(e) => setSocioviaWorkspaceId(e.target.value)}
-                                                placeholder="e.g. 41"
-                                            />
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label>Data Type</Label>
-                                            <Select value={socioviaDataType} onValueChange={(v) => { setSocioviaDataType(v as any); setSocioviaPreview(null); }}>
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="contacts">Contacts</SelectItem>
-                                                    <SelectItem value="leads">Leads</SelectItem>
-                                                    <SelectItem value="deals">Deals</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <Button variant="outline" onClick={handleSocioviaPreview} disabled={!socioviaCrmUrl || !socioviaWorkspaceId || loadingSocioviaPreview}>
-                                            {loadingSocioviaPreview ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <CloudDownload className="h-4 w-4 mr-2" />}
-                                            Preview {socioviaDataType}
-                                        </Button>
-
-                                        {/* Sociovia Preview */}
-                                        {socioviaPreview && (
-                                            <div className="space-y-3 p-3 bg-muted/30 rounded w-full overflow-hidden">
-                                                <div className="text-sm font-medium">Fields: {socioviaPreview.fields?.join(", ")}</div>
-                                                <div className="text-sm text-muted-foreground">
-                                                    Total records: {socioviaPreview.total_records}
-                                                </div>
-                                                {socioviaPreview.preview_rows && socioviaPreview.preview_rows.length > 0 && (
-                                                    <div className="border rounded mt-2 w-full h-[300px] overflow-auto">
-                                                        <Table className="min-w-max">
-                                                            <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-                                                                <TableRow>
-                                                                    {socioviaPreview.fields?.map((field: string) => (
-                                                                        <TableHead key={field} className="text-xs">{field}</TableHead>
-                                                                    ))}
-                                                                </TableRow>
-                                                            </TableHeader>
-                                                            <TableBody>
-                                                                {socioviaPreview.preview_rows.map((row: Record<string, any>, idx: number) => (
-                                                                    <TableRow key={idx}>
-                                                                        {socioviaPreview.fields?.map((field: string) => (
-                                                                            <TableCell key={field} className="text-xs max-w-32 truncate">
-                                                                                {row[field] || '-'}
-                                                                            </TableCell>
-                                                                        ))}
-                                                                    </TableRow>
-                                                                ))}
-                                                            </TableBody>
-                                                        </Table>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-
-                                {/* HubSpot / Pipedrive Section */}
-                                {externalCrm !== 'sociovia' && (
-                                    <div className="grid gap-2">
-                                        <Label>API Key *</Label>
-                                        <Input
-                                            type="password"
-                                            value={externalApiKey}
-                                            onChange={(e) => setExternalApiKey(e.target.value)}
-                                            placeholder={externalCrm === 'hubspot' ? "HubSpot Private App Token" : "Pipedrive API Token"}
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            {externalCrm === 'hubspot'
-                                                ? "Get your token from HubSpot → Settings → Integrations → Private Apps"
-                                                : "Get your token from Pipedrive → Settings → Personal Preferences → API"}
-                                        </p>
-                                    </div>
-                                )}
+                                <div className="grid gap-2">
+                                    <Label>API Key *</Label>
+                                    <Input
+                                        type="password"
+                                        value={externalApiKey}
+                                        onChange={(e) => setExternalApiKey(e.target.value)}
+                                        placeholder={externalCrm === 'hubspot' ? "HubSpot Private App Token" : "Pipedrive API Token"}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        {externalCrm === 'hubspot'
+                                            ? "Get your token from HubSpot → Settings → Integrations → Private Apps"
+                                            : "Get your token from Pipedrive → Settings → Personal Preferences → API"}
+                                    </p>
+                                </div>
                             </div>
                             <DialogFooter>
                                 <Button variant="outline" onClick={resetCreateDialog}>Cancel</Button>
-                                {externalCrm === 'sociovia' ? (
-                                    <Button onClick={handleCreateFromSociovia} disabled={creating || !newName || !socioviaCrmUrl || !socioviaWorkspaceId}>
-                                        {creating ? "Importing..." : `Import ${socioviaDataType} from Sociovia`}
-                                    </Button>
-                                ) : (
-                                    <Button onClick={handleCreateFromExternal} disabled={creating || !newName || !externalApiKey}>
-                                        {creating ? "Importing..." : `Import from ${externalCrm}`}
-                                    </Button>
-                                )}
+                                <Button onClick={handleCreateFromExternal} disabled={creating || !newName || !externalApiKey}>
+                                    {creating ? "Importing..." : `Import from ${externalCrm}`}
+                                </Button>
                             </DialogFooter>
                         </TabsContent>
                     </Tabs>
@@ -1691,6 +1472,5 @@ export default function WhatsAppDatasets() {
                 )}
             </div>
         </div>
-        </WhatsAppConnectionGuard>
     );
 }

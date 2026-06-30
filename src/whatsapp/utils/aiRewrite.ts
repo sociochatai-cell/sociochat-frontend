@@ -2,8 +2,6 @@
 // ====================
 // AI-assisted template rewriting for category compliance
 
-import { API_BASE_URL } from '@/config';
-
 export interface RewriteRequest {
     originalText: string;
     targetCategory: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
@@ -19,7 +17,9 @@ export interface RewriteResponse {
     cannotRewrite: boolean;
     suggestedCategory?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
 }
-const baseurl = API_BASE_URL;
+import { WHATSAPP_API_BASE_URL } from '@/config';
+
+const baseurl = WHATSAPP_API_BASE_URL;
 /**
  * Request AI to rewrite template body for target category
  */

@@ -30,6 +30,7 @@ import {
     Lightbulb,
     Target,
     XCircle,
+    ClipboardList,
     RefreshCw
 } from 'lucide-react';
 import logo from '@/assets/sociovia_logo.png';
@@ -57,7 +58,7 @@ export function WhatsAppGuide() {
             content: (
                 <div className="space-y-6">
                     <p className="text-muted-foreground">
-                        Connect your WhatsApp Business Account to start engaging with customers directly through SocioChat.
+                        Connect your WhatsApp Business Account to start engaging with customers directly through Sociovia.
                     </p>
 
                     <div className="grid gap-4">
@@ -69,7 +70,7 @@ export function WhatsAppGuide() {
                                 <div>
                                     <h4 className="font-semibold text-green-900">Option 1: Embedded Signup (Recommended)</h4>
                                     <p className="text-sm text-green-700 mt-1">
-                                        The fastest way to connect. Uses Meta's official signup flow directly in SocioChat.
+                                        The fastest way to connect. Uses Meta's official signup flow directly in Sociovia.
                                         No external steps required.
                                     </p>
                                     <ul className="mt-3 space-y-1 text-sm text-green-700">
@@ -113,7 +114,7 @@ export function WhatsAppGuide() {
                     </div>
 
                     <div className="flex gap-3">
-                        <Button onClick={() => navigate('/dashboard/setup')} className="bg-brand-500 hover:bg-brand-700">
+                        <Button onClick={() => navigate('/dashboard/whatsapp/setup')} className="bg-[#25D366] hover:bg-[#128C7E]">
                             <Zap className="w-4 h-4 mr-2" />
                             Connect Now
                         </Button>
@@ -274,7 +275,7 @@ export function WhatsAppGuide() {
                         </ul>
                     </div>
 
-                    <Button onClick={() => navigate('/dashboard/templates')} variant="outline">
+                    <Button onClick={() => navigate('/dashboard/whatsapp/templates')} variant="outline">
                         <FileText className="w-4 h-4 mr-2" />
                         Manage Templates
                     </Button>
@@ -283,39 +284,39 @@ export function WhatsAppGuide() {
         },
         {
             id: 'flows',
-            title: 'Flows & Automation',
-            icon: <Zap className="w-5 h-5 text-orange-600" />,
+            title: 'WhatsApp Forms',
+            icon: <ClipboardList className="w-5 h-5 text-emerald-600" />,
             content: (
                 <div className="space-y-6">
                     <p className="text-muted-foreground">
-                        WhatsApp Flows are interactive forms and multi-step experiences that run natively within WhatsApp.
+                        WhatsApp Forms are native interactive forms and multi-step experiences that run directly within WhatsApp chat.
                     </p>
 
-                    <div className="p-5 bg-orange-50 rounded-xl border border-orange-200">
-                        <h4 className="font-semibold text-orange-900 mb-3">What Can Flows Do?</h4>
+                    <div className="p-5 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                        <h4 className="font-semibold text-emerald-950 mb-3">What Can Forms Do?</h4>
                         <div className="grid sm:grid-cols-2 gap-3">
-                            <div className="flex items-center gap-2 text-sm text-orange-800">
-                                <CheckCircle className="w-4 h-4 text-green-500" />
+                            <div className="flex items-center gap-2 text-sm text-emerald-800">
+                                <CheckCircle className="w-4 h-4 text-emerald-500" />
                                 Collect lead information
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-orange-800">
-                                <CheckCircle className="w-4 h-4 text-green-500" />
+                            <div className="flex items-center gap-2 text-sm text-emerald-800">
+                                <CheckCircle className="w-4 h-4 text-emerald-500" />
                                 Book appointments
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-orange-800">
-                                <CheckCircle className="w-4 h-4 text-green-500" />
+                            <div className="flex items-center gap-2 text-sm text-emerald-800">
+                                <CheckCircle className="w-4 h-4 text-emerald-500" />
                                 Take orders and payments
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-orange-800">
-                                <CheckCircle className="w-4 h-4 text-green-500" />
+                            <div className="flex items-center gap-2 text-sm text-emerald-800">
+                                <CheckCircle className="w-4 h-4 text-emerald-500" />
                                 Run surveys and feedback forms
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-orange-800">
-                                <CheckCircle className="w-4 h-4 text-green-500" />
+                            <div className="flex items-center gap-2 text-sm text-emerald-800">
+                                <CheckCircle className="w-4 h-4 text-emerald-500" />
                                 Customer support routing
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-orange-800">
-                                <CheckCircle className="w-4 h-4 text-green-500" />
+                            <div className="flex items-center gap-2 text-sm text-emerald-800">
+                                <CheckCircle className="w-4 h-4 text-emerald-500" />
                                 Product catalogs
                             </div>
                         </div>
@@ -327,14 +328,14 @@ export function WhatsAppGuide() {
                             <span className="font-medium text-sm">Note</span>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                            Flows can only be triggered within the 24-hour messaging window (via interactive messages)
+                            Forms can only be triggered within the 24-hour messaging window (via interactive messages)
                             or through template buttons. They require Meta app approval for production use.
                         </p>
                     </div>
 
-                    <Button onClick={() => navigate('/dashboard/flows')} variant="outline">
-                        <Zap className="w-4 h-4 mr-2" />
-                        View Flows
+                    <Button onClick={() => navigate('/dashboard/whatsapp/flows')} variant="outline">
+                        <ClipboardList className="w-4 h-4 mr-2" />
+                        View Forms
                     </Button>
                 </div>
             )
@@ -346,7 +347,7 @@ export function WhatsAppGuide() {
             content: (
                 <div className="space-y-6">
                     <p className="text-muted-foreground">
-                        SocioChat provides a powerful suite of automation tools to engage customers 24/7.
+                        Sociovia provides a powerful suite of automation tools to engage customers 24/7.
                     </p>
 
                     <div className="grid sm:grid-cols-2 gap-4">
@@ -406,7 +407,7 @@ export function WhatsAppGuide() {
                         </div>
                     </div>
 
-                    <Button onClick={() => navigate('/dashboard/automation')} className="bg-amber-600 hover:bg-amber-700 text-white">
+                    <Button onClick={() => navigate('/dashboard/whatsapp/automation')} className="bg-amber-600 hover:bg-amber-700 text-white">
                         <Settings className="w-4 h-4 mr-2" />
                         Configure Automations
                     </Button>
@@ -566,7 +567,7 @@ export function WhatsAppGuide() {
                         </div>
                     </div>
 
-                    <Button onClick={() => navigate('/dashboard/settings')} variant="outline">
+                    <Button onClick={() => navigate('/dashboard/whatsapp/settings')} variant="outline">
                         <RefreshCw className="w-4 h-4 mr-2" />
                         Check Connection Status
                     </Button>
@@ -583,7 +584,7 @@ export function WhatsAppGuide() {
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => navigate('/dashboard/settings')}
+                        onClick={() => navigate('/dashboard/whatsapp/settings')}
                         className="mb-4 -ml-2 text-muted-foreground hover:text-foreground"
                     >
                         <ArrowLeft className="w-4 h-4 mr-2" />
@@ -591,7 +592,7 @@ export function WhatsAppGuide() {
                     </Button>
 
                     <div className="flex items-center gap-4">
-                        <div className="p-3 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-lg">
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-[#25D366] to-[#128C7E] shadow-lg">
                             <BookOpen className="w-8 h-8 text-white" />
                         </div>
                         <div>

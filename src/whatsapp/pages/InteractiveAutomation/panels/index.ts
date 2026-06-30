@@ -3,4 +3,3 @@
  */
 
 export { NodeEditor } from './NodeEditor';
-export { ApiNodeEditor } from './ApiNodeEditor';

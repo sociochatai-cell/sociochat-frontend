@@ -6,12 +6,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Users, Send, Eye, CheckCircle, BarChart as BarChartIcon, MessageCircle, TrendingUp, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { API_ENDPOINT } from '@/config';
-import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { cachedFetch } from '../utils/waPersistentCache';
+import { getWorkspaceId } from '../utils/workspaceContext';
+import { RefreshButton } from '../components/RefreshButton';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
-const API_BASE = API_ENDPOINT;
+const API_BASE = API_BASE_URL;
 
 interface SummaryStats {
     total_campaigns: number;
@@ -45,12 +47,9 @@ const DripOverallAnalyticsPage = () => {
     const navigate = useNavigate();
 
     // Use workspace ID from localStorage
-    const [workspaceId, setWorkspaceId] = useState<string | null>(getWorkspaceId());
-
-    useEffect(() => {
-        const id = getWorkspaceId();
-        if (id) setWorkspaceId(id);
-    }, []);
+    const [workspaceId] = useState<string | null>(
+        getWorkspaceId()
+    );
 
     const [stats, setStats] = useState<SummaryStats | null>(null);
     const [campaigns, setCampaigns] = useState<CampaignPerformance[]>([]);
@@ -61,10 +60,7 @@ const DripOverallAnalyticsPage = () => {
         if (!workspaceId) return;
         setLoading(true);
         try {
-            const res = await fetch(
-                `${API_BASE}/whatsapp/drip-campaigns/analytics/overview?workspace_id=${workspaceId}`,
-                { credentials: 'include' }
-            );
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/drip-campaigns/analytics/overview?workspace_id=${workspaceId}`);
             if (!res.ok) throw new Error('Failed to fetch analytics');
             const data = await res.json();
             setStats(data.summary);
@@ -103,9 +99,12 @@ const DripOverallAnalyticsPage = () => {
                     </h1>
                     <p className="text-muted-foreground">Comprehensive performance overview across all drip campaigns</p>
                 </div>
-                <Button variant="outline" onClick={() => navigate('/dashboard/drip')}>
-                    Back to Drip Campaigns
-                </Button>
+                <div className="flex items-center gap-2">
+                    <RefreshButton onRefresh={fetchOverview} isRefreshing={loading} title="Refresh" />
+                    <Button variant="outline" onClick={() => navigate('/dashboard/whatsapp/automations')}>
+                        Back to Drip Campaigns
+                    </Button>
+                </div>
             </div>
 
             {/* KPI Cards */}
@@ -257,7 +256,7 @@ const DripOverallAnalyticsPage = () => {
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={() => navigate(`/dashboard/campaigns/${c.id}/analytics`)}
+                                                onClick={() => navigate(`/dashboard/whatsapp/campaigns/${c.id}/analytics`)}
                                             >
                                                 Details <ArrowRight className="w-4 h-4 ml-1" />
                                             </Button>

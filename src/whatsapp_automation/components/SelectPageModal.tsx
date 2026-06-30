@@ -13,7 +13,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
+import { 
   Facebook,
   MessageCircle,
   Phone,
@@ -84,17 +84,19 @@ const PageCard: React.FC<{
       type="button"
       onClick={() => !isDisabled && onSelect()}
       disabled={isDisabled}
-      className={`w-full text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-lg ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-        }`}
+      className={`w-full text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-lg ${
+        isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+      }`}
       aria-pressed={isSelected}
       aria-describedby={isDisabled ? `${cardId}-disabled` : undefined}
     >
-      <Card className={`transition-colors ${isSelected
-          ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-          : isDisabled
-            ? 'border-muted'
+      <Card className={`transition-colors ${
+        isSelected 
+          ? 'border-primary bg-primary/5 ring-2 ring-primary/20' 
+          : isDisabled 
+            ? 'border-muted' 
             : 'hover:border-muted-foreground/30'
-        }`}>
+      }`}>
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
             {/* Page Icon */}
@@ -110,7 +112,7 @@ const PageCard: React.FC<{
                   <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
                 )}
               </div>
-
+              
               <p className="text-xs text-muted-foreground mt-1">
                 Page ID: {page.page_id}
               </p>
@@ -123,14 +125,14 @@ const PageCard: React.FC<{
                     WhatsApp
                   </Badge>
                 )}
-
+                
                 {page.instagram_account_id && (
                   <Badge variant="secondary" className="text-xs">
                     <Instagram className="w-3 h-3 mr-1" />
                     Instagram
                   </Badge>
                 )}
-
+                
                 {page.phone_number_id && (
                   <Badge variant="outline" className="text-xs">
                     <Phone className="w-3 h-3 mr-1" />
@@ -143,7 +145,7 @@ const PageCard: React.FC<{
 
           {/* WhatsApp Required Warning */}
           {isDisabled && (
-            <div
+            <div 
               id={`${cardId}-disabled`}
               className="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-md"
             >
@@ -203,7 +205,7 @@ export const SelectPageModal: React.FC<SelectPageModalProps> = ({
 
       // Convert WABA + phone numbers to LinkedPage format for compatibility
       const linkedPages: LinkedPage[] = [];
-
+      
       if (wabaResponse.waba && phoneResponse.phone_numbers) {
         phoneResponse.phone_numbers.forEach((phone) => {
           linkedPages.push({
@@ -277,7 +279,7 @@ export const SelectPageModal: React.FC<SelectPageModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent
+      <DialogContent 
         className="sm:max-w-lg max-h-[85vh] flex flex-col"
         aria-describedby={`${modalId}-description`}
       >
@@ -287,7 +289,7 @@ export const SelectPageModal: React.FC<SelectPageModalProps> = ({
             Select Account
           </DialogTitle>
           <DialogDescription id={`${modalId}-description`}>
-            {requireWhatsApp
+            {requireWhatsApp 
               ? 'Choose a Facebook Page with a linked WhatsApp Business Account'
               : 'Choose a Facebook Page or Instagram account to post with'}
           </DialogDescription>
@@ -301,9 +303,9 @@ export const SelectPageModal: React.FC<SelectPageModalProps> = ({
               <AlertTitle>Error</AlertTitle>
               <AlertDescription className="flex items-center justify-between">
                 <span>{error}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
+                <Button 
+                  variant="outline" 
+                  size="sm" 
                   onClick={fetchPages}
                   disabled={isLoading}
                 >
@@ -332,7 +334,7 @@ export const SelectPageModal: React.FC<SelectPageModalProps> = ({
                 Connect your Facebook Page to get started
               </p>
               <Button variant="outline" asChild>
-                <a href="/dashboard/setup" className="inline-flex items-center gap-2">
+                <a href="/dashboard/whatsapp/setup" className="inline-flex items-center gap-2">
                   Connect Account
                   <ExternalLink className="w-4 h-4" />
                 </a>
@@ -346,11 +348,11 @@ export const SelectPageModal: React.FC<SelectPageModalProps> = ({
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>WhatsApp Not Linked</AlertTitle>
               <AlertDescription>
-                None of your Facebook Pages have a WhatsApp Business Account linked.
-                Please use the Embedded Signup to connect WhatsApp, or link your Page
+                None of your Facebook Pages have a WhatsApp Business Account linked. 
+                Please use the Embedded Signup to connect WhatsApp, or link your Page 
                 to WhatsApp in your Facebook Business settings.
                 <Button variant="link" asChild className="px-0 mt-2 h-auto">
-                  <a href="/dashboard/setup">
+                  <a href="/dashboard/whatsapp/setup">
                     Set up WhatsApp Business
                     <ExternalLink className="w-3 h-3 ml-1" />
                   </a>
@@ -379,7 +381,7 @@ export const SelectPageModal: React.FC<SelectPageModalProps> = ({
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
-          <Button
+          <Button 
             onClick={handleConfirm}
             disabled={!selectedPage || (requireWhatsApp && !selectedPage.phone_number_id)}
           >

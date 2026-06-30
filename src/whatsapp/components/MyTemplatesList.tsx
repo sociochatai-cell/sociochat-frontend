@@ -20,9 +20,17 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { API_BASE_URL } from "@/config";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { cachedFetch, invalidateHttpCache } from '../utils/waPersistentCache';
+import { clearCache } from '../hooks/useDataCache';
 
 const API_BASE = API_BASE_URL;
+
+// Drop both cache layers that back the templates list so the next read pulls fresh data.
+const invalidateTemplatesCache = () => {
+    invalidateHttpCache('/api/whatsapp/templates');
+    clearCache('whatsapp_templates');
+};
 
 interface MyTemplatesListProps {
     accountId: number | null;
@@ -51,7 +59,7 @@ export function MyTemplatesList({ accountId, onSendTemplate }: MyTemplatesListPr
             const params = new URLSearchParams({ account_id: accountId.toString() });
             if (statusFilter) params.append('status', statusFilter);
 
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates?${params}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/templates?${params}`, {
                 credentials: 'include',
             });
             const data = await res.json();
@@ -71,7 +79,7 @@ export function MyTemplatesList({ accountId, onSendTemplate }: MyTemplatesListPr
 
         try {
             setSyncing(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates/sync`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/templates/sync`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -80,6 +88,8 @@ export function MyTemplatesList({ accountId, onSendTemplate }: MyTemplatesListPr
             const data = await res.json();
 
             if (data.success) {
+                // Drop stale cached GETs before the refetch so it reads fresh data.
+                invalidateTemplatesCache();
                 // Re-fetch templates with current filter instead of using sync result
                 await fetchTemplates();
                 toast({
@@ -111,7 +121,7 @@ export function MyTemplatesList({ accountId, onSendTemplate }: MyTemplatesListPr
 
         try {
             setSyncingTemplateId(template.id);
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates/${template.id}/sync`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/templates/${template.id}/sync`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -120,6 +130,8 @@ export function MyTemplatesList({ accountId, onSendTemplate }: MyTemplatesListPr
             const data = await res.json();
 
             if (data.success) {
+                // Stored cache now stale (status may have changed) — drop it.
+                invalidateTemplatesCache();
                 // Update template in local state
                 setTemplates(prev => prev.map(t =>
                     t.id === template.id ? { ...t, ...data.template, status: data.template?.status || t.status } : t
@@ -152,7 +164,7 @@ export function MyTemplatesList({ accountId, onSendTemplate }: MyTemplatesListPr
         if (!selectedTemplateForAction || !accountId) return;
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates/${selectedTemplateForAction.id}/archive`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/templates/${selectedTemplateForAction.id}/archive`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -161,6 +173,8 @@ export function MyTemplatesList({ accountId, onSendTemplate }: MyTemplatesListPr
             const data = await res.json();
 
             if (data.success) {
+                // Cached list still contains the archived template — drop it.
+                invalidateTemplatesCache();
                 // Remove from local list or mark as archived
                 setTemplates(prev => prev.filter(t => t.id !== selectedTemplateForAction.id));
                 toast({
@@ -192,7 +206,7 @@ export function MyTemplatesList({ accountId, onSendTemplate }: MyTemplatesListPr
         if (!selectedTemplateForAction || !accountId) return;
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates/${selectedTemplateForAction.id}`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/templates/${selectedTemplateForAction.id}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -201,6 +215,8 @@ export function MyTemplatesList({ accountId, onSendTemplate }: MyTemplatesListPr
             const data = await res.json();
 
             if (data.success) {
+                // Cached list still contains the deleted template — drop it.
+                invalidateTemplatesCache();
                 // Remove from local list
                 setTemplates(prev => prev.filter(t => t.id !== selectedTemplateForAction.id));
                 toast({

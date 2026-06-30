@@ -3,18 +3,22 @@
 // Individual message display (incoming/outgoing)
 
 import { format } from 'date-fns';
-import { Check, CheckCheck, AlertCircle, Image, Video, FileText, Mic, Clock } from 'lucide-react';
+import { Check, CheckCheck, AlertCircle, Image, Video, FileText, Mic, Clock, Star, ExternalLink, ShoppingCart } from 'lucide-react';
 import { ConversationMessage } from '../types';
 import { cn } from '@/lib/utils';
+import {
+  extractOrderData,
+  extractTemplateButtons,
+  formatOrderPrice,
+  getOrderProductImageSrc,
+  type OrderLineItem,
+  type TemplateInfo,
+} from '../utils/messageDisplay';
 import { Button } from '@/components/ui/button';
-
-// Template info from API
-interface TemplateInfo {
-  name: string;
-  body: string | null;
-  header: string | null;
-  footer: string | null;
-}
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { getWorkspaceId } from '../utils/workspaceContext';
+import { toast } from 'sonner';
+import { SafeImage } from '@/components/ui/safe-image';
 
 interface MessageBubbleProps {
   message: ConversationMessage;
@@ -22,7 +26,8 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message, templates = {} }: MessageBubbleProps) {
-  const isOutgoing = message.direction === 'outgoing';
+  // Echo messages (from mobile app) should display as outgoing (right side)
+  const isOutgoing = message.direction === 'outgoing' || message.direction === 'echo';
   const isFailed = message.status === 'failed';
 
   return (
@@ -72,13 +77,49 @@ export function MessageBubble({ message, templates = {} }: MessageBubbleProps) {
         </div>
 
         {/* Error message */}
-        {isFailed && message.error_message && (
-          <div className="px-4 pb-2 text-xs opacity-90 flex items-center gap-1">
-            <AlertCircle className="w-3 h-3" />
-            <span>{message.error_message}</span>
-          </div>
+        {isFailed && (
+          <FailedStatusDetails message={message} />
         )}
       </div>
+    </div>
+  );
+}
+
+function extractFirstUrl(text?: string): string | null {
+  if (!text) return null;
+  const match = text.match(/https?:\/\/\S+/i);
+  return match ? match[0] : null;
+}
+
+function FailedStatusDetails({ message }: { message: ConversationMessage }) {
+  const raw = (message.error_message || '').trim();
+  const link = extractFirstUrl(raw);
+  const compactMessage = raw.replace(/https?:\/\/\S+/gi, '').replace(/\s+/g, ' ').trim();
+
+  return (
+    <div className="px-4 pb-2 text-xs opacity-95 space-y-1">
+      <div className="flex items-start gap-1 text-destructive">
+        <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+        <span>{compactMessage || 'Message delivery failed.'}</span>
+      </div>
+
+      {message.error_code && (
+        <div className="text-[11px] text-muted-foreground">
+          Error code: {message.error_code}
+        </div>
+      )}
+
+      {link && (
+        <a
+          href={link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 underline"
+        >
+          Open fix link
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      )}
     </div>
   );
 }
@@ -193,11 +234,42 @@ function renderMessageContent(message: ConversationMessage, isOutgoing: boolean,
     case 'document':
       return renderDocumentMessage(content, isOutgoing);
 
+    case 'sticker':
+      return renderStickerMessage(content, isOutgoing);
+
     case 'interactive':
       return renderInteractiveMessage(content, isOutgoing);
 
-    default:
+    case 'button':
+      return renderButtonMessage(content, isOutgoing);
+
+    case 'order':
+      return renderOrderMessage(content, isOutgoing);
+
+    case 'location':
+      return renderLocationMessage(content);
+
+    case 'contacts':
+      return renderContactsMessage(content);
+
+    case 'reaction':
+      return renderReactionMessage(content);
+
+    default: {
+      // Fallback to content.type when DB type and content payload are inconsistent.
+      const fallbackType = String(content?.type || '').toLowerCase();
+      if (fallbackType === 'image') return renderImageMessage(content, isOutgoing);
+      if (fallbackType === 'video') return renderVideoMessage(content, isOutgoing);
+      if (fallbackType === 'document') return renderDocumentMessage(content, isOutgoing);
+      if (fallbackType === 'sticker') return renderStickerMessage(content, isOutgoing);
+      if (fallbackType === 'interactive') return renderInteractiveMessage(content, isOutgoing);
+      if (fallbackType === 'button') return renderButtonMessage(content, isOutgoing);
+      if (fallbackType === 'order') return renderOrderMessage(content, isOutgoing);
+      if (fallbackType === 'location') return renderLocationMessage(content);
+      if (fallbackType === 'contacts') return renderContactsMessage(content);
+      if (fallbackType === 'reaction') return renderReactionMessage(content);
       return <p className="text-xs opacity-70 px-4 py-2">Unsupported message type: {type}</p>;
+    }
   }
 }
 
@@ -311,8 +383,8 @@ function renderTemplateMessage(content: MessageContent, isOutgoing: boolean, tem
         )}
 
         {/* Footer */}
-        {content?.footer && (
-          <p className="text-xs mt-2 opacity-70">{String(content.footer)}</p>
+        {footerText && (
+          <p className="text-xs mt-2 opacity-70">{footerText}</p>
         )}
 
         {/* Error message */}
@@ -323,19 +395,38 @@ function renderTemplateMessage(content: MessageContent, isOutgoing: boolean, tem
         )}
       </div>
 
-      {/* Buttons */}
-      {content?.buttons && content.buttons.length > 0 && (
-        <div className="border-t border-white/10">
-          {content.buttons.map((btn, idx) => (
-            <div
-              key={idx}
-              className="text-center py-2 border-b border-white/10 last:border-b-0 text-blue-400 font-medium text-sm"
-            >
-              {btn.title}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Template buttons (quick reply, URL, catalog, etc.) */}
+      {(() => {
+        const templateButtons = extractTemplateButtons(content as Record<string, unknown>, templates);
+        if (templateButtons.length === 0) return null;
+        return (
+          <div className="border-t border-black/10">
+            {templateButtons.map((btn, idx) => (
+              <div
+                key={`${btn.title}-${idx}`}
+                className={cn(
+                  'text-center py-2.5 border-b border-black/10 last:border-b-0 font-medium text-sm',
+                  isOutgoing ? 'text-blue-700' : 'text-blue-600',
+                )}
+              >
+                {btn.url ? (
+                  <a
+                    href={btn.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1 hover:underline"
+                  >
+                    {btn.title}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : (
+                  btn.title
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -369,26 +460,33 @@ function extractHeaderImage(content: MessageContent): string | null {
   return null;
 }
 
-function renderImageMessage(content: MessageContent, isOutgoing: boolean) {
-  const imageUrl = content?.image_url || content?.url || content?.link || content?.media_url;
+function renderImageMessage(content: any, isOutgoing: boolean) {
+  const workspaceId = getWorkspaceId();
+  const mediaId = content?.id || content?.image?.id;
+
+  // Try to use backend proxy for WhatsApp media IDs
+  let displayUrl = (mediaId && typeof mediaId === 'string' && mediaId.length > 5)
+    ? `${WHATSAPP_REST_API_PREFIX}/media/${mediaId}?workspace_id=${workspaceId}`
+    : (content?.image?.link || content?.image_url || content?.url || content?.link || content?.media_url);
 
   // Debug log to help troubleshoot image issues
-  console.log('🖼️ renderImageMessage - content:', content, 'imageUrl:', imageUrl);
+  console.log('🖼️ renderImageMessage - content:', content, 'displayUrl:', displayUrl);
 
-  // Check if it's a Google Drive URL
-  const isGoogleDrive = imageUrl?.includes('drive.google.com');
+  // Check if it's a Google Drive URL (fallback for non-WhatsApp media)
+  const isGoogleDrive = typeof displayUrl === 'string' && displayUrl.includes('drive.google.com');
 
   // Extract Google Drive file ID and create direct preview URL
   const getGoogleDrivePreviewUrl = (url: string): string => {
     const fileIdMatch = url.match(/[?&]id=([^&]+)/);
     if (fileIdMatch) {
-      // Use lh3.googleusercontent.com for direct image access
       return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}`;
     }
     return url;
   };
 
-  const displayUrl = isGoogleDrive && imageUrl ? getGoogleDrivePreviewUrl(imageUrl) : imageUrl;
+  if (isGoogleDrive && displayUrl) {
+    displayUrl = getGoogleDrivePreviewUrl(displayUrl);
+  }
 
   return (
     <div>
@@ -398,13 +496,12 @@ function renderImageMessage(content: MessageContent, isOutgoing: boolean) {
             src={displayUrl}
             alt="Image message"
             className="w-full h-auto max-h-64 object-cover cursor-pointer"
-            onClick={() => window.open(imageUrl || displayUrl, '_blank')}
+            onClick={() => window.open(displayUrl, '_blank')}
             referrerPolicy="no-referrer"
             onError={(e) => {
               console.error('🖼️ Image load error for URL:', displayUrl);
-              // Try iframe fallback for Google Drive
               const target = e.target as HTMLImageElement;
-              if (isGoogleDrive && imageUrl) {
+              if (isGoogleDrive && displayUrl) {
                 const container = target.parentElement;
                 if (container) {
                   target.style.display = 'none';
@@ -412,7 +509,7 @@ function renderImageMessage(content: MessageContent, isOutgoing: boolean) {
                   fallback.innerHTML = `
                     <div 
                       class="flex flex-col items-center justify-center gap-2 bg-black/20 p-4 cursor-pointer hover:bg-black/30"
-                      onclick="window.open('${imageUrl}', '_blank')"
+                      onclick="window.open('${displayUrl}', '_blank')"
                     >
                       <span class="text-3xl">🖼️</span>
                       <span class="text-sm">Click to view image</span>
@@ -440,8 +537,85 @@ function renderImageMessage(content: MessageContent, isOutgoing: boolean) {
   );
 }
 
-function renderVideoMessage(content: MessageContent, isOutgoing: boolean) {
-  const videoUrl = content?.url || content?.link || content?.media_url;
+function renderStickerMessage(content: any, isOutgoing: boolean) {
+  const workspaceId = getWorkspaceId();
+  const mediaId = content?.id;
+
+  const stickerUrl = (mediaId && typeof mediaId === 'string' && mediaId.length > 5)
+    ? `${WHATSAPP_REST_API_PREFIX}/media/${mediaId}?workspace_id=${workspaceId}`
+    : (content?.url || content?.link || content?.media_url);
+
+  const handleFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!mediaId || !workspaceId) {
+      toast.error('Missing media ID or workspace ID');
+      return;
+    }
+
+    try {
+      const resp = await fetch(`${WHATSAPP_REST_API_PREFIX}/stickers/favorite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          media_id: mediaId,
+          workspace_id: workspaceId,
+          mime_type: content?.mime_type,
+          sha256: content?.sha256
+        })
+      });
+
+      if (resp.ok) {
+        toast.success('Sticker added to favorites!');
+      } else {
+        const errData = await resp.json().catch(() => ({}));
+        console.error('Failed to favorite sticker:', resp.status, errData);
+        toast.error(`Failed to save: ${resp.status} ${errData.error || 'Server error'}. Check if frontend points to correct backend.`);
+      }
+    } catch (err) {
+      console.error('Failed to favorite sticker:', err);
+      toast.error('Network error while saving sticker. Check backend connection.');
+    }
+  };
+
+  return (
+    <div className="relative group">
+      <div className="p-1">
+        {stickerUrl ? (
+          <img
+            src={stickerUrl}
+            alt="Sticker"
+            className="w-[120px] h-[120px] object-contain cursor-pointer"
+            onClick={() => window.open(stickerUrl, '_blank')}
+          />
+        ) : (
+          <div className="w-[120px] h-[120px] bg-black/5 flex flex-col items-center justify-center rounded border border-dashed border-black/10">
+            <AlertCircle className="w-6 h-6 opacity-20 mb-1" />
+            <span className="text-[10px] opacity-40">Media Error</span>
+            <span className="text-[8px] opacity-30 mt-1">Check Backend Proxy</span>
+          </div>
+        )}
+      </div>
+
+      {!isOutgoing && mediaId && (
+        <button
+          onClick={handleFavorite}
+          className="absolute top-1 right-1 p-1.5 bg-white/95 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-yellow-50 border border-yellow-100"
+          title="Add to favorites"
+        >
+          <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function renderVideoMessage(content: any, isOutgoing: boolean) {
+  const workspaceId = getWorkspaceId();
+  const mediaId = content?.id || content?.video?.id;
+
+  const videoUrl = (mediaId && typeof mediaId === 'string' && mediaId.length > 5)
+    ? `${WHATSAPP_REST_API_PREFIX}/media/${mediaId}?workspace_id=${workspaceId}`
+    : (content?.video?.link || content?.url || content?.link || content?.media_url);
 
   return (
     <div>
@@ -466,16 +640,22 @@ function renderVideoMessage(content: MessageContent, isOutgoing: boolean) {
   );
 }
 
-function renderDocumentMessage(content: MessageContent, isOutgoing: boolean) {
-  const docUrl = content?.url || content?.link || content?.media_url;
+
+function renderDocumentMessage(content: any, isOutgoing: boolean) {
+  const workspaceId = getWorkspaceId();
+  const mediaId = content?.id || content?.document?.id;
+
+  const docUrl = (mediaId && typeof mediaId === 'string' && mediaId.length > 5)
+    ? `${WHATSAPP_REST_API_PREFIX}/media/${mediaId}?workspace_id=${workspaceId}`
+    : (content?.document?.link || content?.url || content?.link || content?.media_url);
 
   return (
     <div className="px-4 py-2">
       <div className="flex items-center gap-2 bg-black/10 rounded p-3">
         <FileText className="w-5 h-5" />
         <div className="flex-1 min-w-0">
-          {content?.filename && (
-            <p className="text-sm font-medium truncate">{String(content.filename)}</p>
+          {(content?.filename || content?.document?.filename) && (
+            <p className="text-sm font-medium truncate">{String(content?.filename || content?.document?.filename)}</p>
           )}
           {docUrl && (
             <a
@@ -654,4 +834,163 @@ function renderStatusWithText(status: string, isFailed: boolean) {
     default:
       return null;
   }
+}
+
+function renderButtonMessage(content: any, isOutgoing: boolean) {
+  return (
+    <div className="px-4 py-2">
+      <div className={cn(
+        "inline-block px-4 py-2 rounded-lg",
+        isOutgoing ? "bg-white/10" : "bg-primary/10"
+      )}>
+        <p className="text-xs opacity-70 mb-1">🔘 Quick Reply</p>
+        <p className="font-medium">{content?.button_text || content?.button_payload || 'Button clicked'}</p>
+      </div>
+    </div>
+  );
+}
+
+function OrderProductThumb({ item, label }: { item: OrderLineItem; label: string }) {
+  const workspaceId = getWorkspaceId();
+  const imageSrc = getOrderProductImageSrc(item, WHATSAPP_REST_API_PREFIX, workspaceId);
+
+  if (!imageSrc) {
+    return (
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-black/10 text-lg">
+        🛍️
+      </div>
+    );
+  }
+
+  return (
+    <SafeImage
+      src={imageSrc}
+      alt={label}
+      className="h-12 w-12 shrink-0 rounded-md object-cover"
+      fallbackClassName="h-12 w-12 shrink-0 rounded-md"
+      fallbackText=""
+      hideOnError={false}
+    />
+  );
+}
+
+function renderOrderMessage(content: any, isOutgoing: boolean) {
+  const { catalog_id, text, items } = extractOrderData(content);
+  const totalQty = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+
+  return (
+    <div className="px-4 py-2">
+      <div className="flex flex-col gap-2 rounded-lg bg-black/5 p-3">
+        <div className="flex items-center gap-2">
+          <ShoppingCart className="h-4 w-4 shrink-0 opacity-70" />
+          <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
+            Catalog cart submitted
+          </p>
+        </div>
+
+        {catalog_id && (
+          <p className="text-[11px] opacity-60">Catalog ID: {catalog_id}</p>
+        )}
+
+        {items.length > 0 ? (
+          <div className="space-y-2">
+            {items.map((item, idx) => {
+              const price = formatOrderPrice(item);
+              const label = item.name || item.product_retailer_id || `Item ${idx + 1}`;
+              return (
+                <div
+                  key={`${item.product_retailer_id || idx}-${idx}`}
+                  className="flex gap-3 border-t border-black/5 pt-2 first:border-t-0 first:pt-0"
+                >
+                  <OrderProductThumb item={item} label={label} />
+                  <div className="min-w-0 flex-1 text-sm">
+                    <p className="font-medium break-words">{label}</p>
+                    {item.product_retailer_id && item.name && (
+                      <p className="text-[11px] opacity-60">SKU: {item.product_retailer_id}</p>
+                    )}
+                    <p className="text-xs opacity-75">Qty: {item.quantity ?? 1}</p>
+                  </div>
+                  {price && <span className="shrink-0 text-sm font-semibold">{price}</span>}
+                </div>
+              );
+            })}
+            <p className="border-t border-black/5 pt-2 text-xs font-medium opacity-80">
+              {items.length} product{items.length === 1 ? '' : 's'} · {totalQty} item{totalQty === 1 ? '' : 's'} total
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm opacity-75">
+            Cart was submitted, but line items were not included in the webhook payload.
+          </p>
+        )}
+
+        {text && (
+          <p className="border-t border-black/5 pt-2 text-sm italic break-words">
+            &ldquo;{text}&rdquo;
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function renderLocationMessage(content: any) {
+  const lat = content?.latitude;
+  const lng = content?.longitude;
+  const address = content?.address || '';
+  const name = content?.name || '';
+  const mapUrl = (lat && lng) ? `https://www.google.com/maps?q=${lat},${lng}` : null;
+
+  return (
+    <div className="px-4 py-2">
+      <div className="flex items-center gap-2 bg-black/10 rounded p-3">
+        <span className="text-xl">📍</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold truncate">{name || 'Location Shared'}</p>
+          {address && <p className="text-xs opacity-70 truncate">{address}</p>}
+          {mapUrl && (
+            <a
+              href={mapUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 hover:underline mt-1 block"
+            >
+              View on Google Maps
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function renderContactsMessage(content: any) {
+  const contactsList = content?.contacts || [];
+  return (
+    <div className="px-4 py-2">
+      <div className="flex flex-col gap-2 bg-black/10 rounded p-3">
+        <p className="text-xs opacity-70">👤 Contact Card(s)</p>
+        {contactsList.map((contact: any, index: number) => {
+          const name = contact?.name?.formatted_name || contact?.name?.first_name || 'Contact';
+          const phones = (contact?.phones || []).map((p: any) => p.phone).join(', ');
+          return (
+            <div key={index} className="border-t border-black/5 pt-2 first:border-t-0 first:pt-0">
+              <p className="text-sm font-semibold">{name}</p>
+              {phones && <p className="text-xs opacity-70">{phones}</p>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function renderReactionMessage(content: any) {
+  return (
+    <div className="px-4 py-2">
+      <p className="text-xs opacity-70 italic">
+        Reacted: {content?.emoji || '❤️'}
+      </p>
+    </div>
+  );
 }

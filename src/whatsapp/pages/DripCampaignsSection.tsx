@@ -10,10 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { GitMerge, Plus, Trash2, Clock, Play, UserPlus, ArrowRight, Loader2, RefreshCw, Users, Upload, FileSpreadsheet, Pause, RotateCcw, Eye, X, BarChart, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { API_BASE_URL } from '@/config';
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { cachedFetch } from '../utils/waPersistentCache';
 import { DripEnrollmentDialog } from '../components/DripEnrollmentDialog';
-import { getActiveAccountId } from '../utils/accountContext';
-import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
+import { RefreshButton } from '../components/RefreshButton';
 
 const API_BASE = API_BASE_URL;
 
@@ -32,6 +32,7 @@ interface Step {
     id?: number;
     step_order: number;
     delay_seconds: number;
+    scheduled_at?: string;
     // Template fields
     template_name?: string;
     language?: string;
@@ -52,28 +53,11 @@ interface Campaign {
     steps: Step[];
 }
 
-export function DripCampaignsSection({ accountId: propAccountId }: { accountId: number }) {
+export function DripCampaignsSection({ accountId }: { accountId: number }) {
     const navigate = useNavigate();
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [loading, setLoading] = useState(true);
     const [isOpen, setIsOpen] = useState(false);
-    const [accountId, setAccountId] = useState<number>(propAccountId);
-
-    // Auto-resolve accountId when the prop is 0/falsy (standalone route)
-    useEffect(() => {
-        if (propAccountId) {
-            setAccountId(propAccountId);
-        } else {
-            getActiveAccountId(API_BASE).then((id) => {
-                if (id) {
-                    setAccountId(id);
-                } else {
-                    toast.error('No WhatsApp account found. Please connect one first.');
-                    setLoading(false);
-                }
-            });
-        }
-    }, [propAccountId]);
 
     // Templates list
     const [templates, setTemplates] = useState<Template[]>([]);
@@ -90,6 +74,8 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
     // Template Step State
     const [stepTemplate, setStepTemplate] = useState('');
     const [stepDelay, setStepDelay] = useState('0');
+    const [stepDelayType, setStepDelayType] = useState<'relative' | 'absolute'>('relative');
+    const [stepScheduledAt, setStepScheduledAt] = useState('');
     const [stepVariables, setStepVariables] = useState<Record<string, string>>({});  // {"1": "name", "2": "company"}
     const [stepFallbacks, setStepFallbacks] = useState<Record<string, string>>({});  // {"1": "there", "2": ""}
     const [stepExitOnReply, setStepExitOnReply] = useState(false);
@@ -183,23 +169,21 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
     }, [crmAudienceTab]);
 
     useEffect(() => {
-        if (accountId) {
+        if (isOpen && accountId) {
             loadCampaigns();
             loadTemplates();
         }
-    }, [accountId]);
+    }, [isOpen, accountId]);
 
     async function loadCampaigns() {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns`, {
                 credentials: 'include'
             });
             if (res.ok) {
                 const data = await res.json();
                 setCampaigns(data.campaigns || []);
-            } else {
-                toast.error("Failed to load campaigns");
             }
         } catch (err) {
             console.error('Failed to load campaigns:', err);
@@ -213,7 +197,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
     async function handleManualSync(campaignId: number) {
         setSyncingCampaignId(campaignId);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/sheets/sync/${campaignId}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/sheets/sync/${campaignId}`, {
                 method: 'POST',
                 credentials: 'include'
             });
@@ -251,18 +235,15 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
     async function loadTemplates() {
         try {
             setLoadingTemplates(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/templates?account_id=${accountId}&status=APPROVED`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/templates?account_id=${accountId}&status=APPROVED`, {
                 credentials: 'include'
             });
             if (res.ok) {
                 const data = await res.json();
                 setTemplates(data.templates || []);
-            } else {
-                toast.error("Failed to load templates");
             }
         } catch (err) {
             console.error('Failed to load templates:', err);
-            toast.error("Failed to load templates");
         } finally {
             setLoadingTemplates(false);
         }
@@ -310,7 +291,8 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
         const newStep: Step = {
             step_order: currentSteps.length + 1,
             template_name: stepTemplate,
-            delay_seconds: parseInt(stepDelay) * 60,
+            delay_seconds: stepDelayType === 'relative' ? parseInt(stepDelay) * 60 : 0,
+            scheduled_at: stepDelayType === 'absolute' && stepScheduledAt ? new Date(stepScheduledAt).toISOString() : undefined,
             language: selectedTpl?.language || 'en_US',
             template_params: Object.keys(template_params).length > 0 ? template_params : undefined,
             exit_on_reply: stepExitOnReply,
@@ -323,6 +305,8 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
         // Reset all step form fields
         setStepTemplate('');
         setStepDelay('0');
+        setStepScheduledAt('');
+        setStepDelayType('relative');
         setStepExitOnReply(false);
         setStepVariables({});   // Clear variable mappings
         setStepFallbacks({});   // Clear fallbacks
@@ -339,13 +323,13 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
         setSheetsPreviewLoading(true);
         try {
             // Also fetch config to get service account email
-            const configRes = await fetch(`${API_BASE}/api/whatsapp/sheets/config`, { credentials: 'include' });
+            const configRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/sheets/config`, { credentials: 'include' });
             if (configRes.ok) {
                 const config = await configRes.json();
                 setSheetsServiceAccountEmail(config.service_account_email);
             }
 
-            const res = await fetch(`${API_BASE}/api/whatsapp/sheets/preview?sheet_id=${encodeURIComponent(sheetsUrl)}&sheet_name=${encodeURIComponent(sheetsTab)}&limit=5`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/sheets/preview?sheet_id=${encodeURIComponent(sheetsUrl)}&sheet_name=${encodeURIComponent(sheetsTab)}&limit=5`, {
                 credentials: 'include'
             });
 
@@ -401,7 +385,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                 payload.phone_column = sheetsPhoneColumn || 'phone';
             }
 
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -428,7 +412,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
             return;
         }
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaignId}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaignId}`, {
                 method: 'DELETE',
                 credentials: 'include'
             });
@@ -449,7 +433,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
 
         try {
             setEnrolling(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns/${enrollCampaign.id}/enroll`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${enrollCampaign.id}/enroll`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -488,7 +472,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
 
         try {
             setBulkEnrolling(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns/${bulkEnrollCampaign.id}/bulk-enroll`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${bulkEnrollCampaign.id}/bulk-enroll`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -518,11 +502,10 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
 
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('column_mapping', '{}');
 
         try {
             setUploadingCSV(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns/${bulkEnrollCampaign.id}/import-contacts`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${bulkEnrollCampaign.id}/import-contacts`, {
                 method: 'POST',
                 credentials: 'include',
                 body: formData
@@ -550,12 +533,12 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
 
         try {
             setImportingSheets(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns/${sheetsCampaign.id}/import-sheet`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${sheetsCampaign.id}/import-sheet`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({
-                    sheet_url: sheetsUrl,
+                    sheet_id: sheetsUrl,
                     sheet_name: sheetsTab
                 })
             });
@@ -580,7 +563,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
     async function loadEnrollees(campaignId: number, page: number = 1) {
         try {
             setLoadingEnrollees(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaignId}/enrollments?page=${page}&limit=20`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaignId}/enrollments?page=${page}&limit=20`, {
                 credentials: 'include'
             });
 
@@ -589,8 +572,6 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                 setEnrollees(data.enrollments || []);
                 setEnrolleesTotal(data.pagination?.total || 0);
                 setEnrolleesPage(page);
-            } else {
-                toast.error("Failed to load enrollees");
             }
         } catch (err) {
             toast.error("Failed to load enrollees");
@@ -604,7 +585,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
         if (!viewEnrolleesCampaign) return;
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns/${viewEnrolleesCampaign.id}/enrollments/${enrollmentId}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${viewEnrolleesCampaign.id}/enrollments/${enrollmentId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -615,7 +596,6 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
             if (res.ok) {
                 toast.success(data.message);
                 loadEnrollees(viewEnrolleesCampaign.id, enrolleesPage);
-                loadCampaigns();
             } else {
                 toast.error(data.error || "Action failed");
             }
@@ -630,7 +610,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
         if (!confirm('Remove this contact from the campaign?')) return;
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns/${viewEnrolleesCampaign.id}/enrollments/${enrollmentId}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${viewEnrolleesCampaign.id}/enrollments/${enrollmentId}`, {
                 method: 'DELETE',
                 credentials: 'include'
             });
@@ -659,7 +639,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
             setCrmPreviewIndex(0);
 
             // Load variable schema for preview
-            const schemaRes = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaignId}/variables`, {
+            const schemaRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaignId}/variables`, {
                 credentials: 'include'
             });
             if (schemaRes.ok) {
@@ -668,7 +648,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
             }
 
             // Get summary first
-            const summaryRes = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/crm-audience/summary?campaign_id=${campaignId}`, {
+            const summaryRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/crm-audience/summary?campaign_id=${campaignId}`, {
                 credentials: 'include'
             });
 
@@ -678,7 +658,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
             }
 
             // Get leads list (include_all=true to show leads without phone too)
-            const leadsRes = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/crm-audience/leads?campaign_id=${campaignId}&limit=100&include_all=true`, {
+            const leadsRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/crm-audience/leads?campaign_id=${campaignId}&limit=100&include_all=true`, {
                 credentials: 'include'
             });
 
@@ -688,7 +668,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
             }
 
             // Get contacts list
-            const contactsRes = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/crm-audience/contacts?campaign_id=${campaignId}&limit=100`, {
+            const contactsRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/crm-audience/contacts?campaign_id=${campaignId}&limit=100`, {
                 credentials: 'include'
             });
 
@@ -727,7 +707,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
 
         try {
             setEnrollingFromCrm(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/drip-campaigns/${crmAudienceCampaign.id}/bulk-enroll`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${crmAudienceCampaign.id}/bulk-enroll`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -801,7 +781,6 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
 
 
     return (
-        <WhatsAppConnectionGuard feature="Drip Campaigns">
         <Card className="border shadow-sm bg-gradient-to-br from-green-50/50 via-white to-emerald-50/30">
             <div className="h-1 bg-gradient-to-r from-emerald-500 via-green-500 to-lime-500" />
             <CardHeader
@@ -829,8 +808,9 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
 
             {isOpen && (
                 <CardContent className="pt-0 pb-6 animate-in slide-in-from-top-2 duration-200">
-                    <div className="flex justify-end mb-4 gap-2">
-                        <Button variant="outline" onClick={() => navigate('/dashboard/drip-analytics')}>
+                    <div className="flex justify-end items-center mb-4 gap-2">
+                        <RefreshButton onRefresh={loadCampaigns} isRefreshing={loading} title="Refresh" />
+                        <Button variant="outline" onClick={() => navigate('/dashboard/whatsapp/drip-analytics')}>
                             <BarChart className="w-4 h-4 mr-2" />
                             Global Analytics
                         </Button>
@@ -842,16 +822,11 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                     New Campaign
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-2xl max-h-[90vh] p-0 flex flex-col overflow-hidden shadow-2xl border-none">
-                                <div className="p-6 pb-2 border-b bg-white sticky top-0 z-10">
-                                    <DialogHeader>
-                                        <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                            <Plus className="w-5 h-5 text-emerald-500" />
-                                            Create Drip Campaign
-                                        </DialogTitle>
-                                    </DialogHeader>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-6 pt-4 space-y-6">
+                            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+                                <DialogHeader>
+                                    <DialogTitle>Create Drip Campaign</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
                                     <div className="space-y-2">
                                         <Label>Campaign Name</Label>
                                         <Input
@@ -908,7 +883,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                                     variant="outline"
                                                     size="sm"
                                                     className="text-amber-700 border-amber-300 hover:bg-amber-100"
-                                                    onClick={() => window.open('/dashboard/crm/leads', '_blank')}
+                                                    onClick={() => window.open('/crm/leads', '_blank')}
                                                 >
                                                     <Users className="w-4 h-4 mr-1" />
                                                     View Leads
@@ -933,7 +908,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                                     variant="outline"
                                                     size="sm"
                                                     className="text-indigo-700 border-indigo-300 hover:bg-indigo-100"
-                                                    onClick={() => window.open('/dashboard/crm/contacts', '_blank')}
+                                                    onClick={() => window.open('/crm/contacts', '_blank')}
                                                 >
                                                     <Users className="w-4 h-4 mr-1" />
                                                     View Contacts
@@ -1137,7 +1112,11 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                                                 <div className="text-sm font-medium">{step.template_name}</div>
                                                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
                                                                     <Clock className="w-3 h-3" />
-                                                                    Delay: {step.delay_seconds / 60} mins
+                                                                    {step.scheduled_at ? (
+                                                                        <span>Scheduled: {new Date(step.scheduled_at).toLocaleString()}</span>
+                                                                    ) : (
+                                                                        <span>Delay: {step.delay_seconds / 60} mins</span>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         )}
@@ -1166,52 +1145,70 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                             </div>
 
                                             {stepType === 'template' ? (
-                                                <div className="grid grid-cols-12 gap-2 items-end">
-                                                    <div className="col-span-5 space-y-1">
-                                                        <div className="flex items-center justify-between">
-                                                            <Label className="text-xs">Template</Label>
-                                                            <Button variant="ghost" size="sm" onClick={loadTemplates} className="h-5 w-5 p-0">
-                                                                <RefreshCw className={`w-3 h-3 ${loadingTemplates ? 'animate-spin' : ''}`} />
+                                                <div className="space-y-3 bg-slate-50/60 p-3 rounded-lg border border-slate-100">
+                                                    <div className="grid grid-cols-12 gap-3">
+                                                        <div className="col-span-7 space-y-1">
+                                                            <div className="flex items-center justify-between">
+                                                                <Label className="text-xs font-semibold text-slate-700">Template</Label>
+                                                                <Button variant="ghost" size="sm" onClick={loadTemplates} className="h-5 w-5 p-0">
+                                                                    <RefreshCw className={`w-3 h-3 ${loadingTemplates ? 'animate-spin' : ''}`} />
+                                                                </Button>
+                                                            </div>
+                                                            <Select value={stepTemplate} onValueChange={(v) => {
+                                                                // Clear mappings when template changes (prevents stale mappings)
+                                                                if (v !== stepTemplate) {
+                                                                    setStepVariables({});
+                                                                    setStepFallbacks({});
+                                                                }
+                                                                setStepTemplate(v);
+                                                            }}>
+                                                                <SelectTrigger className="h-8 bg-white">
+                                                                    <SelectValue placeholder="Select template" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {templates.map(t => (
+                                                                        <SelectItem key={t.id} value={t.name}>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span>{t.name}</span>
+                                                                                <span className="text-xs text-muted-foreground">({t.language})</span>
+                                                                            </div>
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                        <div className="col-span-5 space-y-1">
+                                                            <Label className="text-xs font-semibold text-slate-700">Time Type</Label>
+                                                            <Select value={stepDelayType} onValueChange={(v: any) => setStepDelayType(v)}>
+                                                                <SelectTrigger className="h-8 bg-white">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="relative">Relative Delay</SelectItem>
+                                                                    <SelectItem value="absolute">Specific Date/Time</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-12 gap-3 items-end">
+                                                        <div className="col-span-8 space-y-1">
+                                                            {stepDelayType === 'relative' ? (
+                                                                <>
+                                                                    <Label className="text-xs font-semibold text-slate-700">Delay (mins)</Label>
+                                                                    <Input type="number" value={stepDelay} onChange={e => setStepDelay(e.target.value)} className="h-8 bg-white" />
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Label className="text-xs font-semibold text-slate-700">Date & Time</Label>
+                                                                    <Input type="datetime-local" value={stepScheduledAt} onChange={e => setStepScheduledAt(e.target.value)} className="h-8 bg-white w-full px-3 py-1 text-sm font-medium" />
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        <div className="col-span-4">
+                                                            <Button size="sm" variant="secondary" onClick={addStep} disabled={!stepTemplate || (stepDelayType === 'absolute' && !stepScheduledAt)} className="w-full h-8 bg-emerald-600 hover:bg-emerald-700 text-white hover:text-white font-medium">
+                                                                <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Step
                                                             </Button>
                                                         </div>
-                                                        <Select value={stepTemplate} onValueChange={(v) => {
-                                                            // Clear mappings when template changes (prevents stale mappings)
-                                                            if (v !== stepTemplate) {
-                                                                setStepVariables({});
-                                                                setStepFallbacks({});
-                                                            }
-                                                            setStepTemplate(v);
-                                                        }}>
-                                                            <SelectTrigger className="h-8 border-emerald-100 hover:border-emerald-300 transition-colors">
-                                                                <SelectValue placeholder="Select template" />
-                                                            </SelectTrigger>
-                                                            <SelectContent position="popper" sideOffset={5} className="max-h-[300px] z-[100]">
-                                                                {templates.map(t => (
-                                                                    <SelectItem key={t.id} value={t.name}>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="font-medium text-xs">{t.name}</span>
-                                                                            <span className="text-[10px] bg-gray-100 px-1 rounded text-muted-foreground uppercase">
-                                                                                {t.language}
-                                                                            </span>
-                                                                        </div>
-                                                                    </SelectItem>
-                                                                ))}
-                                                                {templates.length === 0 && (
-                                                                    <div className="p-4 text-center text-xs text-muted-foreground italic">
-                                                                        No approved templates found.
-                                                                    </div>
-                                                                )}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                    <div className="col-span-4 space-y-1">
-                                                        <Label className="text-xs">Delay (mins)</Label>
-                                                        <Input type="number" value={stepDelay} onChange={e => setStepDelay(e.target.value)} className="h-8" />
-                                                    </div>
-                                                    <div className="col-span-3">
-                                                        <Button size="sm" variant="secondary" onClick={addStep} disabled={!stepTemplate} className="w-full h-8">
-                                                            <Plus className="w-3 h-3 mr-1" /> Add Step
-                                                        </Button>
                                                     </div>
                                                 </div>
                                             ) : (
@@ -1302,7 +1299,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                                                                 const formData = new FormData();
                                                                                 formData.append('file', file);
 
-                                                                                const res = await fetch(`${API_BASE}/api/whatsapp/media/upload/public`, {
+                                                                                const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/media/upload/public`, {
                                                                                     method: 'POST',
                                                                                     credentials: 'include',
                                                                                     body: formData
@@ -1459,15 +1456,20 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                                                                 });
                                                                             }
 
-                                                                            let preview = selectedTpl.body_text;
+                                                                            // Escape any HTML so sheet/template content cannot inject markup/scripts (XSS).
+                                                                            const escapeHtml = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+                                                                                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+                                                                            ));
 
-                                                                            // Replace variables with sample/fallback values
+                                                                            let preview = escapeHtml(selectedTpl.body_text);
+
+                                                                            // Replace variables with sample/fallback values (escaped before injection)
                                                                             for (let i = 1; i <= varCount; i++) {
                                                                                 const fieldName = stepVariables[String(i)];
                                                                                 const fallback = stepFallbacks[String(i)];
                                                                                 const sampleValue = fieldName ? (sampleData[fieldName] || `[${fieldName}]`) : (fallback || `{{${i}}}`);
 
-                                                                                preview = preview.replace(`{{${i}}}`, `<span class="font-medium text-blue-600">${sampleValue}</span>`);
+                                                                                preview = preview.replace(`{{${i}}}`, `<span class="font-medium text-blue-600">${escapeHtml(sampleValue)}</span>`);
                                                                             }
 
                                                                             return <span dangerouslySetInnerHTML={{ __html: preview }} />;
@@ -1482,18 +1484,15 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                         })()}
                                     </div>
                                 </div>
-                                <div className="p-6 pt-2 border-t bg-gray-50/50">
-                                    <DialogFooter>
-                                        <Button
-                                            onClick={handleCreate}
-                                            disabled={currentSteps.length === 0}
-                                            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 font-semibold"
-                                            title={currentSteps.length === 0 ? "Add at least one step with a template" : ""}
-                                        >
-                                            Create Campaign
-                                        </Button>
-                                    </DialogFooter>
-                                </div>
+                                <DialogFooter>
+                                    <Button 
+                                        onClick={handleCreate} 
+                                        disabled={currentSteps.length === 0}
+                                        title={currentSteps.length === 0 ? "Add at least one step with a template" : ""}
+                                    >
+                                        Create Campaign
+                                    </Button>
+                                </DialogFooter>
                             </DialogContent>
                         </Dialog>
                     </div>
@@ -1595,7 +1594,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() => window.location.href = `/dashboard/campaigns/${c.id}/analytics`}
+                                                onClick={() => window.location.href = `/dashboard/whatsapp/campaigns/${c.id}/analytics`}
                                             >
                                                 <BarChart className="w-4 h-4 mr-2 text-indigo-600" />
                                                 Analytics
@@ -1631,7 +1630,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                             <div key={i} className="flex items-center flex-shrink-0">
                                                 <div className="flex items-center gap-2 bg-white border rounded-full px-3 py-1 text-xs shadow-sm">
                                                     <Clock className="w-3 h-3 text-muted-foreground" />
-                                                    <span>{step.delay_seconds / 60}m</span>
+                                                    <span>{step.scheduled_at ? new Date(step.scheduled_at).toLocaleString() : `${step.delay_seconds / 60}m`}</span>
                                                     <ArrowRight className="w-3 h-3 text-gray-300" />
                                                     <span className="font-medium text-emerald-700">{step.template_name}</span>
                                                 </div>
@@ -2309,7 +2308,6 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                 </DialogContent>
             </Dialog>
         </Card >
-        </WhatsAppConnectionGuard>
     );
 }
 

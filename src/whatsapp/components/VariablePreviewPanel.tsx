@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Eye, AlertCircle, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Users } from 'lucide-react';
-import { API_BASE_URL } from '@/config';
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 
 interface VariableMapping {
   key: string;
@@ -71,7 +71,7 @@ export function VariablePreviewPanel({ campaign, accountId, datasetId, contactId
       }
 
       const res = await fetch(
-        `${API_BASE_URL}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaign.id}/preview?${params}`,
+        `${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaign.id}/preview?${params}`,
         { credentials: 'include' }
       );
 

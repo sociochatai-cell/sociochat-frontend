@@ -1,16 +1,9 @@
-/**
- * InputNode Component
- * ===================
- * Captures a free-text user response and stores it into a flow variable.
- * Has a single input handle (top) and a single output handle (bottom).
- */
-
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { Keyboard, HelpCircle } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import type { InputNode as InputNodeType } from '../types';
 import { NODE_COLORS, VALIDATION_TYPE_LABELS } from '../constants';
+import type { InputNode as InputNodeType } from '../types';
+import { Badge } from '@/components/ui/badge';
 
 export const InputNode = memo(({ data, selected }: NodeProps<InputNodeType['data']>) => {
     const colors = NODE_COLORS.input;
@@ -21,6 +14,7 @@ export const InputNode = memo(({ data, selected }: NodeProps<InputNodeType['data
                 relative px-5 py-4 rounded-xl shadow-lg border-2 min-w-[280px]
                 transition-all duration-200 bg-white
                 ${selected ? 'ring-2 ring-sky-400 ring-offset-0' : ''}
+                ${(data as any).validationIssues?.some((i: any) => !i.handleId) ? 'node-error' : ''}
             `}
             style={{ borderColor: colors.border }}
         >
@@ -46,10 +40,7 @@ export const InputNode = memo(({ data, selected }: NodeProps<InputNodeType['data
                         Input
                     </div>
                     <div className="text-xs text-gray-500 truncate flex items-center gap-1">
-                        Save to
-                        <Badge variant="secondary" className="px-1 py-0 h-4 text-[10px] ml-1 font-normal">
-                            {data.field || 'unnamed'}
-                        </Badge>
+                        Save to <Badge variant="secondary" className="px-1 py-0 h-4 text-[10px] ml-1 font-normal">{data.field || 'unnamed'}</Badge>
                     </div>
                 </div>
             </div>
@@ -57,9 +48,7 @@ export const InputNode = memo(({ data, selected }: NodeProps<InputNodeType['data
             {/* Question Text */}
             <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-2.5 mb-3 border border-gray-100 min-h-[40px] flex items-start gap-2">
                 <HelpCircle className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-                <span className="line-clamp-3 leading-tight break-words">
-                    {data.body || <span className="text-gray-400 italic">No question set...</span>}
-                </span>
+                <span className="line-clamp-3 leading-tight break-words">{data.body || <span className="text-gray-400 italic">No question set...</span>}</span>
             </div>
 
             {/* Validation Type */}
@@ -70,7 +59,7 @@ export const InputNode = memo(({ data, selected }: NodeProps<InputNodeType['data
                 </span>
             </div>
 
-            {/* Output / "Next step" */}
+            {/* Output / “Next step” — no box border (avoids grey U/L frame that reads like a connector) */}
             <div className="relative group">
                 <div className="w-full text-center py-2 bg-gray-50 hover:bg-gray-100 rounded-md text-sm text-gray-600 transition-colors">
                     Next step
@@ -83,6 +72,11 @@ export const InputNode = memo(({ data, selected }: NodeProps<InputNodeType['data
                     style={{ bottom: -8 }}
                 />
             </div>
+
+            {/* Edge Error indicator */}
+            {(data as any).validationIssues?.some((i: any) => i.handleId === 'output') && (
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-red-500 animate-ping opacity-75" />
+            )}
         </div>
     );
 });

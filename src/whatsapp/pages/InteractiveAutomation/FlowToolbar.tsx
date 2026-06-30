@@ -16,13 +16,13 @@ import {
     Loader2,
     LayoutGrid,
     MessageCircle,
-    FileText,
     Flag,
+    FileText,
     Keyboard,
     Plug,
-    Tag,
     Sparkles,
-    KeyRound
+    KeyRound,
+    UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,14 +47,14 @@ interface FlowToolbarProps {
     onPublish: () => void;
     onAddMessageNode: () => void;
     onAddTemplateNode: () => void;
+    onAddInputNode: () => void;
+    onAddApiNode: () => void;
+    onAddLeadNode: () => void;
     onAddEndNode: () => void;
     onAutoLayout: () => void;
-    // Optional additive entries (Input / API / Set Status nodes + AI / Flow Variables)
-    onAddInputNode?: () => void;
-    onAddApiNode?: () => void;
-    onAddSetStatusNode?: () => void;
-    onOpenAiGenerator?: () => void;
-    onOpenFlowVariables?: () => void;
+    onGenerateWithAi?: () => void;
+    onOpenFlowSettings?: () => void;
+    hasFlowVariables?: boolean;
 }
 
 export function FlowToolbar({
@@ -69,53 +69,60 @@ export function FlowToolbar({
     onPublish,
     onAddMessageNode,
     onAddTemplateNode,
-    onAddEndNode,
-    onAutoLayout,
     onAddInputNode,
     onAddApiNode,
-    onAddSetStatusNode,
-    onOpenAiGenerator,
-    onOpenFlowVariables,
+    onAddLeadNode,
+    onAddEndNode,
+    onAutoLayout,
+    onGenerateWithAi,
+    onOpenFlowSettings,
+    hasFlowVariables,
 }: FlowToolbarProps) {
     const navigate = useNavigate();
 
     const errorCount = validationIssues.filter(i => i.severity === 'error').length;
     const warningCount = validationIssues.filter(i => i.severity === 'warning').length;
     const hasErrors = errorCount > 0;
+    const hasWarnings = warningCount > 0;
+    const hasValidationIssues = errorCount > 0 || warningCount > 0;
+
+    const validationSummary = [
+        errorCount > 0 ? `${errorCount} error${errorCount > 1 ? 's' : ''}` : null,
+        warningCount > 0 ? `${warningCount} warning${warningCount > 1 ? 's' : ''}` : null,
+    ].filter(Boolean).join(' • ');
 
     return (
-        <header className="min-h-14 bg-white border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between px-3 sm:px-4 py-2 sm:py-0 gap-2 flex-shrink-0">
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 flex-shrink-0">
             {/* Left Section */}
-            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <div className="flex items-center gap-4">
                 <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => navigate('/dashboard/automation')}
-                    className="shrink-0"
+                    onClick={() => navigate('/dashboard/whatsapp/automation')}
                 >
-                    <ArrowLeft className="w-4 h-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Back</span>
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back
                 </Button>
 
                 {/* Flow Name */}
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex items-center gap-2">
                     <Input
                         value={flowName}
                         onChange={(e) => onNameChange(e.target.value)}
-                        className="w-full max-w-[10rem] sm:max-w-xs h-8 font-medium border-0 hover:bg-gray-100 focus-visible:ring-1"
+                        className="w-52 h-8 font-medium border-0 hover:bg-gray-100 focus-visible:ring-1"
                         placeholder="Automation name..."
                     />
                 </div>
 
                 {/* Status Badges */}
-                <div className="hidden md:flex items-center gap-2 shrink-0">
-                    {flowStatus === 'published' && (
+                <div className="flex items-center gap-2">
+                    {(flowStatus === 'published' || flowStatus === 'active') && (
                         <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
                             Published
                         </Badge>
                     )}
                     {flowStatus === 'draft' && (
-                        <Badge className="bg-gray-100 text-gray-600 border-gray-200">Draft</Badge>
+                        <Badge variant="secondary">Draft</Badge>
                     )}
                     {isDirty && (
                         <Badge variant="outline" className="text-amber-600 border-amber-300">
@@ -126,18 +133,73 @@ export function FlowToolbar({
             </div>
 
             {/* Right Section */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1 sm:mx-0 sm:px-0">
+            <div className="flex items-center gap-2">
+                {onOpenFlowSettings && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onOpenFlowSettings}
+                        className={hasFlowVariables ? 'border-violet-200' : 'border-amber-300 text-amber-700'}
+                    >
+                        <KeyRound className="w-4 h-4 mr-2" />
+                        Flow variables
+                    </Button>
+                )}
+                {onGenerateWithAi && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onGenerateWithAi}
+                        className="border-violet-200 text-violet-700 hover:bg-violet-50"
+                    >
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Do with AI
+                    </Button>
+                )}
+
                 {/* Validation Status */}
-                {hasErrors ? (
-                    <Badge variant="destructive" className="gap-1">
-                        <AlertTriangle className="w-3 h-3" />
-                        {errorCount} error{errorCount > 1 ? 's' : ''}
-                    </Badge>
-                ) : warningCount > 0 ? (
-                    <Badge variant="outline" className="text-amber-600 border-amber-300 gap-1">
-                        <AlertTriangle className="w-3 h-3" />
-                        {warningCount} warning{warningCount > 1 ? 's' : ''}
-                    </Badge>
+                {hasValidationIssues ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button type="button" className="focus:outline-none">
+                                <Badge
+                                    variant={hasErrors ? 'destructive' : 'outline'}
+                                    className={hasErrors ? 'gap-1' : 'text-amber-600 border-amber-300 gap-1'}
+                                >
+                                    <AlertTriangle className="w-3 h-3" />
+                                    {validationSummary}
+                                </Badge>
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-[360px]">
+                            <div className="px-2 py-1.5 text-xs font-semibold text-gray-600">
+                                Flow Validation Issues
+                            </div>
+                            <div className="max-h-72 overflow-y-auto">
+                                {validationIssues.map((issue, index) => (
+                                    <DropdownMenuItem
+                                        key={`${issue.nodeId || 'flow'}-${issue.message}-${index}`}
+                                        className="items-start gap-2 py-2"
+                                    >
+                                        <AlertTriangle
+                                            className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
+                                                issue.severity === 'error' ? 'text-red-600' : 'text-amber-600'
+                                            }`}
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-xs font-medium text-gray-800 capitalize">
+                                                {issue.severity}
+                                                {issue.nodeId ? ` • ${issue.nodeId}` : ''}
+                                            </div>
+                                            <div className="text-xs text-gray-600 whitespace-normal break-words">
+                                                {issue.message}
+                                            </div>
+                                        </div>
+                                    </DropdownMenuItem>
+                                ))}
+                            </div>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 ) : validationIssues.length === 0 ? null : (
                     <Badge className="bg-green-100 text-green-700 hover:bg-green-100 gap-1">
                         <CheckCircle className="w-3 h-3" />
@@ -159,27 +221,21 @@ export function FlowToolbar({
                             Message Node
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={onAddTemplateNode}>
-                            <FileText className="w-4 h-4 mr-2 text-blue-600" />
+                            <FileText className="w-4 h-4 mr-2 text-purple-600" />
                             Template Node
                         </DropdownMenuItem>
-                        {onAddInputNode && (
-                            <DropdownMenuItem onClick={onAddInputNode}>
-                                <Keyboard className="w-4 h-4 mr-2 text-sky-600" />
-                                Input Node
-                            </DropdownMenuItem>
-                        )}
-                        {onAddApiNode && (
-                            <DropdownMenuItem onClick={onAddApiNode}>
-                                <Plug className="w-4 h-4 mr-2 text-violet-600" />
-                                API Node
-                            </DropdownMenuItem>
-                        )}
-                        {onAddSetStatusNode && (
-                            <DropdownMenuItem onClick={onAddSetStatusNode}>
-                                <Tag className="w-4 h-4 mr-2 text-emerald-600" />
-                                Set Status
-                            </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem onClick={onAddInputNode}>
+                            <Keyboard className="w-4 h-4 mr-2 text-sky-600" />
+                            Input Node
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={onAddApiNode}>
+                            <Plug className="w-4 h-4 mr-2 text-violet-600" />
+                            API Node
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={onAddLeadNode}>
+                            <UserPlus className="w-4 h-4 mr-2 text-emerald-600" />
+                            Lead Node
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={onAddEndNode}>
                             <Flag className="w-4 h-4 mr-2 text-amber-600" />
                             End Node
@@ -187,24 +243,8 @@ export function FlowToolbar({
                     </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* AI Flow Generator */}
-                {onOpenAiGenerator && (
-                    <Button variant="outline" size="sm" onClick={onOpenAiGenerator} className="shrink-0">
-                        <Sparkles className="w-4 h-4 sm:mr-2 text-violet-600" />
-                        <span className="hidden sm:inline">Do with AI</span>
-                    </Button>
-                )}
-
-                {/* Flow Variables */}
-                {onOpenFlowVariables && (
-                    <Button variant="outline" size="sm" onClick={onOpenFlowVariables} className="shrink-0">
-                        <KeyRound className="w-4 h-4 sm:mr-2 text-violet-600" />
-                        <span className="hidden sm:inline">Variables</span>
-                    </Button>
-                )}
-
                 {/* Auto Layout */}
-                <Button variant="outline" size="sm" onClick={onAutoLayout} className="shrink-0 hidden sm:inline-flex">
+                <Button variant="outline" size="sm" onClick={onAutoLayout}>
                     <LayoutGrid className="w-4 h-4 mr-2" />
                     Auto Layout
                 </Button>
@@ -215,7 +255,6 @@ export function FlowToolbar({
                     size="sm"
                     onClick={onSave}
                     disabled={isSaving || !isDirty}
-                    className="shrink-0"
                 >
                     {isSaving ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -229,8 +268,13 @@ export function FlowToolbar({
                 <Button
                     size="sm"
                     onClick={onPublish}
-                    disabled={isPublishing || hasErrors || flowStatus === 'published'}
-                    className="bg-green-600 hover:bg-green-700 shrink-0"
+                    disabled={
+                        isPublishing ||
+                        hasErrors ||
+                        flowStatus === 'published' ||
+                        flowStatus === 'active'
+                    }
+                    className="bg-green-600 hover:bg-green-700"
                 >
                     {isPublishing ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />

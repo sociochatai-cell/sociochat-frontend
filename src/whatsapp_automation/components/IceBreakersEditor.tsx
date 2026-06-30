@@ -21,7 +21,7 @@ import {
   Zap,
   AlertCircle,
   Clock,
-  IndianRupee as DollarSign
+  Banknote as DollarSign
 } from 'lucide-react';
 import type { IceBreaker } from '../types';
 

@@ -398,6 +398,7 @@ export function validateTemplate(state: TemplateState): ValidationResult {
         const catalogButtons = state.buttons.filter(b => b.type === 'catalog');
         const voiceCallButtons = state.buttons.filter(b => b.type === 'voice_call');
 
+        // Meta catalog templates must be MARKETING category
         if (catalogButtons.length > 0 && state.category !== 'MARKETING') {
             errors.buttons = 'Catalog button requires MARKETING category as per Meta template rules.';
         }
@@ -478,6 +479,7 @@ export function validateTemplate(state: TemplateState): ValidationResult {
                     errors.buttons = `Button ${i + 1}: Copy code must be alphanumeric only.`;
                     break;
                 }
+                // Meta docs limit COPY_CODE example value to 15 chars
                 if (btn.copy_code.length > 15) {
                     errors.buttons = `Button ${i + 1}: Copy code exceeds 15 characters.`;
                     break;
@@ -682,6 +684,7 @@ interface TemplateApiData {
 
 /**
  * Convert template data returned by backend API into editable builder state.
+ * Handles both legacy fields (body_text/footer_text) and component-based schema.
  */
 export function templateApiToState(template: TemplateApiData): TemplateState {
     const components = Array.isArray(template.components) ? template.components : [];
@@ -698,7 +701,10 @@ export function templateApiToState(template: TemplateApiData): TemplateState {
     if (headerComp) {
         const format = String(headerComp.format || '').toUpperCase();
         if (format === 'TEXT') {
-            header = { type: 'text', text: String(headerComp.text || '') };
+            header = {
+                type: 'text',
+                text: String(headerComp.text || ''),
+            };
         } else if (format === 'IMAGE' || format === 'VIDEO' || format === 'DOCUMENT') {
             const headerHandle = Array.isArray(headerComp.example?.header_handle)
                 ? String(headerComp.example.header_handle[0] || '')
@@ -733,7 +739,11 @@ export function templateApiToState(template: TemplateApiData): TemplateState {
                         flow_token: String(btn?.flow_token || ''),
                     };
                 case 'COPY_CODE':
-                    return { type: 'copy_code', text: text || 'Copy Code', copy_code: String(btn?.example || '') };
+                    return {
+                        type: 'copy_code',
+                        text: text || 'Copy Code',
+                        copy_code: String(btn?.example || ''),
+                    };
                 case 'VOICE_CALL':
                     return { type: 'voice_call', text: text || 'Call on WhatsApp' };
                 case 'CATALOG':

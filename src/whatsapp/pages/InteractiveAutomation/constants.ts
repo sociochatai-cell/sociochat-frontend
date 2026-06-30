@@ -10,8 +10,7 @@ import type {
     TemplateNode,
     EndNode,
     InputNode,
-    ApiNode,
-    SetStatusNode,
+    LeadNode,
     AutomationFlow,
     TriggerConfig
 } from './types';
@@ -24,15 +23,20 @@ export const LIMITS = {
     // Button limits
     MAX_BUTTONS_PER_MESSAGE: 3,
     MAX_BUTTON_LABEL_LENGTH: 20,
+    MAX_LIST_SECTIONS: 10,
+    MAX_ROWS_PER_SECTION: 10,
+    MAX_SECTION_TITLE_LENGTH: 24,
+    MAX_ROW_TITLE_LENGTH: 24,
+    MAX_ROW_DESCRIPTION_LENGTH: 72,
 
     // Message limits
-    MAX_HEADER_LENGTH: 60,
+    MAX_HEADER_LENGTH: 100,
     MAX_BODY_LENGTH: 1024,
-    MAX_FOOTER_LENGTH: 60,
+    MAX_FOOTER_LENGTH: 100,
 
     // Flow limits
     MAX_NODES: 50,
-    MAX_DEPTH: 10, // Maximum nesting depth
+    MAX_DEPTH: 15, // Maximum nesting depth
 
     // Name limits
     MAX_FLOW_NAME_LENGTH: 100,
@@ -46,11 +50,11 @@ export const LIMITS = {
 export const NODE_DIMENSIONS = {
     trigger: { width: 280, height: 120 },
     message: { width: 320, height: 200 },
-    template: { width: 320, height: 220 },
+    template: { width: 320, height: 200 },
     input: { width: 320, height: 220 },
     api: { width: 320, height: 240 },
-    set_status: { width: 320, height: 220 },
     end: { width: 240, height: 100 },
+    lead: { width: 240, height: 100 },
 } as const;
 
 // =============================================================================
@@ -116,6 +120,18 @@ export const createDefaultEndNode = (
     },
 });
 
+export const createDefaultTemplateNode = (
+    id: string,
+    position: { x: number; y: number }
+): TemplateNode => ({
+    id,
+    type: 'template',
+    position,
+    data: {
+        buttonMappings: [],
+    },
+});
+
 export const createDefaultInputNode = (
     id: string,
     position: { x: number; y: number }
@@ -131,42 +147,16 @@ export const createDefaultInputNode = (
     },
 });
 
-export const createDefaultSetStatusNode = (
+export const createDefaultLeadNode = (
     id: string,
     position: { x: number; y: number }
-): SetStatusNode => ({
+): LeadNode => ({
     id,
-    type: 'set_status',
+    type: 'lead',
     position,
     data: {
-        status: 'qualified',
-        mode: 'advance',
-        targetNodeId: null,
-    },
-});
-
-export const createDefaultApiNode = (
-    id: string,
-    position: { x: number; y: number }
-): ApiNode => ({
-    id,
-    type: 'api',
-    position,
-    data: {
-        label: 'API Call',
-        method: 'POST',
-        url: '',
-        headers: [],
-        queryParams: [],
-        bodyType: 'json',
-        body: '',
-        timeoutSec: 15,
-        responseFormat: 'auto',
-        branches: [],
-        output: {
-            onSuccess: { mode: 'auto' },
-            onError: { text: 'Sorry, something went wrong. Please try again later.' },
-        },
+        label: 'Mark as Lead',
+        condition: { source: 'response', operator: 'any' },
     },
 });
 
@@ -199,9 +189,9 @@ export const NODE_COLORS = {
         text: '#065F46', // green-800
     },
     template: {
-        bg: '#EFF6FF', // blue-50
-        border: '#3B82F6', // blue-500
-        text: '#1E40AF', // blue-800
+        bg: '#F3E8FF', // purple-100
+        border: '#8B5CF6', // purple-500
+        text: '#6B21A8', // purple-800
     },
     input: {
         bg: '#F0F9FF', // sky-50
@@ -213,15 +203,15 @@ export const NODE_COLORS = {
         border: '#7C3AED', // violet-600
         text: '#5B21B6', // violet-800
     },
-    set_status: {
-        bg: '#ECFDF5', // emerald-50
-        border: '#059669', // emerald-600
-        text: '#065F46', // emerald-800
-    },
     end: {
         bg: '#FEF3C7', // amber-100
         border: '#F59E0B', // amber-500
         text: '#92400E', // amber-800
+    },
+    lead: {
+        bg: '#ECFDF5', // emerald-50
+        border: '#10B981', // emerald-500
+        text: '#065F46', // emerald-800
     },
 } as const;
 
@@ -243,7 +233,6 @@ export const BUTTON_ACTION_LABELS = {
     catalog: 'Show catalog',
     product_list: 'Show products',
     send_document: 'Send document/PDF',
-    template_button: 'Template quick reply',
 } as const;
 
 
@@ -270,19 +259,4 @@ export const VALIDATION_TYPE_LABELS = {
     pincode: 'PIN / Postal Code',
     enum: 'Multiple Choice (Enum)',
     regex: 'Custom Regex',
-} as const;
-
-// =============================================================================
-// SET STATUS LABELS
-// =============================================================================
-
-export const LEAD_STATUS_LABELS = {
-    new: 'New',
-    contacted: 'Contacted',
-    qualified: 'Qualified',
-} as const;
-
-export const SET_STATUS_MODE_LABELS = {
-    advance: 'Advance (forward only)',
-    set: 'Set exact (allow downgrade)',
 } as const;

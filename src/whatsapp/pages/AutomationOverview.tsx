@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, MessageCircle, Clock, Hash, Snowflake, BookOpen, Sparkles, RefreshCw, Lock, ArrowRight, CheckCircle, LayoutDashboard, Settings, Plus, GitBranch } from 'lucide-react';
+import { Zap, MessageCircle, Clock, Hash, Snowflake, BookOpen, Sparkles, RefreshCw, Lock, ArrowRight, CheckCircle, LayoutDashboard, Settings, Plus, GitBranch, Bot } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { API_BASE_URL } from '@/config';
+import { WHATSAPP_REST_API_PREFIX } from "@/config";
+import { cachedFetch } from '../utils/waPersistentCache';
 
 interface AutomationOverviewProps {
     unlockedLevel: number;
@@ -29,7 +30,7 @@ interface FeatureCardProps {
 }
 
 function FeatureCard({ title, description, icon: Icon, level, userLevel, tabTarget, onUnlock, onNavigate, color, stats, isEnabled, onToggle }: FeatureCardProps & { isEnabled?: boolean; onToggle?: (enabled: boolean) => void }) {
-    const isLocked = false; // All features are unlocked in standalone version
+    const isLocked = userLevel < level;
     const enabled = isEnabled ?? true;
 
     return (
@@ -37,6 +38,24 @@ function FeatureCard({ title, description, icon: Icon, level, userLevel, tabTarg
             "relative overflow-hidden transition-all duration-300 hover:shadow-lg border-l-4 group",
             isLocked ? "border-l-gray-300 bg-gray-50/50" : enabled ? `border-l-${color}-500 bg-white` : "border-l-gray-300 bg-gray-50/80"
         )}>
+            {/* Locked Overlay */}
+            {isLocked && (
+                <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-6 text-center transition-opacity duration-300">
+                    <div className="bg-gray-100 p-3 rounded-full mb-3 shadow-inner">
+                        <Lock className="w-6 h-6 text-gray-500" />
+                    </div>
+                    <h4 className="font-semibold text-gray-800 mb-1">
+                        {level === 2 ? 'Growth Feature' : 'Enterprise Feature'}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mb-4 max-w-[180px]">
+                        Unlock this feature to power up your automation.
+                    </p>
+                    <Button size="sm" onClick={onUnlock} className="bg-gradient-to-r from-gray-700 to-gray-900 text-white shadow-md hover:shadow-lg transform transition hover:-translate-y-0.5">
+                        <Sparkles className="w-3 h-3 mr-2 text-yellow-400" />
+                        Unlock {level === 2 ? 'Growth' : 'Enterprise'}
+                    </Button>
+                </div>
+            )}
 
             <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
@@ -64,6 +83,12 @@ function FeatureCard({ title, description, icon: Icon, level, userLevel, tabTarg
                                 />
                             </button>
                         )}
+                        {/* Level Badge */}
+                        {level > 1 && (
+                            <Badge variant="outline" className={cn("text-[10px] items-center gap-1", isLocked ? "border-gray-300 text-gray-400" : `border-${color}-200 text-${color}-700 bg-${color}-50`)}>
+                                {level === 2 ? 'GROWTH' : 'ENTERPRISE'}
+                            </Badge>
+                        )}
                     </div>
                 </div>
                 <CardTitle className={cn("text-lg mt-3 transition-colors", !isLocked && enabled ? "group-hover:text-emerald-700" : "text-gray-500")}>{title}</CardTitle>
@@ -73,7 +98,7 @@ function FeatureCard({ title, description, icon: Icon, level, userLevel, tabTarg
             <CardContent className="pb-2">
                 {stats && !isLocked && (
                     <div className={cn("flex items-center gap-2 text-xs font-medium p-2 rounded border",
-                        enabled ? "text-muted-foreground bg-slate-50 border-slate-100" : "text-gray-400 bg-gray-50 border-gray-100"
+                         enabled ? "text-muted-foreground bg-slate-50 border-slate-100" : "text-gray-400 bg-gray-50 border-gray-100"
                     )}>
                         <CheckCircle className={cn("w-3 h-3", enabled ? "text-emerald-500" : "text-gray-400")} />
                         {enabled ? stats : "Disabled"}
@@ -122,7 +147,8 @@ export function AutomationOverview({ unlockedLevel, onUnlockRequest, onNavigate,
         // Sync with backend API
         if (accountId) {
             try {
-                await fetch(`${API_BASE_URL}/api/whatsapp/accounts/${accountId}/automation-settings`, {
+                const API_BASE = import.meta.env.VITE_WHATSAPP_API_BASE || import.meta.env.VITE_API_BASE || '';
+                await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/automation-settings`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
@@ -136,6 +162,7 @@ export function AutomationOverview({ unlockedLevel, onUnlockRequest, onNavigate,
     };
 
     const features = [
+        // Level 1: Starter
         {
             title: "Welcome Message",
             description: "Auto-greet new customers instantly when they message you.",
@@ -155,6 +182,7 @@ export function AutomationOverview({ unlockedLevel, onUnlockRequest, onNavigate,
             stats: "4 Options Set"
         },
 
+        // Level 2: Growth
         {
             title: "Business Hours",
             description: "Set your schedule and auto-reply when you are away.",
@@ -174,6 +202,7 @@ export function AutomationOverview({ unlockedLevel, onUnlockRequest, onNavigate,
             stats: "Keywords Active"
         },
 
+        // Level 3: Enterprise
         {
             title: "AI Chatbot",
             description: "Gemini-powered AI assistant to handle complex queries 24/7.",
@@ -202,11 +231,11 @@ export function AutomationOverview({ unlockedLevel, onUnlockRequest, onNavigate,
             stats: "Campaigns Running"
         },
         {
-            title: "Interactive Flows",
-            description: "Create branching message flows with buttons. Each option leads to a different conversation path.",
-            icon: GitBranch,
+            title: "Conversational Flows",
+            description: "Create branching chatbot flows with buttons and automated logic.",
+            icon: Bot,
             level: 1,
-            color: "violet",
+            color: "orange",
             tabTarget: "interactive-automation",
             stats: "Flow Builder"
         },
@@ -236,7 +265,7 @@ export function AutomationOverview({ unlockedLevel, onUnlockRequest, onNavigate,
                                 <LayoutDashboard className="w-6 h-6 text-green-600" />
                             </div>
                             <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
-                                AUTOMATION PLAN
+                                {unlockedLevel === 1 ? 'STARTER PLAN' : unlockedLevel === 2 ? 'GROWTH PLAN' : 'ENTERPRISE PLAN'}
                             </Badge>
                         </div>
                         <h1 className="text-3xl font-bold mb-3 tracking-tight text-slate-900">
@@ -257,7 +286,9 @@ export function AutomationOverview({ unlockedLevel, onUnlockRequest, onNavigate,
                         <Settings className="w-5 h-5 text-indigo-600" />
                         Available Tools
                     </h2>
-                    {features.length} / {features.length} Unlocked
+                    <span className="text-sm text-muted-foreground">
+                        {features.filter(f => f.level <= unlockedLevel).length} / {features.length} Unlocked
+                    </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -43,8 +43,9 @@ import {
     ChevronDown,
     Info
 } from 'lucide-react';
-import { API_BASE_URL } from "@/config";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 import { getWhatsAppAccounts } from '../api';
+import { getWorkspaceId } from '../utils/workspaceContext';
 import { TriggeredMessagesSectionEnhanced as TriggeredMessagesSection } from './TriggeredMessagesSectionEnhanced';
 import { DripCampaignsSection } from './DripCampaignsSection';
 import { AutomationOverview } from './AutomationOverview';
@@ -52,6 +53,8 @@ import { LayoutDashboard, Lock, Crown } from 'lucide-react';
 import { useFeatureGate } from '@/hooks/useFeatureGate';
 import KnowledgeBaseSection from '../components/KnowledgeBaseSection';
 import { AutomationLoadingScreen } from '../components/AutomationLoadingScreen';
+import { RestrictionBanner } from '../components';
+import { cachedFetch } from '../utils/waPersistentCache';
 import logo from '@/assets/sociovia_logo.png';
 
 const API_BASE = API_BASE_URL;
@@ -103,7 +106,7 @@ interface WhatsAppAccount {
 // ============================================================
 
 async function fetchAutomationRules(accountId: number): Promise<AutomationRule[]> {
-    const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/automation/rules`, {
+    const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/automation/rules`, {
         credentials: 'include'
     });
     const data = await res.json();
@@ -111,7 +114,7 @@ async function fetchAutomationRules(accountId: number): Promise<AutomationRule[]
 }
 
 async function fetchBusinessHours(accountId: number): Promise<BusinessHours | null> {
-    const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/automation/business-hours`, {
+    const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/automation/business-hours`, {
         credentials: 'include'
     });
     const data = await res.json();
@@ -119,7 +122,7 @@ async function fetchBusinessHours(accountId: number): Promise<BusinessHours | nu
 }
 
 async function fetchIceBreakers(accountId: number): Promise<IceBreaker[]> {
-    const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/ice-breakers`, {
+    const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/ice-breakers`, {
         credentials: 'include'
     });
     const data = await res.json();
@@ -127,7 +130,7 @@ async function fetchIceBreakers(accountId: number): Promise<IceBreaker[]> {
 }
 
 async function createRule(accountId: number, rule: Partial<AutomationRule>): Promise<{ success: boolean; rule?: AutomationRule; error?: string }> {
-    const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/automation/rules`, {
+    const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/automation/rules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -137,7 +140,7 @@ async function createRule(accountId: number, rule: Partial<AutomationRule>): Pro
 }
 
 async function updateRule(accountId: number, ruleId: number, updates: Partial<AutomationRule>): Promise<{ success: boolean; error?: string }> {
-    const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/automation/rules/${ruleId}`, {
+    const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/automation/rules/${ruleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -147,7 +150,7 @@ async function updateRule(accountId: number, ruleId: number, updates: Partial<Au
 }
 
 async function deleteRule(accountId: number, ruleId: number): Promise<{ success: boolean; error?: string }> {
-    const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/automation/rules/${ruleId}`, {
+    const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/automation/rules/${ruleId}`, {
         method: 'DELETE',
         credentials: 'include'
     });
@@ -155,7 +158,7 @@ async function deleteRule(accountId: number, ruleId: number): Promise<{ success:
 }
 
 async function updateBusinessHours(accountId: number, hours: Partial<BusinessHours>): Promise<{ success: boolean; error?: string }> {
-    const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/automation/business-hours`, {
+    const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/automation/business-hours`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -165,7 +168,7 @@ async function updateBusinessHours(accountId: number, hours: Partial<BusinessHou
 }
 
 async function updateIceBreakers(accountId: number, iceBreakers: IceBreaker[]): Promise<{ success: boolean; error?: string }> {
-    const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/ice-breakers`, {
+    const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/ice-breakers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1354,7 +1357,7 @@ function AIChatbotSection({ accountId, workspaceId }: { accountId: number; works
     useEffect(() => {
         async function loadConfig() {
             try {
-                const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/ai/config`, {
+                const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/ai/config`, {
                     credentials: 'include'
                 });
                 if (res.ok) {
@@ -1377,7 +1380,7 @@ function AIChatbotSection({ accountId, workspaceId }: { accountId: number; works
         setSaving(true);
         try {
             const endpoint = checked ? 'enable' : 'disable';
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/ai/${endpoint}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/ai/${endpoint}`, {
                 method: 'POST',
                 credentials: 'include'
             });
@@ -1396,7 +1399,7 @@ function AIChatbotSection({ accountId, workspaceId }: { accountId: number; works
     const handleSave = async () => {
         setSaving(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/ai/config`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/ai/config`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
@@ -1573,7 +1576,7 @@ function FAQSection({ accountId }: { accountId: number }) {
     async function loadFAQs() {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/faqs`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/faqs`, {
                 credentials: 'include'
             });
             if (res.ok) {
@@ -1593,10 +1596,10 @@ function FAQSection({ accountId }: { accountId: number }) {
         setSaving(true);
         try {
             const url = editingFaq
-                ? `${API_BASE}/api/whatsapp/accounts/${accountId}/faqs/${editingFaq.id}`
-                : `${API_BASE}/api/whatsapp/accounts/${accountId}/faqs`;
+                ? `${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/faqs/${editingFaq.id}`
+                : `${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/faqs`;
 
-            const res = await fetch(url, {
+            const res = await cachedFetch(url, {
                 method: editingFaq ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -1616,7 +1619,7 @@ function FAQSection({ accountId }: { accountId: number }) {
                 // Auto-enable FAQ rule when first FAQ is added
                 if (!editingFaq) {
                     try {
-                        await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/faqs/enable`, {
+                        await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/faqs/enable`, {
                             method: 'POST',
                             credentials: 'include'
                         });
@@ -1636,7 +1639,7 @@ function FAQSection({ accountId }: { accountId: number }) {
         if (!confirm('Delete this FAQ?')) return;
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/faqs/${faqId}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/faqs/${faqId}`, {
                 method: 'DELETE',
                 credentials: 'include'
             });
@@ -1656,7 +1659,7 @@ function FAQSection({ accountId }: { accountId: number }) {
         setTestResult(null);
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/faqs/test`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/faqs/test`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -1866,8 +1869,6 @@ export default function WhatsAppAutomation() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const openUnlockDialog = (level: number, name: string) => { };
-
     // New State for Hub UI
     const [activeTab, setActiveTab] = useState("overview");
     // All features unlocked by default (no enterprise lock)
@@ -1878,7 +1879,7 @@ export default function WhatsAppAutomation() {
         async function loadAccounts() {
             try {
                 // Get workspace_id from storage to filter by current user's workspace
-                const workspaceId = localStorage.getItem('sv_whatsapp_workspace_id') || sessionStorage.getItem('sv_whatsapp_workspace_id') || undefined;
+                const workspaceId = getWorkspaceId() || undefined;
                 const data = await getWhatsAppAccounts(workspaceId);
                 const allAccounts = data.accounts || [];
                 const activeAccounts = allAccounts.filter((a: any) => a.is_active);
@@ -1929,7 +1930,7 @@ export default function WhatsAppAutomation() {
         // Get base path from current location (agent or dashboard)
         const basePath = location.pathname.startsWith('/agent') ? '/agent' : '/dashboard';
         if (target === 'interactive-automation') {
-            navigate(`${basePath}/interactive-automation`);
+            navigate(`${basePath}/whatsapp/interactive-automation`);
         } else {
             setActiveTab(target);
         }
@@ -1955,6 +1956,7 @@ export default function WhatsAppAutomation() {
 
     return (
         <div className="min-h-screen bg-slate-50/50 p-6 space-y-6 w-full animate-in fade-in duration-500">
+            {selectedAccount && <RestrictionBanner accountId={selectedAccount.id} />}
 
             {/* Header Area */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

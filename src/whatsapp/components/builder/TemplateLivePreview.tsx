@@ -12,8 +12,12 @@ interface TemplateLivePreviewProps {
 export function TemplateLivePreview({ state }: TemplateLivePreviewProps) {
     // Replace variables with styled placeholders
     const formatBodyWithVariables = (text: string) => {
-        return text.replace(/\{\{(\d+)\}\}/g, (_, num) => {
-            return `[Variable ${num}]`;
+        return text.replace(/\{\{([^}]+)\}\}/g, (_, name) => {
+            const varName = String(name).trim();
+            if (/^\d+$/.test(varName)) {
+                return `[Variable ${varName}]`;
+            }
+            return `[${varName}]`;
         });
     };
 

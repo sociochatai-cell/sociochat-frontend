@@ -1,6 +1,8 @@
 // Delivery Funnel - Visual message flow
 // Shows Sent → Delivered → Read with clear explanations
 
+import { useEffect, useRef, useState } from 'react';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ArrowDown, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -13,7 +15,64 @@ interface DeliveryFunnelProps {
     loading?: boolean;
 }
 
-export function DeliveryFunnel({ sent, delivered, read, failed = 0 }: DeliveryFunnelProps) {
+export function DeliveryFunnel({ sent, delivered, read, failed = 0, loading = false }: DeliveryFunnelProps) {
+    const cardRef = useRef<HTMLDivElement | null>(null);
+    const [isInView, setIsInView] = useState(false);
+
+    useEffect(() => {
+        if (loading || !cardRef.current || isInView) return;
+
+        const fallbackTimer = window.setTimeout(() => {
+            setIsInView(true);
+        }, 650);
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const [entry] = entries;
+                if (entry?.isIntersecting) {
+                    setIsInView(true);
+                    window.clearTimeout(fallbackTimer);
+                    observer.disconnect();
+                }
+            },
+            { threshold: 0.08, rootMargin: '0px 0px -8% 0px' }
+        );
+
+        observer.observe(cardRef.current);
+        return () => {
+            window.clearTimeout(fallbackTimer);
+            observer.disconnect();
+        };
+    }, [isInView, loading]);
+
+    if (loading) {
+        return (
+            <Card className="border-0 shadow-md">
+                <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-lg">📊 Delivery Funnel</CardTitle>
+                    <CardDescription>How your messages flow from sent to read</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-3">
+                    <div className="space-y-1">
+                        <div className="h-4 w-24 rounded bg-muted animate-pulse" />
+                        <div className="h-12 w-full rounded-lg bg-gradient-to-r from-indigo-200/70 via-indigo-100/50 to-indigo-200/70 animate-pulse" />
+                    </div>
+                    <div className="h-5 w-20 mx-auto rounded bg-muted animate-pulse" />
+                    <div className="space-y-1">
+                        <div className="h-4 w-28 rounded bg-muted animate-pulse" />
+                        <div className="h-12 w-4/5 mx-auto rounded-lg bg-gradient-to-r from-green-200/70 via-green-100/50 to-green-200/70 animate-pulse" />
+                    </div>
+                    <div className="h-5 w-24 mx-auto rounded bg-muted animate-pulse" />
+                    <div className="space-y-1">
+                        <div className="h-4 w-20 rounded bg-muted animate-pulse" />
+                        <div className="h-12 w-3/5 mx-auto rounded-lg bg-gradient-to-r from-blue-200/70 via-blue-100/50 to-blue-200/70 animate-pulse" />
+                    </div>
+                    <div className="mt-4 h-14 w-full rounded-lg bg-muted/60 animate-pulse" />
+                </CardContent>
+            </Card>
+        );
+    }
+
     // Calculate rates
     const deliveryRate = sent > 0 ? Math.round((delivered / sent) * 100) : 0;
     const readRate = delivered > 0 ? Math.round((read / delivered) * 100) : 0;
@@ -23,9 +82,13 @@ export function DeliveryFunnel({ sent, delivered, read, failed = 0 }: DeliveryFu
     const sentWidth = 100;
     const deliveredWidth = Math.max(30, deliveryRate);
     const readWidth = Math.max(20, (read / sent) * 100 || 0);
+    const animatedSentWidth = isInView ? sentWidth : 0;
+    const animatedDeliveredWidth = isInView ? deliveredWidth : 0;
+    const animatedReadWidth = isInView ? readWidth : 0;
+    const animatedFailedWidth = isInView ? Math.max(15, failureRate) : 0;
     
     return (
-        <Card className="border-0 shadow-md">
+        <Card ref={cardRef} className="border-0 shadow-md">
             <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-lg">
                     📊 Delivery Funnel
@@ -43,8 +106,8 @@ export function DeliveryFunnel({ sent, delivered, read, failed = 0 }: DeliveryFu
                             <span className="font-bold text-lg">{sent.toLocaleString()}</span>
                         </div>
                         <div 
-                            className="h-12 bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center text-white font-semibold shadow-sm transition-all duration-500"
-                            style={{ width: `${sentWidth}%` }}
+                            className="h-12 bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center text-white font-semibold shadow-sm transition-all duration-700 ease-out"
+                            style={{ width: `${animatedSentWidth}%` }}
                         >
                             {sent.toLocaleString()} messages
                         </div>
@@ -77,8 +140,8 @@ export function DeliveryFunnel({ sent, delivered, read, failed = 0 }: DeliveryFu
                             </span>
                         </div>
                         <div 
-                            className="h-12 bg-gradient-to-r from-green-500 to-green-600 rounded-lg flex items-center justify-center text-white font-semibold shadow-sm transition-all duration-500 mx-auto"
-                            style={{ width: `${deliveredWidth}%` }}
+                            className="h-12 bg-gradient-to-r from-green-500 to-green-600 rounded-lg flex items-center justify-center text-white font-semibold shadow-sm transition-all duration-700 ease-out mx-auto"
+                            style={{ width: `${animatedDeliveredWidth}%` }}
                         >
                             {delivered.toLocaleString()}
                         </div>
@@ -111,8 +174,8 @@ export function DeliveryFunnel({ sent, delivered, read, failed = 0 }: DeliveryFu
                             </span>
                         </div>
                         <div 
-                            className="h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-semibold shadow-sm transition-all duration-500 mx-auto"
-                            style={{ width: `${readWidth}%`, minWidth: '80px' }}
+                            className="h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-semibold shadow-sm transition-all duration-700 ease-out mx-auto"
+                            style={{ width: `${animatedReadWidth}%`, minWidth: '80px' }}
                         >
                             {read.toLocaleString()}
                         </div>
@@ -135,8 +198,8 @@ export function DeliveryFunnel({ sent, delivered, read, failed = 0 }: DeliveryFu
                                     </span>
                                 </div>
                                 <div 
-                                    className="h-10 bg-gradient-to-r from-red-500 to-red-600 rounded-lg flex items-center justify-center text-white font-semibold shadow-sm mx-auto"
-                                    style={{ width: `${Math.max(15, failureRate)}%`, minWidth: '60px' }}
+                                    className="h-10 bg-gradient-to-r from-red-500 to-red-600 rounded-lg flex items-center justify-center text-white font-semibold shadow-sm mx-auto transition-all duration-700 ease-out"
+                                    style={{ width: `${animatedFailedWidth}%`, minWidth: '60px' }}
                                 >
                                     {failed.toLocaleString()}
                                 </div>

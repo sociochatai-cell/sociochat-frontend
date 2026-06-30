@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Upload, UserPlus, FileSpreadsheet, Eye, AlertCircle, CheckCircle, Download, RefreshCw, X, ChevronLeft, ChevronRight, Play, Pause } from 'lucide-react';
 import { toast } from 'sonner';
-import { API_BASE_URL } from '@/config';
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { invalidateHttpCache } from '../utils/waPersistentCache';
 
 interface VariableMapping {
   key: string;
@@ -345,7 +346,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
     if (!campaign) return;
     try {
       setLoadingSchema(true);
-      const res = await fetch(`${API_BASE_URL}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaign.id}/variables`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaign.id}/variables`, {
         credentials: 'include'
       });
       if (res.ok) {
@@ -381,7 +382,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
   async function loadDatasets() {
     try {
       setLoadingDatasets(true);
-      const res = await fetch(`${API_BASE_URL}/api/whatsapp/datasets?account_id=${accountId}`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/datasets?account_id=${accountId}`, {
         credentials: 'include'
       });
       if (res.ok) {
@@ -398,7 +399,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
   async function loadDatasetRows(datasetId: number) {
     try {
       setLoadingDatasetRows(true);
-      const res = await fetch(`${API_BASE_URL}/api/whatsapp/datasets/${datasetId}/rows?limit=50`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${datasetId}/rows?limit=50`, {
         credentials: 'include'
       });
       if (res.ok) {
@@ -427,7 +428,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
     if (!sheetsUrl) return;
     try {
       setLoadingSheetsPreview(true);
-      const res = await fetch(`${API_BASE_URL}/api/whatsapp/sheets/preview`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/sheets/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -550,7 +551,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
 
     try {
       setImportingSheets(true);
-      const res = await fetch(`${API_BASE_URL}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaign.id}/import-sheet`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaign.id}/import-sheet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -564,6 +565,10 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
       });
       const data = await res.json();
       if (res.ok) {
+        // Raw POST bypasses cachedFetch's auto-invalidation; drop cached drip GETs
+        // (campaign list + enrollments live under /api/whatsapp/accounts) so the
+        // refetch — and the next cold reopen — shows the updated enrolled count.
+        invalidateHttpCache('/api/whatsapp/accounts');
         toast.success(`Enrolled ${data.enrolled} contacts from Google Sheet`);
         onEnrollmentComplete();
         resetForm();
@@ -580,7 +585,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
   async function downloadSampleCSV() {
     if (!campaign) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaign.id}/sample-csv`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaign.id}/sample-csv`, {
         credentials: 'include'
       });
       if (res.ok) {
@@ -605,7 +610,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
       if (selectedDatasetId) {
         params.set('dataset_id', selectedDatasetId.toString());
       }
-      const res = await fetch(`${API_BASE_URL}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaign.id}/preview?${params}`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaign.id}/preview?${params}`, {
         credentials: 'include'
       });
       if (res.ok) {
@@ -750,7 +755,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
       const profileData: Record<string, string> = {};
       if (manualName) profileData['name'] = manualName;
 
-      const res = await fetch(`${API_BASE_URL}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaign.id}/enroll`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaign.id}/enroll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -765,6 +770,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
 
       const data = await res.json();
       if (res.ok) {
+        invalidateHttpCache('/api/whatsapp/accounts');
         toast.success('Contact enrolled successfully');
         onEnrollmentComplete();
         resetForm();
@@ -795,10 +801,9 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
       const formData = new FormData();
       formData.append('file', csvFile);
       formData.append('column_mapping', JSON.stringify(columnMapping));
-      formData.append('phone_column', columnMapping['phone'] || '');
       formData.append('fallback_values', JSON.stringify(csvFallbackValues));
 
-      const res = await fetch(`${API_BASE_URL}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaign.id}/import-contacts`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaign.id}/import-contacts`, {
         method: 'POST',
         credentials: 'include',
         body: formData
@@ -806,6 +811,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
 
       const data = await res.json();
       if (res.ok) {
+        invalidateHttpCache('/api/whatsapp/accounts');
         toast.success(`Enrolled ${data.enrolled} contacts (${data.skipped} skipped)`);
         onEnrollmentComplete();
         resetForm();
@@ -831,12 +837,13 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
 
     try {
       setEnrolling(true);
-      const res = await fetch(`${API_BASE_URL}/api/whatsapp/accounts/${accountId}/drip-campaigns/${campaign.id}/enroll-dataset`, {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/drip-campaigns/${campaign.id}/enroll-dataset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           dataset_id: selectedDatasetId,
+          workspace_id: accountId,
           phone_column: datasetColumnMapping['phone'] || 'phone',
           name_column: datasetColumnMapping['name'] || 'name',
           column_mapping: datasetColumnMapping,
@@ -846,6 +853,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
 
       const data = await res.json();
       if (res.ok) {
+        invalidateHttpCache('/api/whatsapp/accounts');
         toast.success(`Enrolled ${data.enrolled} contacts (${data.skipped} skipped)`);
         onEnrollmentComplete();
         resetForm();

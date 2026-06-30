@@ -47,7 +47,7 @@ import {
     ThumbsUp,
     ThumbsDown,
     Activity,
-    IndianRupee as DollarSign,
+    Banknote as DollarSign,
 } from 'lucide-react';
 import logo from '@/assets/sociovia_logo.png';
 import { cn } from '@/lib/utils';
@@ -64,9 +64,10 @@ import {
     Cell,
     Legend,
 } from 'recharts';
-import { API_BASE_URL } from "@/config";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 import { useDataCache } from '../hooks/useDataCache';
 import { CACHE_KEYS, POLL_INTERVALS } from '../hooks/useWhatsAppData';
+import { getWorkspaceId, setWorkspaceId as persistWorkspaceId } from '../utils/workspaceContext';
 
 // Import new analytics components
 import {
@@ -231,7 +232,6 @@ export function WhatsAppAnalytics() {
 
     // WhatsApp account linked state
     const [hasLinkedAccount, setHasLinkedAccount] = useState<boolean | null>(null);
-    const [accountName, setAccountName] = useState<string | null>(null);
     const [checkingAccount, setCheckingAccount] = useState(false);
 
     // Overall analytics state
@@ -280,12 +280,8 @@ export function WhatsAppAnalytics() {
     const [period, setPeriod] = useState('7');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState<'utility' | 'marketing' | 'authentication'>('utility');
-
-    const selectedWorkspaceName = useMemo(() => {
-        const workspace = workspaces.find(w => String(w.id) === selectedWorkspaceId);
-        return workspace?.name || 'SocioChat';
-    }, [workspaces, selectedWorkspaceId]);
 
     // New business-first analytics state
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
@@ -342,7 +338,7 @@ export function WhatsAppAnalytics() {
         setAIInsightsLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE}/api/whatsapp/analytics/ai-insights/generate`, {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/analytics/ai-insights/generate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -394,15 +390,14 @@ export function WhatsAppAnalytics() {
                 setWorkspaces(mapped);
 
                 // Set initial workspace from storage or first one
-                const storedWs = localStorage.getItem('sv_whatsapp_workspace_id') || sessionStorage.getItem('sv_whatsapp_workspace_id');
+                const storedWs = getWorkspaceId();
                 if (storedWs && mapped.some((w: Workspace) => w.id === Number(storedWs))) {
                     setSelectedWorkspaceId(storedWs);
                 } else if (mapped.length > 0) {
                     const firstWsId = String(mapped[0].id);
                     setSelectedWorkspaceId(firstWsId);
                     // Store the initial workspace ID so other pages can use it
-                    localStorage.setItem('sv_whatsapp_workspace_id', firstWsId);
-                    sessionStorage.setItem('sv_whatsapp_workspace_id', firstWsId);
+                    persistWorkspaceId(firstWsId);
                 }
             } catch (err) {
                 console.error('Failed to fetch workspaces:', err);
@@ -416,10 +411,8 @@ export function WhatsAppAnalytics() {
     // Handle workspace change
     const handleWorkspaceChange = (wsId: string) => {
         setSelectedWorkspaceId(wsId);
-        localStorage.setItem('sv_whatsapp_workspace_id', wsId);
-        sessionStorage.setItem('sv_whatsapp_workspace_id', wsId);
+        persistWorkspaceId(wsId);
         setHasLinkedAccount(null); // Reset account check on workspace change
-        setAccountName(null);
     };
 
     // Check if workspace has a linked WhatsApp account
@@ -427,32 +420,20 @@ export function WhatsAppAnalytics() {
         const checkLinkedAccount = async () => {
             if (!selectedWorkspaceId) {
                 setHasLinkedAccount(null);
-                setAccountName(null);
                 return;
             }
             setCheckingAccount(true);
             try {
-                const res = await fetch(`${API_BASE}/api/whatsapp/connection-path?workspace_id=${selectedWorkspaceId}`, {
+                const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/accounts?workspace_id=${selectedWorkspaceId}`, {
                     credentials: 'include',
                 });
-                const data = await res.json();
-                if (data.status === 'CONNECTED') {
-                    setHasLinkedAccount(true);
-                    // Prioritise verified_name, then phone_number
-                    const name = data.account_summary?.verified_name || data.account_summary?.phone_number;
-                    if (name) {
-                        setAccountName(name);
-                    } else {
-                        setAccountName(null);
-                    }
-                } else {
-                    setHasLinkedAccount(false);
-                    setAccountName(null);
-                }
+                const json = await res.json();
+                const accounts = json.accounts || [];
+                const hasActive = accounts.some((acc: any) => acc.is_active);
+                setHasLinkedAccount(hasActive);
             } catch (err) {
                 console.error('Failed to check linked account:', err);
                 setHasLinkedAccount(false);
-                setAccountName(null);
             } finally {
                 setCheckingAccount(false);
             }
@@ -481,7 +462,7 @@ export function WhatsAppAnalytics() {
 
             if (isConversationView) {
                 // Fetch conversation-specific analytics
-                const res = await fetch(`${API_BASE}/api/whatsapp/analytics/conversations/${conversationId}?days=${period}&workspace_id=${selectedWorkspaceId}`, {
+                const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/analytics/conversations/${conversationId}?days=${period}&workspace_id=${selectedWorkspaceId}`, {
                     headers: { Authorization: `Bearer ${token}` },
                     credentials: 'include',
                 });
@@ -506,11 +487,11 @@ export function WhatsAppAnalytics() {
                 // Fetch overall analytics with workspace_id
                 const wsParam = `workspace_id=${selectedWorkspaceId}`;
                 const [analyticsRes, categoryRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/whatsapp/analytics?${queryParams}&${wsParam}`, {
+                    fetch(`${WHATSAPP_REST_API_PREFIX}/analytics?${queryParams}&${wsParam}`, {
                         headers: { Authorization: `Bearer ${token}` },
                         credentials: 'include',
                     }),
-                    fetch(`${API_BASE}/api/whatsapp/analytics/categories?${queryParams}&${wsParam}`, {
+                    fetch(`${WHATSAPP_REST_API_PREFIX}/analytics/categories?${queryParams}&${wsParam}`, {
                         headers: { Authorization: `Bearer ${token}` },
                         credentials: 'include',
                     }),
@@ -534,11 +515,11 @@ export function WhatsAppAnalytics() {
                 const daysForTrends = period === 'all' ? '30' : period === 'custom' ? '30' : period;
                 try {
                     const [summaryRes, trendsRes] = await Promise.all([
-                        fetch(`${API_BASE}/api/whatsapp/analytics/summary?${wsParam}&days=${daysForTrends}`, {
+                        fetch(`${WHATSAPP_REST_API_PREFIX}/analytics/summary?${wsParam}&days=${daysForTrends}`, {
                             headers: { Authorization: `Bearer ${token}` },
                             credentials: 'include',
                         }),
-                        fetch(`${API_BASE}/api/whatsapp/analytics/trends?${wsParam}&days=${daysForTrends}`, {
+                        fetch(`${WHATSAPP_REST_API_PREFIX}/analytics/trends?${wsParam}&days=${daysForTrends}`, {
                             headers: { Authorization: `Bearer ${token}` },
                             credentials: 'include',
                         }),
@@ -700,15 +681,74 @@ export function WhatsAppAnalytics() {
     if (hasLinkedAccount === false) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 p-6">
+                {/* Sidebar Overlay */}
+                {sidebarOpen && (
+                    <div
+                        className="fixed inset-0 bg-black/50 z-40 transition-opacity"
+                        onClick={() => setSidebarOpen(false)}
+                    />
+                )}
 
-                <div className="w-full">
+                {/* Slide-in Sidebar */}
+                <div className={cn(
+                    "fixed top-0 left-0 h-full w-72 bg-background border-r z-50 transform transition-transform duration-300 ease-in-out",
+                    sidebarOpen ? "translate-x-0" : "-translate-x-full"
+                )}>
+                    <div className="p-4 border-b flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <img src={logo} alt="Sociovia" className="w-6 h-6" />
+                            <span className="font-semibold">Analytics</span>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
+                            <X className="w-5 h-5" />
+                        </Button>
+                    </div>
+
+                    <div className="p-3 space-y-1">
+                        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Analytics</div>
+                        <button onClick={() => { window.location.href = '/dashboard'; }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
+                            <Target className="w-4 h-4 text-[#0081FB]" />
+                            <span className="text-sm">Meta Ads Analytics</span>
+                        </button>
+                        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/10 text-primary font-medium transition-colors text-left relative">
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-full" />
+                            <MessageCircle className="w-4 h-4 text-[#25D366]" />
+                            <span className="text-sm">WhatsApp Analytics</span>
+                        </button>
+                        <button onClick={() => { navigate('/dashboard?view=google'); setSidebarOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
+                            <Search className="w-4 h-4 text-[#4285F4]" />
+                            <span className="text-sm flex-1">Google Analytics</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Soon</Badge>
+                        </button>
+                        <button onClick={() => { navigate('/dashboard?view=email'); setSidebarOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
+                            <Mail className="w-4 h-4 text-[#EA4335]" />
+                            <span className="text-sm flex-1">Email Analytics</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Soon</Badge>
+                        </button>
+                        <div className="my-3 border-t" />
+                        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Management</div>
+                        <button onClick={() => { navigate('/dashboard/whatsapp/settings'); setSidebarOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
+                            <Settings className="w-4 h-4" />
+                            <span className="text-sm">Settings</span>
+                        </button>
+                        <button onClick={() => { navigate('/dashboard/whatsapp/settings'); setSidebarOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
+                            <Sliders className="w-4 h-4" />
+                            <span className="text-sm">Manage</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="max-w-7xl mx-auto">
                     {/* Header with workspace selector */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                         <div className="flex items-center gap-4">
+                            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
+                                <Menu className="w-5 h-5" />
+                            </Button>
                             <div>
                                 <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
-                                    <img src={logo} alt="SocioChat" className="w-5 h-5 md:w-6 md:h-6" />
-                                    {accountName || selectedWorkspaceName} Analytics
+                                    <img src={logo} alt="Sociovia" className="w-5 h-5 md:w-6 md:h-6" />
+                                    WhatsApp Analytics
                                 </h1>
                                 <p className="text-muted-foreground text-xs md:text-sm">Select workspace to view analytics</p>
                             </div>
@@ -744,11 +784,11 @@ export function WhatsAppAnalytics() {
                                 Connect your WhatsApp Business account for workspace "{workspaces.find(w => String(w.id) === selectedWorkspaceId)?.name || 'this workspace'}" to view analytics.
                             </p>
                             <div className="flex flex-col gap-3">
-                                <Button onClick={() => navigate('/dashboard/settings')} className="gap-2 w-full">
+                                <Button onClick={() => navigate('/dashboard/whatsapp/settings')} className="gap-2 w-full">
                                     <MessageCircle className="w-4 h-4" />
                                     Connect WhatsApp Account
                                 </Button>
-                                <Button variant="outline" onClick={() => navigate('/dashboard/inbox')} className="gap-2 w-full">
+                                <Button variant="outline" onClick={() => navigate('/dashboard/whatsapp/inbox')} className="gap-2 w-full">
                                     <Inbox className="w-4 h-4" />
                                     Go to Inbox
                                 </Button>
@@ -779,7 +819,7 @@ export function WhatsAppAnalytics() {
                         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
                         <h2 className="text-lg font-semibold mb-2">Failed to load analytics</h2>
                         <p className="text-muted-foreground mb-4">{error}</p>
-                        <Button onClick={() => fetchAnalytics(false)}>Try Again</Button>
+                        <Button onClick={fetchAnalytics}>Try Again</Button>
                     </CardContent>
                 </Card>
             </div>
@@ -800,22 +840,81 @@ export function WhatsAppAnalytics() {
         return (
             <TooltipProvider>
                 <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 p-4 md:p-6">
+                    {/* Sidebar Overlay */}
+                    {sidebarOpen && (
+                        <div
+                            className="fixed inset-0 bg-black/50 z-40 transition-opacity"
+                            onClick={() => setSidebarOpen(false)}
+                        />
+                    )}
+
+                    {/* Slide-in Sidebar */}
+                    <div className={cn(
+                        "fixed top-0 left-0 h-full w-72 bg-background border-r z-50 transform transition-transform duration-300 ease-in-out",
+                        sidebarOpen ? "translate-x-0" : "-translate-x-full"
+                    )}>
+                        <div className="p-4 border-b flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <img src={logo} alt="Sociovia" className="w-6 h-6" />
+                                <span className="font-semibold">Analytics</span>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
+                                <X className="w-5 h-5" />
+                            </Button>
+                        </div>
+
+                        <div className="p-3 space-y-1">
+                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Analytics</div>
+                            <button onClick={() => { window.location.href = '/dashboard'; }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
+                                <Target className="w-4 h-4 text-[#0081FB]" />
+                                <span className="text-sm">Meta Ads Analytics</span>
+                            </button>
+                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/10 text-primary font-medium transition-colors text-left relative">
+                                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-full" />
+                                <MessageCircle className="w-4 h-4 text-[#25D366]" />
+                                <span className="text-sm">WhatsApp Analytics</span>
+                            </button>
+                            <button onClick={() => { navigate('/dashboard?view=google'); setSidebarOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
+                                <Search className="w-4 h-4 text-[#4285F4]" />
+                                <span className="text-sm flex-1">Google Analytics</span>
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Soon</Badge>
+                            </button>
+                            <button onClick={() => { navigate('/dashboard?view=email'); setSidebarOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
+                                <Mail className="w-4 h-4 text-[#EA4335]" />
+                                <span className="text-sm flex-1">Email Analytics</span>
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Soon</Badge>
+                            </button>
+                            <div className="my-3 border-t" />
+                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Management</div>
+                            <button onClick={() => { navigate('/dashboard/whatsapp/settings'); setSidebarOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
+                                <Settings className="w-4 h-4" />
+                                <span className="text-sm">Settings</span>
+                            </button>
+                            <button onClick={() => { navigate('/dashboard/whatsapp/settings'); setSidebarOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
+                                <Sliders className="w-4 h-4" />
+                                <span className="text-sm">Manage</span>
+                            </button>
+                        </div>
+                    </div>
 
                     <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
                         {/* Header with Menu Button */}
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                             <div className="flex items-center gap-3 md:gap-4">
+                                <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
+                                    <Menu className="w-5 h-5" />
+                                </Button>
                                 <div>
                                     <h1 className="text-lg md:text-2xl font-bold flex items-center gap-2">
-                                        <img src={logo} alt="SocioChat" className="w-5 h-5 md:w-6 md:h-6" />
-                                        {accountName || selectedWorkspaceName} Analytics
+                                        <img src={logo} alt="Sociovia" className="w-5 h-5 md:w-6 md:h-6" />
+                                        Chat Analytics
                                     </h1>
                                     <p className="text-xs md:text-sm text-muted-foreground">
                                         Conversation #{conversationData.conversation_id}
                                     </p>
                                 </div>
                             </div>
-                            <Button variant="outline" size="sm" className="ml-12 md:ml-0 w-fit" onClick={() => navigate('/dashboard/analytics')}>
+                            <Button variant="outline" size="sm" className="ml-12 md:ml-0 w-fit" onClick={() => navigate('/dashboard/whatsapp/analytics')}>
                                 View Overall Analytics
                             </Button>
                         </div>
@@ -942,15 +1041,112 @@ export function WhatsAppAnalytics() {
     return (
         <TooltipProvider>
             <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 p-4 md:p-6">
+                {/* Sidebar Overlay */}
+                {sidebarOpen && (
+                    <div
+                        className="fixed inset-0 bg-black/50 z-40 transition-opacity"
+                        onClick={() => setSidebarOpen(false)}
+                    />
+                )}
 
-                <div className="w-full space-y-4 md:space-y-6">
+                {/* Slide-in Sidebar */}
+                <div className={cn(
+                    "fixed top-0 left-0 h-full w-72 bg-background border-r z-50 transform transition-transform duration-300 ease-in-out",
+                    sidebarOpen ? "translate-x-0" : "-translate-x-full"
+                )}>
+                    <div className="p-4 border-b flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <img src={logo} alt="Sociovia" className="w-6 h-6" />
+                            <span className="font-semibold">Analytics</span>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
+                            <X className="w-5 h-5" />
+                        </Button>
+                    </div>
+
+                    <div className="p-3 space-y-1">
+                        {/* Analytics Section */}
+                        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            Analytics
+                        </div>
+
+                        {/* Meta Ads Analytics */}
+                        <button
+                            onClick={() => { window.location.href = '/dashboard'; }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                        >
+                            <Target className="w-4 h-4 text-[#0081FB]" />
+                            <span className="text-sm">Meta Ads Analytics</span>
+                        </button>
+
+                        {/* WhatsApp Analytics - Active */}
+                        <button
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/10 text-primary font-medium transition-colors text-left relative"
+                        >
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-full" />
+                            <MessageCircle className="w-4 h-4 text-[#25D366]" />
+                            <span className="text-sm">WhatsApp Analytics</span>
+                        </button>
+
+                        {/* Google Analytics - Coming Soon */}
+                        <button
+                            onClick={() => { navigate('/dashboard?view=google'); setSidebarOpen(false); }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                        >
+                            <Search className="w-4 h-4 text-[#4285F4]" />
+                            <span className="text-sm flex-1">Google Analytics</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Soon</Badge>
+                        </button>
+
+                        {/* Email Analytics - Coming Soon */}
+                        <button
+                            onClick={() => { navigate('/dashboard?view=email'); setSidebarOpen(false); }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                        >
+                            <Mail className="w-4 h-4 text-[#EA4335]" />
+                            <span className="text-sm flex-1">Email Analytics</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Soon</Badge>
+                        </button>
+
+                        {/* Divider */}
+                        <div className="my-3 border-t" />
+
+                        {/* Management Section */}
+                        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            Management
+                        </div>
+
+                        {/* Settings */}
+                        <button
+                            onClick={() => { navigate('/dashboard/whatsapp/settings'); setSidebarOpen(false); }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                        >
+                            <Settings className="w-4 h-4" />
+                            <span className="text-sm">Settings</span>
+                        </button>
+
+                        {/* Manage */}
+                        <button
+                            onClick={() => { navigate('/dashboard/whatsapp/settings'); setSidebarOpen(false); }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                        >
+                            <Sliders className="w-4 h-4" />
+                            <span className="text-sm">Manage</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
                     {/* Header - Desktop */}
                     <div className="hidden md:flex items-center justify-between border-b pb-4">
                         <div className="flex items-center gap-4">
+                            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
+                                <Menu className="w-5 h-5" />
+                            </Button>
                             <div>
                                 <h1 className="text-2xl font-bold flex items-center gap-2">
-                                    <img src={logo} alt="SocioChat" className="w-6 h-6" />
-                                    {accountName || selectedWorkspaceName} Analytics
+                                    <img src={logo} alt="Sociovia" className="w-6 h-6" />
+                                    WhatsApp Analytics
                                 </h1>
                                 <p className="text-muted-foreground text-sm">{data?.period_label || 'Performance'}</p>
                             </div>
@@ -1009,7 +1205,14 @@ export function WhatsAppAnalytics() {
                             <div className="h-6 w-px bg-border" />
 
 
-
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate('/dashboard/whatsapp/settings')}
+                            >
+                                <Settings className="w-4 h-4 mr-2" />
+                                Settings
+                            </Button>
 
                             {/* Export Button */}
                             <ExportButtons
@@ -1047,10 +1250,18 @@ export function WhatsAppAnalytics() {
                         {/* Top row: Menu, Title, Workspace */}
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-9 w-9 shrink-0"
+                                    onClick={() => setSidebarOpen(true)}
+                                >
+                                    <Menu className="w-5 h-5" />
+                                </Button>
                                 <div>
                                     <h1 className="text-base font-bold flex items-center gap-1.5">
-                                        <img src={logo} alt="SocioChat" className="w-5 h-5" />
-                                        {accountName || selectedWorkspaceName} Analytics
+                                        <img src={logo} alt="Sociovia" className="w-5 h-5" />
+                                        WhatsApp Analytics
                                     </h1>
                                     <p className="text-muted-foreground text-[10px]">{data?.period_label || 'Last 7 days'}</p>
                                 </div>
@@ -1105,7 +1316,15 @@ export function WhatsAppAnalytics() {
                             {/* Quick action icons */}
                             <div className="flex items-center gap-1">
 
-
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => navigate('/dashboard/whatsapp/settings')}
+                                    title="Settings"
+                                >
+                                    <Settings className="w-4 h-4" />
+                                </Button>
                                 <ExportButtons
                                     workspaceId={selectedWorkspaceId}
                                     period={period}
@@ -1134,8 +1353,6 @@ export function WhatsAppAnalytics() {
                         loading={aiInsightsLoading}
                         onGenerateInsights={() => generateRealAIInsights(false)}
                         onRefreshInsights={() => generateRealAIInsights(true)}
-                        accountName={accountName}
-                        selectedWorkspaceName={selectedWorkspaceName}
                     />
 
                     {/* ============================================ */}
@@ -1152,6 +1369,7 @@ export function WhatsAppAnalytics() {
                             data={trendData}
                             loading={trendsLoading}
                             periodDays={parseInt(period) || 7}
+                            periodLabel={period === 'all' ? 'all time' : period === 'custom' ? 'custom range' : `${period} days`}
                         />
                     </div>
 
@@ -1282,15 +1500,11 @@ function AIInsightsSection({
     loading,
     onGenerateInsights,
     onRefreshInsights,
-    accountName,
-    selectedWorkspaceName
 }: {
     insights: AIInsights | null;
     loading: boolean;
     onGenerateInsights: () => void;
     onRefreshInsights: () => void;
-    accountName: string | null;
-    selectedWorkspaceName: string;
 }) {
     const getSentimentColor = (score: number) => {
         if (score >= 70) return 'text-green-600 bg-green-100 dark:bg-green-900/30';
@@ -1326,20 +1540,20 @@ function AIInsightsSection({
                     <CardTitle className="flex items-center gap-2 text-lg">
                         <Brain className="w-5 h-5 text-purple-600" />
                         AI-Powered Insights
-                        <Badge variant="secondary" className="text-[10px] ml-2">{accountName || selectedWorkspaceName}</Badge>
+                        <Badge variant="secondary" className="text-[10px] ml-2">Sociovia AI</Badge>
                     </CardTitle>
                     <CardDescription>
-                        Get intelligent analytics powered by SocioChat AI
+                        Get intelligent analytics powered by Sociovia AI
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-4">
                     <div className="text-center py-8">
                         <Brain className="w-12 h-12 mx-auto text-purple-400 mb-4" />
                         <p className="text-muted-foreground mb-4">
-                            Click below to generate AI-powered insights for your {accountName || selectedWorkspaceName} Analytics.
+                            Click below to generate AI-powered insights for your WhatsApp analytics.
                         </p>
                         <p className="text-xs text-muted-foreground mb-4">
-                            ⚡ Uses {accountName || selectedWorkspaceName} • Cached for 24 hours
+                            ⚡ Uses Sociovia AI • Cached for 24 hours
                         </p>
                         <Button
                             onClick={onGenerateInsights}
@@ -1380,7 +1594,7 @@ function AIInsightsSection({
                                 variant="default"
                                 className="text-[10px] bg-purple-600"
                             >
-                                {accountName || selectedWorkspaceName}
+                                Sociovia AI
                             </Badge>
                             {insights.metadata?.from_cache && (
                                 <Badge variant="outline" className="text-[10px]">Cached</Badge>
@@ -1636,7 +1850,7 @@ function AIInsightsSection({
                                     )}
                                 </Button>
                                 <p className="text-xs text-muted-foreground mt-2">
-                                    Get ROI-focused insights powered by SocioChat AI
+                                    Get ROI-focused insights powered by Sociovia AI
                                 </p>
                             </div>
                         )}

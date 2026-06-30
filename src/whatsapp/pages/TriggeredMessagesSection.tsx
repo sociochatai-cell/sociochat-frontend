@@ -9,7 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Zap, Plus, Trash2, Copy, Play, Loader2, Code } from 'lucide-react';
 import { toast } from 'sonner';
-import { API_BASE_URL } from '@/config';
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { cachedFetch } from '../utils/waPersistentCache';
+import { RefreshButton } from '../components/RefreshButton';
 
 const API_BASE = API_BASE_URL;
 
@@ -54,7 +56,7 @@ export function TriggeredMessagesSection({ accountId }: { accountId: number }) {
     async function loadTriggers() {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/triggers`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/triggers`, {
                 credentials: 'include'
             });
             if (res.ok) {
@@ -77,7 +79,7 @@ export function TriggeredMessagesSection({ accountId }: { accountId: number }) {
 
         try {
             setCreating(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/triggers`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/triggers`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -105,7 +107,7 @@ export function TriggeredMessagesSection({ accountId }: { accountId: number }) {
         if (!confirm("Are you sure? This will break any external integrations using this trigger.")) return;
 
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/triggers/${id}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/triggers/${id}`, {
                 method: 'DELETE',
                 credentials: 'include'
             });
@@ -125,7 +127,7 @@ export function TriggeredMessagesSection({ accountId }: { accountId: number }) {
 
         try {
             setTesting(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/hooks/${testTrigger.id}?secret=${testTrigger.secret_key}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/hooks/${testTrigger.id}?secret=${testTrigger.secret_key}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ to: testPhone })
@@ -199,7 +201,8 @@ export function TriggeredMessagesSection({ accountId }: { accountId: number }) {
 
             {isOpen && (
                 <CardContent className="pt-0 pb-6 animate-in slide-in-from-top-2 duration-200">
-                    <div className="flex justify-end mb-4">
+                    <div className="flex justify-end items-center gap-2 mb-4">
+                        <RefreshButton onRefresh={loadTriggers} isRefreshing={loading} title="Refresh" />
                         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                             <DialogTrigger asChild>
                                 <Button className="bg-indigo-600 hover:bg-indigo-700">

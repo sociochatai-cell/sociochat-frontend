@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { requestWhatsAppAccountStatusPopup } from '@/whatsapp/utils/accountStatusPopup';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,12 +15,12 @@ import {
 } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import {
-  MessageCircle,
-  Facebook,
-  Phone,
-  Shield,
-  CheckCircle2,
+import { 
+  MessageCircle, 
+  Facebook, 
+  Phone, 
+  Shield, 
+  CheckCircle2, 
   AlertCircle,
   Loader2,
   ArrowRight,
@@ -53,18 +54,18 @@ interface WABAState {
 // Step Components
 // ============================================================
 
-const StepIndicator: React.FC<{
-  currentStep: number;
+const StepIndicator: React.FC<{ 
+  currentStep: number; 
   totalSteps: number;
   stepLabels: string[];
 }> = ({ currentStep, totalSteps, stepLabels }) => {
   const progress = (currentStep / totalSteps) * 100;
-
+  
   return (
     <div className="space-y-3">
       <div className="flex justify-between text-sm text-muted-foreground">
         {stepLabels.map((label, index) => (
-          <span
+          <span 
             key={label}
             className={index + 1 <= currentStep ? 'text-primary font-medium' : ''}
           >
@@ -81,20 +82,20 @@ const StepIndicator: React.FC<{
 // Main Component
 // ============================================================
 
-export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
+export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({ 
   workspaceId: propWorkspaceId,
-  onSuccess
+  onSuccess 
 }) => {
   const navigate = useNavigate();
   const { id: paramWorkspaceId } = useParams<{ id: string }>();
   const workspaceId = propWorkspaceId || paramWorkspaceId || 'default';
-
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<SetupStep>('initial');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linkedAssets, setLinkedAssets] = useState<LinkedPage[]>([]);
-
+  
   // WABA state - check if already connected
   const [wabaState, setWabaState] = useState<WABAState>({
     waba: null,
@@ -102,7 +103,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
     isLoading: true,
     error: null,
   });
-
+  
   // Phone verification state
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -112,10 +113,10 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
   useEffect(() => {
     const checkExistingWABA = async () => {
       setWabaState(prev => ({ ...prev, isLoading: true, error: null }));
-
+      
       try {
         const response = await whatsappApi.getWABA(workspaceId);
-
+        
         if (response.error) {
           // No WABA linked yet - this is expected for new workspaces
           setWabaState({
@@ -131,7 +132,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
             isLoading: false,
             error: null,
           });
-
+          
           // Convert to LinkedPage format for success state
           if (response.waba) {
             const linkedPages: LinkedPage[] = (response.phone_numbers || []).map(phone => ({
@@ -152,7 +153,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
         });
       }
     };
-
+    
     checkExistingWABA();
   }, [workspaceId]);
 
@@ -174,7 +175,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
   const handleFacebookLogin = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-
+    
     try {
       // STUB: In production, this would initiate Facebook OAuth flow
       // For now, we simulate a successful login
@@ -192,10 +193,10 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
       setError('Please enter a valid phone number.');
       return;
     }
-
+    
     setIsLoading(true);
     setError(null);
-
+    
     try {
       // STUB: In production, this would send OTP via WhatsApp Business API
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -212,10 +213,10 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
       setError('Please enter a valid 6-digit OTP.');
       return;
     }
-
+    
     setIsLoading(true);
     setError(null);
-
+    
     try {
       // STUB: In production, this would verify OTP
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -230,7 +231,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
   const handleGrantPermissions = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-
+    
     try {
       // Call WhatsApp API to link Meta accounts
       const response = await whatsappApi.linkWABA({
@@ -238,14 +239,14 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
         waba_id: '', // Will be populated by OAuth flow
         access_token: '', // Will be populated by OAuth flow
       });
-
+      
       if (!response.success) {
         throw new Error(response.error || 'Failed to link accounts.');
       }
-
+      
       // Fetch phone numbers for the newly linked WABA
       const phoneResponse = await whatsappApi.getPhoneNumbers(workspaceId);
-
+      
       // Update WABA state with newly linked info
       if (response.waba) {
         setWabaState({
@@ -254,7 +255,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
           isLoading: false,
           error: null,
         });
-
+        
         // Convert to LinkedPage format for success state
         const linkedPages: LinkedPage[] = (phoneResponse.phone_numbers || []).map(phone => ({
           page_id: response.waba!.id,
@@ -264,8 +265,9 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
         }));
         setLinkedAssets(linkedPages);
         onSuccess?.(linkedPages);
+        requestWhatsAppAccountStatusPopup(workspaceId);
       }
-
+      
       setCurrentStep('success');
     } catch (err: unknown) {
       // Handle specific error cases
@@ -322,9 +324,9 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
                 Log in with your Facebook account to connect your WhatsApp Business Account.
               </p>
             </div>
-
-            <Button
-              onClick={handleFacebookLogin}
+            
+            <Button 
+              onClick={handleFacebookLogin} 
               disabled={isLoading}
               className="w-full bg-[#1877F2] hover:bg-[#166FE5]"
             >
@@ -337,7 +339,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
             </Button>
           </div>
         );
-
+        
       case 'phone_verify':
         return (
           <div className="space-y-6 py-4">
@@ -350,7 +352,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
                 Enter the WhatsApp Business phone number you want to use for ads.
               </p>
             </div>
-
+            
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone Number</Label>
@@ -367,10 +369,10 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
                   Include country code (e.g., +1 for US, +91 for India)
                 </p>
               </div>
-
+              
               {!otpSent ? (
-                <Button
-                  onClick={handleSendOTP}
+                <Button 
+                  onClick={handleSendOTP} 
                   disabled={isLoading || !phoneNumber}
                   className="w-full"
                 >
@@ -398,9 +400,9 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
                       Enter the 6-digit code sent to your WhatsApp
                     </p>
                   </div>
-
-                  <Button
-                    onClick={handleVerifyOTP}
+                  
+                  <Button 
+                    onClick={handleVerifyOTP} 
                     disabled={isLoading || otpCode.length !== 6}
                     className="w-full"
                   >
@@ -411,9 +413,9 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
                     )}
                     Verify Code
                   </Button>
-
-                  <Button
-                    variant="ghost"
+                  
+                  <Button 
+                    variant="ghost" 
                     onClick={() => setOtpSent(false)}
                     className="w-full"
                   >
@@ -424,7 +426,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
             </div>
           </div>
         );
-
+        
       case 'permissions':
         return (
           <div className="space-y-6 py-4">
@@ -434,30 +436,34 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
               </div>
               <h3 className="font-semibold text-lg">Grant Permissions</h3>
               <p className="text-muted-foreground text-sm">
-                Allow SocioChat to manage your WhatsApp Business Account for ad campaigns.
+                Allow Sociovia to manage your WhatsApp Business Account for ad campaigns.
               </p>
             </div>
-
+            
             <div className="bg-muted/50 rounded-lg p-4 space-y-3">
               <h4 className="font-medium text-sm">Permissions requested:</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  Create and manage Click-to-WhatsApp ads
+                  Manage WhatsApp Business Account settings and templates
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  Access WhatsApp Business phone number
+                  Send and receive WhatsApp messages with connected phone numbers
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  View conversation metrics
+                  Manage business assets needed for onboarding and token exchange
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  Optional: catalog and call-template assets (only if you enable these features)
                 </li>
               </ul>
             </div>
-
-            <Button
-              onClick={handleGrantPermissions}
+            
+            <Button 
+              onClick={handleGrantPermissions} 
               disabled={isLoading}
               className="w-full"
             >
@@ -470,7 +476,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
             </Button>
           </div>
         );
-
+        
       case 'success':
         return (
           <div className="space-y-6 py-4">
@@ -483,14 +489,14 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
                 Your WhatsApp Business Account is now linked and ready for ads.
               </p>
             </div>
-
+            
             {linkedAssets.length > 0 && (
               <div className="space-y-3">
                 <h4 className="font-medium text-sm">Linked Assets:</h4>
                 <div className="space-y-2">
                   {linkedAssets.map((asset) => (
-                    <div
-                      key={asset.page_id}
+                    <div 
+                      key={asset.page_id} 
                       className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
                     >
                       <div className="space-y-1">
@@ -515,17 +521,17 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
                 </div>
               </div>
             )}
-
+            
             <div className="flex gap-2">
-              <Button
-                variant="outline"
+              <Button 
+                variant="outline" 
                 onClick={handleClose}
                 className="flex-1"
               >
                 Close
               </Button>
-              <Button
-                onClick={() => navigate(`/dashboard/campaign/create`)}
+              <Button 
+                onClick={() => navigate(`/dashboard/whatsapp/campaign/create`)}
                 className="flex-1"
               >
                 Create CTWA Ad
@@ -534,7 +540,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
             </div>
           </div>
         );
-
+        
       default:
         return null;
     }
@@ -596,8 +602,8 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
                     </Badge>
                   )}
                 </div>
-                <Button
-                  variant="ghost"
+                <Button 
+                  variant="ghost" 
                   size="sm"
                   onClick={() => navigate('/dashboard/settings/integrations')}
                 >
@@ -615,7 +621,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
                 </h4>
                 <div className="space-y-2">
                   {wabaState.phoneNumbers.map((phone) => (
-                    <div
+                    <div 
                       key={phone.id}
                       className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
                     >
@@ -636,24 +642,24 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
 
             {/* Quick Actions */}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Button
-                onClick={() => navigate('/dashboard/campaign/create')}
+              <Button 
+                onClick={() => navigate('/dashboard/whatsapp/campaign/create')}
                 className="w-full"
               >
                 <MessageCircle className="w-4 h-4 mr-2" />
                 Create CTWA Ad
               </Button>
-              <Button
+              <Button 
                 variant="outline"
-                onClick={() => navigate('/dashboard/templates')}
+                onClick={() => navigate('/dashboard/whatsapp/templates')}
                 className="w-full"
               >
                 <FileText className="w-4 h-4 mr-2" />
                 Manage Templates
               </Button>
-              <Button
+              <Button 
                 variant="outline"
-                onClick={() => navigate('/dashboard/test')}
+                onClick={() => navigate('/dashboard/whatsapp/test')}
                 className="w-full"
               >
                 <Send className="w-4 h-4 mr-2" />
@@ -703,7 +709,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
             Connect WhatsApp Business
           </CardTitle>
           <CardDescription>
-            Link your WhatsApp Business Account to create Click-to-WhatsApp ads and
+            Link your WhatsApp Business Account to create Click-to-WhatsApp ads and 
             engage with customers directly on WhatsApp.
           </CardDescription>
         </CardHeader>
@@ -731,7 +737,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
               </p>
             </div>
           </div>
-
+          
           <Button onClick={handleStartSetup} className="w-full" size="lg">
             <MessageCircle className="w-5 h-5 mr-2" />
             Connect WhatsApp Business Account
@@ -740,7 +746,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
       </Card>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent
+        <DialogContent 
           className="sm:max-w-md"
           aria-describedby="setup-dialog-description"
         >
@@ -750,24 +756,24 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
               Follow the steps to connect your WhatsApp Business Account.
             </DialogDescription>
           </DialogHeader>
-
+          
           {currentStep !== 'initial' && currentStep !== 'success' && (
-            <StepIndicator
-              currentStep={stepNumber[currentStep]}
+            <StepIndicator 
+              currentStep={stepNumber[currentStep]} 
               totalSteps={4}
               stepLabels={stepLabels}
             />
           )}
-
+          
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error</AlertTitle>
               <AlertDescription className="flex items-center justify-between">
                 <span>{error}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
+                <Button 
+                  variant="outline" 
+                  size="sm" 
                   onClick={handleRetry}
                   className="ml-2"
                 >
@@ -777,7 +783,7 @@ export const EmbeddedSignupStub: React.FC<EmbeddedSignupStubProps> = ({
               </AlertDescription>
             </Alert>
           )}
-
+          
           {renderStepContent()}
         </DialogContent>
       </Dialog>

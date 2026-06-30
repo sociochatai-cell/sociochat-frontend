@@ -35,6 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   FileText,
@@ -56,13 +62,19 @@ import {
   Trash2,
   Plus,
   ExternalLink,
-  Settings2
+  Settings2,
+  Send,
+  Edit,
+  Copy,
+  Archive,
+  MoreHorizontal
 } from 'lucide-react';
 import { VariableMappingEditor } from '@/whatsapp/components/VariableMappingEditor';
+import { TemplatePreviewModal } from '@/whatsapp/components/TemplatePreviewModal';
 import { whatsappApi, type MessageTemplate } from '../api';
-import { API_BASE_URL } from "@/config";
-
-const API_BASE = API_BASE_URL;
+import { WHATSAPP_REST_API_PREFIX } from "@/config";
+import { connectionPathHasLinkedAccount } from '@/whatsapp/hooks/useWhatsAppData';
+import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 
 // ============================================================
 // Types
@@ -172,7 +184,7 @@ const TemplatePreview: React.FC<TemplatePreviewProps> = ({ template, isOpen, onC
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-green-500" />
@@ -183,7 +195,7 @@ const TemplatePreview: React.FC<TemplatePreviewProps> = ({ template, isOpen, onC
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto pr-1 max-h-[calc(90vh-140px)]">
           {/* Status and Meta */}
           <div className="flex items-center gap-3 flex-wrap">
             <StatusBadge status={template.status} />
@@ -216,7 +228,7 @@ const TemplatePreview: React.FC<TemplatePreviewProps> = ({ template, isOpen, onC
               <div className="bg-background rounded-lg p-4 border max-w-[280px] mx-auto shadow-sm">
                 {template.components.map((component, index) => (
                   <div key={index} className="mb-3 last:mb-0">
-                    {component.type.toUpperCase() === 'HEADER' && (
+                    {component.type === 'HEADER' && (
                       <div className="mb-2">
                         {component.format === 'IMAGE' ? (
                           <div className="w-full h-32 bg-muted rounded flex items-center justify-center">
@@ -232,17 +244,15 @@ const TemplatePreview: React.FC<TemplatePreviewProps> = ({ template, isOpen, onC
                       </div>
                     )}
 
-                    {component.type.toUpperCase() === 'BODY' && (
+                    {component.type === 'BODY' && (
                       <p className="text-sm whitespace-pre-wrap">{getDisplayText(component.text)}</p>
-                    ) || (component.type.toLowerCase() === 'body' && (
-                      <p className="text-sm whitespace-pre-wrap">{getDisplayText(component.text)}</p>
-                    ))}
+                    )}
 
-                    {component.type.toUpperCase() === 'FOOTER' && (
+                    {component.type === 'FOOTER' && (
                       <p className="text-xs text-muted-foreground mt-2">{getDisplayText(component.text)}</p>
                     )}
 
-                    {component.type.toUpperCase() === 'BUTTONS' && component.buttons && (
+                    {component.type === 'BUTTONS' && component.buttons && (
                       <div className="mt-3 space-y-1">
                         {component.buttons.map((button, btnIndex) => (
                           <div
@@ -293,13 +303,16 @@ const TemplatePreview: React.FC<TemplatePreviewProps> = ({ template, isOpen, onC
 const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWorkspaceId }) => {
   const { id: routeWorkspaceId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const wsFromStorage = localStorage.getItem('sv_whatsapp_workspace_id') || sessionStorage.getItem('sv_whatsapp_workspace_id');
+  const wsFromStorage = getWorkspaceId();
   const workspaceId = propWorkspaceId || routeWorkspaceId || wsFromStorage || 'default';
 
   // Connection state
   const [isConnected, setIsConnected] = useState<boolean | null>(null);
+  const [connectionReconnectHint, setConnectionReconnectHint] = useState<string | null>(null);
   const [checkingConnection, setCheckingConnection] = useState(true);
   const [accountName, setAccountName] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<number | null>(null);
+  const [phoneNumberId, setPhoneNumberId] = useState<string>('');
 
   // State
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -320,6 +333,9 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
   // Variable mapping editor state
   const [mappingEditorOpen, setMappingEditorOpen] = useState(false);
   const [templateToConfigureAliases, setTemplateToConfigureAliases] = useState<MessageTemplate | null>(null);
+  const [templateToSend, setTemplateToSend] = useState<MessageTemplate | null>(null);
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [sendRecipientPhone, setSendRecipientPhone] = useState('');
 
   const componentId = useId();
 
@@ -328,20 +344,29 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
     const checkConnection = async () => {
       setCheckingConnection(true);
       try {
-        const res = await fetch(`${API_BASE}/api/whatsapp/connection-path?workspace_id=${workspaceId}`, {
+        const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/connection-path?workspace_id=${workspaceId}`, {
           credentials: 'include',
         });
         const data = await res.json();
 
-        if (data.status === 'CONNECTED') {
+        if (connectionPathHasLinkedAccount(data)) {
           setIsConnected(true);
           setAccountName(data.account_summary?.verified_name || null);
+          setAccountId(data.account_summary?.id != null ? Number(data.account_summary.id) : null);
+          setPhoneNumberId(data.account_summary?.phone_number_id || '');
+          const needsAttention =
+            data.status === 'RELINK_REQUIRED' || data.status === 'PARTIAL';
+          setConnectionReconnectHint(
+            needsAttention ? (data.reason || data.message || 'Reconnect WhatsApp to restore full functionality.') : null
+          );
         } else {
           setIsConnected(false);
+          setConnectionReconnectHint(null);
         }
       } catch (err) {
         console.error('Failed to check connection:', err);
         setIsConnected(false);
+        setConnectionReconnectHint(null);
       } finally {
         setCheckingConnection(false);
       }
@@ -430,23 +455,6 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
     fetchTemplates();
   }, [fetchTemplates]);
 
-  // Auto-sync from Meta on mount to pick up new/updated templates
-  useEffect(() => {
-    if (!isConnected || !workspaceId) return;
-    // Run a background sync silently (don't show loading spinner)
-    const autoSync = async () => {
-      try {
-        await whatsappApi.syncTemplates(workspaceId);
-        // Re-fetch after sync to show latest
-        await fetchTemplates();
-      } catch {
-        // Silent fail — manual sync button still available
-      }
-    };
-    autoSync();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, workspaceId]);
-
   // ============================================================
   // Handlers
   // ============================================================
@@ -455,6 +463,61 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
     setSelectedTemplate(template);
     setShowPreview(true);
   }, []);
+
+  const handleSendTemplate = useCallback((template: MessageTemplate) => {
+    setTemplateToSend(template);
+    setSendModalOpen(true);
+  }, []);
+
+  const handleEditTemplate = useCallback((template: MessageTemplate) => {
+    const isAgentContext = window.location.pathname.startsWith('/agent');
+    const basePath = isAgentContext ? '/agent' : '/dashboard';
+    navigate(`${basePath}/whatsapp/templates/${template.id}/edit`);
+  }, [navigate]);
+
+  const handleDuplicateTemplate = useCallback((template: MessageTemplate) => {
+    const isAgentContext = window.location.pathname.startsWith('/agent');
+    const basePath = isAgentContext ? '/agent' : '/dashboard';
+    navigate(`${basePath}/whatsapp/templates/new?duplicate=${template.id}`);
+  }, [navigate]);
+
+  const handleSyncSingleTemplate = useCallback(async (template: MessageTemplate) => {
+    setError(null);
+    try {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/templates/${template.id}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ account_id: accountId || undefined, workspace_id: workspaceId }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to sync template');
+      }
+      await fetchTemplates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sync template');
+    }
+  }, [accountId, workspaceId, fetchTemplates]);
+
+  const handleArchiveTemplate = useCallback(async (template: MessageTemplate) => {
+    setError(null);
+    try {
+      const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/templates/${template.id}/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ account_id: accountId || undefined, workspace_id: workspaceId }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to archive template');
+      }
+      await fetchTemplates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to archive template');
+    }
+  }, [accountId, workspaceId, fetchTemplates]);
 
   const handleConfigureAliases = useCallback((template: MessageTemplate) => {
     setTemplateToConfigureAliases(template);
@@ -521,7 +584,7 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
             <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">No WhatsApp Account Connected</h3>
             <p className="text-muted-foreground mb-6">Connect a WhatsApp Business Account to view and manage templates</p>
-            <Button onClick={() => navigate('/dashboard/setup')} className="!bg-green-600 hover:!bg-green-700 !text-white">
+            <Button onClick={() => navigate('/dashboard/whatsapp/setup')} className="!bg-green-600 hover:!bg-green-700 !text-white">
               Connect WhatsApp
             </Button>
           </CardContent>
@@ -542,6 +605,27 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
           Manage your WhatsApp Business message templates
         </p>
       </div>
+
+      {connectionReconnectHint && (
+        <Alert className="mb-6 border-amber-200 bg-amber-50 dark:bg-amber-950/30">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertTitle>WhatsApp reconnect recommended</AlertTitle>
+          <AlertDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <span>{connectionReconnectHint}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                const agent = window.location.pathname.startsWith('/agent');
+                navigate(`${agent ? '/agent' : '/dashboard'}/whatsapp/setup`);
+              }}
+            >
+              Open setup
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-4 mb-6">
@@ -635,6 +719,14 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
               </Select>
             </div>
 
+            {/* Recipient input for Send action */}
+            <Input
+              placeholder="Recipient phone (e.g. 9198...)"
+              value={sendRecipientPhone}
+              onChange={(e) => setSendRecipientPhone(e.target.value)}
+              className="sm:max-w-[240px]"
+            />
+
             {/* Sync Button */}
             <TooltipProvider>
               <Tooltip>
@@ -664,7 +756,7 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
                       // Detect if we're in agent context and use appropriate path
                       const isAgentContext = window.location.pathname.startsWith('/agent');
                       const basePath = isAgentContext ? '/agent' : '/dashboard';
-                      navigate(`${basePath}/templates/new`);
+                      navigate(`${basePath}/whatsapp/templates/new`);
                     }}
                   >
                     <Plus className="w-4 h-4 mr-2" />
@@ -732,6 +824,29 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={template.status !== 'APPROVED' || !phoneNumberId || !sendRecipientPhone.trim()}
+                                onClick={() => handleSendTemplate(template)}
+                                className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                              >
+                                <Send className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {template.status !== 'APPROVED'
+                                ? 'Only approved templates can be sent'
+                                : !sendRecipientPhone.trim()
+                                  ? 'Enter recipient phone to send'
+                                  : 'Send Template'}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+
                         {/* Configure Aliases - only show if template has variables */}
                         {(template.variable_count || 0) > 0 && (
                           <TooltipProvider>
@@ -772,6 +887,40 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
                             <TooltipContent>View Template</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEditTemplate(template)}>
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDuplicateTemplate(template)}>
+                              <Copy className="w-4 h-4 mr-2" />
+                              Duplicate
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleSyncSingleTemplate(template)}>
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                              Sync Status
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleArchiveTemplate(template)}>
+                              <Archive className="w-4 h-4 mr-2" />
+                              Archive
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openDeleteConfirm(template)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -805,6 +954,16 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ workspaceId: propWork
           setShowPreview(false);
           setSelectedTemplate(null);
         }}
+      />
+
+      {/* Send Template Modal (same experience as Inbox templates flow) */}
+      <TemplatePreviewModal
+        open={sendModalOpen}
+        onOpenChange={setSendModalOpen}
+        template={templateToSend as any}
+        recipientPhone={sendRecipientPhone}
+        recipientName={''}
+        phoneNumberId={phoneNumberId}
       />
 
       {/* Delete Confirmation Dialog */}

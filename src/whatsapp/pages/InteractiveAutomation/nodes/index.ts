@@ -7,5 +7,5 @@ export { MessageNode } from './MessageNode';
 export { TemplateNode } from './TemplateNode';
 export { InputNode } from './InputNode';
 export { ApiNode } from './ApiNode';
-export { SetStatusNode } from './SetStatusNode';
 export { EndNode } from './EndNode';
+export { LeadNode } from './LeadNode';

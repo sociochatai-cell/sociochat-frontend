@@ -380,12 +380,16 @@ function PreviewField({ field, value, onChange }: PreviewFieldProps) {
       )}
 
       {field.type === 'time' && (
-        <Input
-          type="time"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className={cn(baseInputClass, "h-8")}
-        />
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className={cn(baseInputClass, "h-8")}>
+            <SelectValue placeholder="🕐 Select time slot" />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options?.map((opt, idx) => (
+              <SelectItem key={idx} value={opt}>{opt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
     </div>
   );

@@ -31,13 +31,51 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 
 import { toast } from '@/hooks/use-toast';
-import { API_BASE_URL } from '@/config';
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { getWorkspaceId } from '../../utils/workspaceContext';
+import { cachedFetch } from '../../utils/waPersistentCache';
 
 // Local imports
-import { TriggerNode, MessageNode, TemplateNode, InputNode, ApiNode, SetStatusNode, EndNode } from './nodes';
+import { TriggerNode, MessageNode, TemplateNode, InputNode, ApiNode, EndNode, LeadNode } from './nodes';
 import { NodeEditor } from './panels';
-import { TemplateSelectPanel } from './panels/TemplateSelectPanel';
 import { FlowToolbar } from './FlowToolbar';
+import {
+    generateId,
+    generateButtonId,
+    validateFlow,
+    hasErrors,
+    addMessageNode,
+    addEndNode,
+    addTemplateNode,
+    addInputNode,
+    addApiNode,
+    addLeadNode,
+    updateNode,
+    deleteNode,
+    addButton,
+    updateButton,
+    removeButton,
+    calculateAutoLayout,
+    syncEdgesFromNodes,
+    addEdge as addFlowEdge,
+    removeEdge as removeFlowEdge,
+} from './flowUtils';
+import {
+    createEmptyFlow,
+    createDefaultTriggerNode,
+    createDefaultTemplateNode,
+    EDGE_COLORS,
+} from './constants';
+import type {
+    AutomationFlow,
+    FlowNode,
+    FlowEdge,
+    ValidationIssue,
+    MessageButton,
+    TemplateNode as TemplateNodeType,
+    TemplateButtonMapping,
+} from './types';
+import './interactive-automation.css';
 import {
     AiFlowGeneratorDialog,
     draftToAutomationFlow,
@@ -47,39 +85,6 @@ import {
     FlowVariablesDialog,
     type FlowVariablesState,
 } from './components/FlowVariablesDialog';
-import {
-    generateId,
-    generateButtonId,
-    validateFlow,
-    hasErrors,
-    addMessageNode,
-    addEndNode,
-    updateNode,
-    deleteNode,
-    addButton,
-    updateButton,
-    removeButton,
-    calculateAutoLayout,
-    addEdge as addFlowEdge,
-    removeEdge as removeFlowEdge,
-} from './flowUtils';
-import {
-    createEmptyFlow,
-    createDefaultTriggerNode,
-    createDefaultInputNode,
-    createDefaultApiNode,
-    createDefaultSetStatusNode,
-    EDGE_COLORS,
-} from './constants';
-import type {
-    AutomationFlow,
-    FlowNode,
-    FlowEdge,
-    ValidationIssue,
-    MessageButton,
-} from './types';
-import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
-import './interactive-automation.css';
 
 // =============================================================================
 // Node Types Registration
@@ -91,8 +96,8 @@ const nodeTypes: NodeTypes = {
     template: TemplateNode,
     input: InputNode,
     api: ApiNode,
-    set_status: SetStatusNode,
     end: EndNode,
+    lead: LeadNode,
 };
 
 // =============================================================================
@@ -100,30 +105,36 @@ const nodeTypes: NodeTypes = {
 // =============================================================================
 
 // Convert our FlowNode[] to ReactFlow Node[]
-const toReactFlowNodes = (nodes: FlowNode[]): Node[] => {
+const toReactFlowNodes = (nodes: FlowNode[], validationIssues: ValidationIssue[] = []): Node[] => {
     return nodes.map((node) => ({
         id: node.id,
         type: node.type,
         position: node.position,
-        data: node.data,
+        data: {
+            ...node.data,
+            validationIssues: (validationIssues || []).filter(issue => issue.nodeId === node.id)
+        },
     }));
 };
 
 // Convert our FlowEdge[] to ReactFlow Edge[]
 const toReactFlowEdges = (edges: FlowEdge[]): Edge[] => {
-    return edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        sourceHandle: edge.sourceHandle,
-        target: edge.target,
-        targetHandle: edge.targetHandle,
-        animated: edge.animated,
-        style: {
-            stroke: EDGE_COLORS.default,
-            strokeWidth: 2,
-            ...edge.style,
-        },
-    }));
+    return edges
+        // Self-loops draw a grey “frame” around the node (output → input on same id)
+        .filter((edge) => edge.source !== edge.target)
+        .map((edge) => ({
+            id: edge.id,
+            source: edge.source,
+            sourceHandle: edge.sourceHandle,
+            target: edge.target,
+            targetHandle: edge.targetHandle,
+            animated: edge.animated,
+            style: {
+                stroke: EDGE_COLORS.default,
+                strokeWidth: 2,
+                ...edge.style,
+            },
+        }));
 };
 
 // Convert ReactFlow nodes back to our FlowNode[]
@@ -161,8 +172,7 @@ export function InteractiveAutomation() {
 
     // Account/Workspace state
     const [accountId, setAccountId] = useState<number | null>(null);
-    const workspaceId = localStorage.getItem('sv_whatsapp_workspace_id') ||
-        sessionStorage.getItem('sv_whatsapp_workspace_id') || '';
+    const workspaceId = getWorkspaceId() || '';
 
     // Flow state
     const [flow, setFlow] = useState<AutomationFlow>(() =>
@@ -180,13 +190,18 @@ export function InteractiveAutomation() {
     const [isPublishing, setIsPublishing] = useState(false);
     const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
     const [isLoading, setIsLoading] = useState(isEditing);
+    const [aiDialogOpen, setAiDialogOpen] = useState(false);
+    const [variablesDialogOpen, setVariablesDialogOpen] = useState(false);
 
-    // Template selector modal state
-    const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
-
-    // AI generator & flow variables dialog state
-    const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
-    const [isVariablesDialogOpen, setIsVariablesDialogOpen] = useState(false);
+    // Template state for template node selection
+    const [templates, setTemplates] = useState<Array<{
+        id: number;
+        name: string;
+        language: string;
+        category: string;
+        status: string;
+        components: any[];
+    }>>([]);
 
     // ReactFlow instance ref for viewport access
     const reactFlowInstance = React.useRef<any>(null);
@@ -200,8 +215,8 @@ export function InteractiveAutomation() {
         const fetchAccount = async () => {
             if (!workspaceId) return;
             try {
-                const res = await fetch(
-                    `${API_BASE_URL}/api/whatsapp/accounts?workspace_id=${workspaceId}`
+                const res = await cachedFetch(
+                    `${WHATSAPP_REST_API_PREFIX}/accounts?workspace_id=${workspaceId}`
                 );
                 const data = await res.json();
                 if (data.success && data.accounts?.length > 0) {
@@ -214,6 +229,25 @@ export function InteractiveAutomation() {
         };
         fetchAccount();
     }, [workspaceId]);
+
+    // Fetch templates for template node selection
+    useEffect(() => {
+        const fetchTemplates = async () => {
+            if (!accountId) return;
+            try {
+                const res = await cachedFetch(
+                    `${WHATSAPP_REST_API_PREFIX}/templates?account_id=${accountId}&workspace_id=${workspaceId}`
+                );
+                const data = await res.json();
+                if (data.success && data.templates) {
+                    setTemplates(data.templates);
+                }
+            } catch (err) {
+                console.error('Failed to fetch templates:', err);
+            }
+        };
+        fetchTemplates();
+    }, [accountId, workspaceId]);
 
     // Load existing flow if editing
     useEffect(() => {
@@ -231,10 +265,11 @@ export function InteractiveAutomation() {
     const loadFlow = async (flowId: number) => {
         try {
             setIsLoading(true);
-            const res = await fetch(`${API_BASE_URL}/api/whatsapp/interactive-automations/${flowId}`);
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/interactive-automations/${flowId}`);
             const data = await res.json();
 
             if (data.success && data.automation) {
+                const rawEdges = (data.automation.edges || []) as FlowEdge[];
                 const loadedFlow: AutomationFlow = {
                     id: data.automation.id,
                     name: data.automation.name,
@@ -242,10 +277,10 @@ export function InteractiveAutomation() {
                     accountId: data.automation.account_id,
                     workspaceId: data.automation.workspace_id,
                     nodes: data.automation.nodes || [],
-                    edges: data.automation.edges || [],
+                    edges: rawEdges.filter((e) => e.source !== e.target),
                     trigger: data.automation.trigger || { type: 'any_reply', enabled: true },
                     variables: data.automation.variables || {},
-                    flowConfig: data.automation.flow_config || data.automation.flowConfig || {},
+                    flowConfig: data.automation.flowConfig || data.automation.flow_config || {},
                     status: data.automation.status || 'draft',
                     createdAt: data.automation.created_at,
                     updatedAt: data.automation.updated_at,
@@ -260,7 +295,7 @@ export function InteractiveAutomation() {
                     description: 'Failed to load automation',
                     variant: 'destructive',
                 });
-                navigate('/dashboard/automation');
+                navigate('/dashboard/whatsapp/automation');
             }
         } catch (err) {
             console.error('Failed to load flow:', err);
@@ -282,9 +317,11 @@ export function InteractiveAutomation() {
         const timeout = setTimeout(() => {
             const issues = validateFlow(flow);
             setValidationIssues(issues);
+            // Also update the nodes directly with issues so they can render the glowing handles
+            setNodes(toReactFlowNodes(flow.nodes, issues));
         }, 300);
         return () => clearTimeout(timeout);
-    }, [flow]);
+    }, [flow, setNodes]);
 
     // ==========================================================================
     // SYNC FLOW STATE WITH REACTFLOW
@@ -305,6 +342,7 @@ export function InteractiveAutomation() {
     const onConnect = useCallback(
         (connection: Connection) => {
             if (!connection.source || !connection.target) return;
+            if (connection.source === connection.target) return;
 
             const updatedFlow = addFlowEdge(
                 flow,
@@ -349,42 +387,6 @@ export function InteractiveAutomation() {
         setIsDirty(true);
     }, []);
 
-    const handleAddMessageNode = useCallback(() => {
-        // Get current viewport center for positioning
-        let position: { x: number; y: number } | undefined;
-        if (reactFlowInstance.current) {
-            const viewport = reactFlowInstance.current.getViewport();
-            // Calculate position relative to viewport center
-            // Account for zoom level and current pan position
-            const zoom = viewport.zoom || 1;
-            const containerWidth = 800; // Approximate visible width
-            const containerHeight = 600; // Approximate visible height
-            position = {
-                x: (-viewport.x + containerWidth / 2) / zoom,
-                y: (-viewport.y + containerHeight / 2) / zoom,
-            };
-        }
-
-        const updatedFlow = addMessageNode(flow, position);
-        setFlow(updatedFlow);
-        setNodes(toReactFlowNodes(updatedFlow.nodes));
-        setIsDirty(true);
-
-        // Select the new node
-        const newNode = updatedFlow.nodes[updatedFlow.nodes.length - 1];
-        setSelectedNodeId(newNode.id);
-
-        // Pan to the new node after a short delay
-        setTimeout(() => {
-            if (reactFlowInstance.current && newNode) {
-                reactFlowInstance.current.setCenter(
-                    newNode.position.x + 150, // Center on the node (node width/2)
-                    newNode.position.y + 100, // Center on the node (node height/2)
-                    { zoom: 1, duration: 500 }
-                );
-            }
-        }, 50);
-    }, [flow]);
 
     const handleAddEndNode = useCallback(() => {
         // Get current viewport center for positioning
@@ -420,156 +422,171 @@ export function InteractiveAutomation() {
         }, 50);
     }, [flow]);
 
-    // Compute a position near the current viewport center (mirrors existing add-node UX)
-    const getViewportCenterPosition = useCallback((): { x: number; y: number } => {
+    const handleAddTemplateNode = useCallback(() => {
+        // Get current viewport center for positioning
+        let position: { x: number; y: number } | undefined;
         if (reactFlowInstance.current) {
             const viewport = reactFlowInstance.current.getViewport();
             const zoom = viewport.zoom || 1;
             const containerWidth = 800;
             const containerHeight = 600;
-            return {
+            position = {
                 x: (-viewport.x + containerWidth / 2) / zoom,
                 y: (-viewport.y + containerHeight / 2) / zoom,
             };
         }
-        return { x: 300, y: 300 };
-    }, []);
+
+        const updatedFlow = addTemplateNode(flow, position);
+        setFlow(updatedFlow);
+        setNodes(toReactFlowNodes(updatedFlow.nodes));
+        setIsDirty(true);
+
+        const newNode = updatedFlow.nodes[updatedFlow.nodes.length - 1];
+        setSelectedNodeId(newNode.id);
+
+        // Pan to the new node after a short delay
+        setTimeout(() => {
+            if (reactFlowInstance.current && newNode) {
+                reactFlowInstance.current.setCenter(
+                    newNode.position.x + 150,
+                    newNode.position.y + 100,
+                    { zoom: 1, duration: 500 }
+                );
+            }
+        }, 50);
+    }, [flow]);
+
+    const handleAddMessageNode = useCallback(() => {
+        // Get current viewport center for positioning
+        let position: { x: number; y: number } | undefined;
+        if (reactFlowInstance.current) {
+            const viewport = reactFlowInstance.current.getViewport();
+            const zoom = viewport.zoom || 1;
+            const containerWidth = 800;
+            const containerHeight = 600;
+            position = {
+                x: (-viewport.x + containerWidth / 2) / zoom,
+                y: (-viewport.y + containerHeight / 2) / zoom,
+            };
+        }
+
+        const updatedFlow = addMessageNode(flow, position);
+        setFlow(updatedFlow);
+        setNodes(toReactFlowNodes(updatedFlow.nodes));
+        setIsDirty(true);
+
+        const newNode = updatedFlow.nodes[updatedFlow.nodes.length - 1];
+        setSelectedNodeId(newNode.id);
+
+        // Pan to the new node after a short delay
+        setTimeout(() => {
+            if (reactFlowInstance.current && newNode) {
+                reactFlowInstance.current.setCenter(
+                    newNode.position.x + 150,
+                    newNode.position.y + 100,
+                    { zoom: 1, duration: 500 }
+                );
+            }
+        }, 50);
+    }, [flow]);
 
     const handleAddInputNode = useCallback(() => {
-        const position = getViewportCenterPosition();
-        const newNode = createDefaultInputNode(generateId('input'), position);
-        const updatedFlow = { ...flow, nodes: [...flow.nodes, newNode] };
+        // Get current viewport center for positioning
+        let position: { x: number; y: number } | undefined;
+        if (reactFlowInstance.current) {
+            const viewport = reactFlowInstance.current.getViewport();
+            const zoom = viewport.zoom || 1;
+            const containerWidth = 800;
+            const containerHeight = 600;
+            position = {
+                x: (-viewport.x + containerWidth / 2) / zoom,
+                y: (-viewport.y + containerHeight / 2) / zoom,
+            };
+        }
+
+        const updatedFlow = addInputNode(flow, position);
         setFlow(updatedFlow);
         setNodes(toReactFlowNodes(updatedFlow.nodes));
         setIsDirty(true);
+
+        const newNode = updatedFlow.nodes[updatedFlow.nodes.length - 1];
         setSelectedNodeId(newNode.id);
 
+        // Pan to the new node after a short delay
         setTimeout(() => {
-            if (reactFlowInstance.current) {
+            if (reactFlowInstance.current && newNode) {
                 reactFlowInstance.current.setCenter(
-                    newNode.position.x + 160,
-                    newNode.position.y + 110,
+                    newNode.position.x + 150,
+                    newNode.position.y + 100,
                     { zoom: 1, duration: 500 }
                 );
             }
         }, 50);
-    }, [flow, getViewportCenterPosition, setNodes]);
+    }, [flow]);
 
     const handleAddApiNode = useCallback(() => {
-        const position = getViewportCenterPosition();
-        const newNode = createDefaultApiNode(generateId('api'), position);
-        const updatedFlow = { ...flow, nodes: [...flow.nodes, newNode] };
-        setFlow(updatedFlow);
-        setNodes(toReactFlowNodes(updatedFlow.nodes));
-        setIsDirty(true);
-        setSelectedNodeId(newNode.id);
-
-        setTimeout(() => {
-            if (reactFlowInstance.current) {
-                reactFlowInstance.current.setCenter(
-                    newNode.position.x + 160,
-                    newNode.position.y + 120,
-                    { zoom: 1, duration: 500 }
-                );
-            }
-        }, 50);
-    }, [flow, getViewportCenterPosition, setNodes]);
-
-    const handleAddSetStatusNode = useCallback(() => {
-        const position = getViewportCenterPosition();
-        const newNode = createDefaultSetStatusNode(generateId('set_status'), position);
-        const updatedFlow = { ...flow, nodes: [...flow.nodes, newNode] };
-        setFlow(updatedFlow);
-        setNodes(toReactFlowNodes(updatedFlow.nodes));
-        setIsDirty(true);
-        setSelectedNodeId(newNode.id);
-
-        setTimeout(() => {
-            if (reactFlowInstance.current) {
-                reactFlowInstance.current.setCenter(
-                    newNode.position.x + 160,
-                    newNode.position.y + 110,
-                    { zoom: 1, duration: 500 }
-                );
-            }
-        }, 50);
-    }, [flow, getViewportCenterPosition, setNodes]);
-
-    const handleAddTemplateNode = useCallback(() => {
-        if (!accountId) {
-            toast({
-                title: 'No account',
-                description: 'Please connect a WhatsApp account first',
-                variant: 'destructive',
-            });
-            return;
+        let position: { x: number; y: number } | undefined;
+        if (reactFlowInstance.current) {
+            const viewport = reactFlowInstance.current.getViewport();
+            const zoom = viewport.zoom || 1;
+            position = {
+                x: (-viewport.x + 400) / zoom,
+                y: (-viewport.y + 300) / zoom,
+            };
         }
-        setIsTemplateSelectOpen(true);
-    }, [accountId]);
 
-    const handleTemplateSelected = useCallback(
-        (template: any) => {
-            setIsTemplateSelectOpen(false);
+        const updatedFlow = addApiNode(flow, position);
+        setFlow(updatedFlow);
+        setNodes(toReactFlowNodes(updatedFlow.nodes));
+        setIsDirty(true);
 
-            // Calculate position
-            let position: { x: number; y: number } = { x: 300, y: 300 };
-            if (reactFlowInstance.current) {
-                const viewport = reactFlowInstance.current.getViewport();
-                const zoom = viewport.zoom || 1;
-                position = {
-                    x: (-viewport.x + 400) / zoom,
-                    y: (-viewport.y + 300) / zoom,
-                };
+        const newNode = updatedFlow.nodes[updatedFlow.nodes.length - 1];
+        setSelectedNodeId(newNode.id);
+
+        setTimeout(() => {
+            if (reactFlowInstance.current && newNode) {
+                reactFlowInstance.current.setCenter(
+                    newNode.position.x + 150,
+                    newNode.position.y + 100,
+                    { zoom: 1, duration: 500 }
+                );
             }
+        }, 50);
+    }, [flow]);
 
-            // Create template node with buttons as handles
-            const nodeId = generateId();
-            const buttons = (template.buttons || []).map((btn: any, idx: number) => ({
-                index: btn.index,
-                text: btn.text,
-                handleId: `${nodeId}-btn-${idx}`,
-                payload: `${nodeId}-btn-${idx}`,
-            }));
-
-            const templateNode = {
-                id: nodeId,
-                type: 'template' as const,
-                position,
-                data: {
-                    templateId: template.id,
-                    templateName: template.name,
-                    languageCode: template.language,
-                    category: template.category,
-                    headerText: template.headerText,
-                    bodyText: template.bodyText,
-                    footerText: template.footerText,
-                    buttons,
-                    variableCount: template.variableCount || 0,
-                },
+    const handleAddLeadNode = useCallback(() => {
+        // Get current viewport center for positioning
+        let position: { x: number; y: number } | undefined;
+        if (reactFlowInstance.current) {
+            const viewport = reactFlowInstance.current.getViewport();
+            const zoom = viewport.zoom || 1;
+            const containerWidth = 800;
+            const containerHeight = 600;
+            position = {
+                x: (-viewport.x + containerWidth / 2) / zoom,
+                y: (-viewport.y + containerHeight / 2) / zoom,
             };
+        }
 
-            const updatedFlow = {
-                ...flow,
-                nodes: [...flow.nodes, templateNode as any],
-            };
+        const updatedFlow = addLeadNode(flow, position);
+        setFlow(updatedFlow);
+        setNodes(toReactFlowNodes(updatedFlow.nodes));
+        setIsDirty(true);
 
-            setFlow(updatedFlow);
-            setNodes(toReactFlowNodes(updatedFlow.nodes));
-            setIsDirty(true);
-            setSelectedNodeId(nodeId);
+        const newNode = updatedFlow.nodes[updatedFlow.nodes.length - 1];
+        setSelectedNodeId(newNode.id);
 
-            setTimeout(() => {
-                if (reactFlowInstance.current) {
-                    reactFlowInstance.current.setCenter(
-                        position.x + 160,
-                        position.y + 110,
-                        { zoom: 1, duration: 500 }
-                    );
-                }
-            }, 50);
-        },
-        [flow]
-    );
+        // Pan to the new node after a short delay
+        setTimeout(() => {
+            if (reactFlowInstance.current && newNode) {
+                reactFlowInstance.current.setCenter(
+                    newNode.position.x + 100,
+                    newNode.position.y + 50,
+                    { zoom: 1, duration: 500 }
+                );
+            }
+        }, 50);
+    }, [flow]);
 
     const handleAutoLayout = useCallback(() => {
         const layoutedFlow = calculateAutoLayout(flow);
@@ -579,52 +596,32 @@ export function InteractiveAutomation() {
         toast({ title: 'Layout applied', description: 'Nodes have been rearranged' });
     }, [flow]);
 
-    // Apply an AI-generated flow draft to the current canvas
-    const handleAiDraftApplied = useCallback(
-        (draft: GeneratedFlowDraft) => {
-            const acct = accountId || flow.accountId || 0;
-            const nextFlow = draftToAutomationFlow(draft, acct, workspaceId, flow.id);
-            const layouted = calculateAutoLayout(nextFlow);
+    const handleOpenAiGenerator = useCallback(() => {
+        const hasContent = flow.nodes.some((n) => n.type !== 'trigger');
+        if (hasContent) {
+            const ok = window.confirm(
+                'Generate with AI will replace your current nodes with a new draft. Continue?'
+            );
+            if (!ok) return;
+        }
+        setAiDialogOpen(true);
+    }, [flow.nodes]);
 
-            setFlow(layouted);
-            setNodes(toReactFlowNodes(layouted.nodes));
-            setEdges(toReactFlowEdges(layouted.edges));
-            setSelectedNodeId(null);
-            setIsDirty(true);
-
-            // Prompt for the API token if the draft needs one but none is set
-            if (!layouted.variables?.flow_api_token) {
-                const usesApiToken = JSON.stringify(layouted.nodes).includes('{{flow_api_token}}');
-                if (usesApiToken) setIsVariablesDialogOpen(true);
-            }
-
-            toast({
-                title: 'AI flow applied',
-                description: 'Review the generated nodes, set any flow variables, then save.',
-            });
-        },
-        [accountId, flow.accountId, flow.id, workspaceId, setNodes, setEdges]
-    );
-
-    // Persist flow variables / default values from the Flow Variables dialog
-    const handleFlowVariablesSave = useCallback(
-        (next: FlowVariablesState) => {
-            setFlow((prev) => ({
-                ...prev,
-                variables: next.variables,
-                flowConfig: {
-                    ...prev.flowConfig,
-                    variableDefaults: next.variableDefaults,
-                },
-            }));
-            setIsDirty(true);
-            toast({
-                title: 'Flow variables updated',
-                description: 'Save the flow to persist tokens and defaults.',
-            });
-        },
-        []
-    );
+    const handleFlowVariablesSave = useCallback((next: FlowVariablesState) => {
+        setFlow((prev) => ({
+            ...prev,
+            variables: next.variables,
+            flowConfig: {
+                ...(prev.flowConfig || {}),
+                variableDefaults: next.variableDefaults,
+            },
+        }));
+        setIsDirty(true);
+        toast({
+            title: 'Flow variables updated',
+            description: 'Save the flow to persist tokens and defaults.',
+        });
+    }, []);
 
     const flowVariablesState = useMemo(
         (): FlowVariablesState => ({
@@ -634,12 +631,42 @@ export function InteractiveAutomation() {
         [flow.variables, flow.flowConfig]
     );
 
+    const hasFlowToken = Boolean(
+        flow.variables?.flow_api_token && flow.variables.flow_api_token !== '***'
+    );
+
+    const handleAiDraftApplied = useCallback(
+        (draft: GeneratedFlowDraft) => {
+            const acct = accountId || flow.accountId || 0;
+            const nextFlow = draftToAutomationFlow(draft, acct, workspaceId, flow.id);
+            const layouted = calculateAutoLayout(syncEdgesFromNodes(nextFlow));
+            setFlow(layouted);
+            setNodes(toReactFlowNodes(layouted.nodes, validateFlow(layouted)));
+            setEdges(toReactFlowEdges(layouted.edges));
+            setSelectedNodeId(null);
+            setIsDirty(true);
+            if (!nextFlow.variables?.flow_api_token) {
+                setVariablesDialogOpen(true);
+            }
+            toast({
+                title: 'AI flow applied',
+                description: 'Set flow variables (API token), review nodes, then save.',
+            });
+        },
+        [accountId, flow.accountId, flow.id, workspaceId]
+    );
+
     const handleUpdateNode = useCallback(
         (updates: Partial<FlowNode['data']>) => {
             if (!selectedNodeId) return;
             const updatedFlow = updateNode(flow, selectedNodeId, updates);
-            setFlow(updatedFlow);
-            setNodes(toReactFlowNodes(updatedFlow.nodes));
+            
+            // Sync edges in case a targetNodeId was changed in the data (e.g., list rows)
+            const syncedFlow = syncEdgesFromNodes(updatedFlow);
+            
+            setFlow(syncedFlow);
+            setNodes(toReactFlowNodes(syncedFlow.nodes));
+            setEdges(toReactFlowEdges(syncedFlow.edges));
             setIsDirty(true);
         },
         [flow, selectedNodeId]
@@ -687,18 +714,97 @@ export function InteractiveAutomation() {
         [flow, selectedNodeId]
     );
 
+    // Template node handlers
+    const handleSelectTemplate = useCallback(
+        (templateId: number) => {
+            if (!selectedNodeId) return;
+            
+            const template = templates.find(t => t.id === templateId);
+            if (!template) return;
+
+            // Extract button mappings from template components
+            const buttonMappings: TemplateButtonMapping[] = [];
+            if (template.components) {
+                for (const comp of template.components) {
+                    if (comp.type === 'BUTTONS') {
+                        (comp.buttons || []).forEach((btn: any, idx: number) => {
+                            buttonMappings.push({
+                                buttonIndex: idx,
+                                buttonText: btn.text || `Button ${idx + 1}`,
+                                buttonType: btn.type === 'QUICK_REPLY' ? 'quick_reply'
+                                          : btn.type === 'FLOW' ? 'flow'
+                                          : btn.type === 'URL' ? 'url'
+                                          : 'phone',
+                                targetNodeId: null,
+                            });
+                        });
+                    }
+                }
+            }
+
+            const updates = {
+                templateId: template.id,
+                templateName: template.name,
+                templateLanguage: template.language,
+                templateCategory: template.category,
+                templateStatus: template.status,
+                buttonMappings,
+            };
+
+            handleUpdateNode(updates);
+        },
+        [selectedNodeId, templates, handleUpdateNode]
+    );
+
+    const handleUpdateButtonMapping = useCallback(
+        (buttonIndex: number, targetNodeId: string | null) => {
+            if (!selectedNodeId) return;
+            
+            const node = flow.nodes.find(n => n.id === selectedNodeId);
+            if (!node || node.type !== 'template') return;
+
+            const tplNode = node as TemplateNodeType;
+            const updatedMappings = [...(tplNode.data.buttonMappings || [])];
+            
+            if (updatedMappings[buttonIndex]) {
+                updatedMappings[buttonIndex] = {
+                    ...updatedMappings[buttonIndex],
+                    targetNodeId,
+                };
+            }
+
+            // Update the node data and sync edges
+            const intermediateFlow = {
+                ...flow,
+                nodes: flow.nodes.map(n =>
+                    n.id === selectedNodeId
+                        ? { ...n, data: { ...n.data, buttonMappings: updatedMappings } } as FlowNode
+                        : n
+                )
+            };
+            
+            const syncedFlow = syncEdgesFromNodes(intermediateFlow);
+
+            setFlow(syncedFlow);
+            setNodes(toReactFlowNodes(syncedFlow.nodes));
+            setEdges(toReactFlowEdges(syncedFlow.edges));
+            setIsDirty(true);
+        },
+        [flow, selectedNodeId, setFlow, setNodes, setEdges]
+    );
+
     // ==========================================================================
     // SAVE & PUBLISH
     // ==========================================================================
 
-    const handleSave = useCallback(async () => {
+    const handleSave = useCallback(async (): Promise<boolean> => {
         if (!flow.name.trim()) {
             toast({
                 title: 'Name required',
                 description: 'Please enter an automation name',
                 variant: 'destructive',
             });
-            return;
+            return false;
         }
 
         try {
@@ -706,12 +812,21 @@ export function InteractiveAutomation() {
 
             // Extract trigger settings from the trigger node
             const triggerNode = flow.nodes.find(n => n.type === 'trigger');
-            const triggerData = (triggerNode?.data || {}) as { triggerType?: string; keywords?: string[] };
+            const triggerData = (triggerNode?.data || {}) as {
+                triggerType?: string;
+                keywords?: string[];
+                templateId?: string;
+                firstMessageOnly?: boolean;
+                oneTimeOnly?: boolean;
+            };
 
             // Build trigger object from trigger node data
             const trigger = {
                 type: triggerData.triggerType || 'any_reply',
                 keywords: triggerData.keywords || [],
+                templateId: triggerData.templateId,
+                firstMessageOnly: Boolean(triggerData.firstMessageOnly),
+                oneTimeOnly: Boolean(triggerData.oneTimeOnly),
                 enabled: true,
             };
 
@@ -724,17 +839,19 @@ export function InteractiveAutomation() {
                 description: flow.description,
                 nodes: flow.nodes,
                 edges: flow.edges,
-                trigger: trigger,  // Use extracted trigger, not flow.trigger
+                trigger: trigger,
                 variables: flow.variables || {},
-                flow_config: flow.flowConfig || {},
+                flow_config: {
+                    ...(flow.flowConfig || {}),
+                },
             };
 
             const url = flow.id
-                ? `${API_BASE_URL}/api/whatsapp/interactive-automations/${flow.id}`
-                : `${API_BASE_URL}/api/whatsapp/interactive-automations`;
+                ? `${WHATSAPP_REST_API_PREFIX}/interactive-automations/${flow.id}`
+                : `${WHATSAPP_REST_API_PREFIX}/interactive-automations`;
             const method = flow.id ? 'PUT' : 'POST';
 
-            const res = await fetch(url, {
+            const res = await cachedFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -744,16 +861,23 @@ export function InteractiveAutomation() {
             const data = await res.json();
 
             if (data.success) {
-                setFlow((prev) => ({ ...prev, id: data.automation.id }));
+                setFlow((prev) => ({
+                    ...prev,
+                    id: data.automation.id,
+                    status: data.automation.status || prev.status,
+                    variables: data.automation.variables ?? prev.variables,
+                    flowConfig: data.automation.flowConfig ?? data.automation.flow_config ?? prev.flowConfig,
+                }));
                 setIsDirty(false);
                 toast({ title: 'Saved!', description: 'Automation saved as draft' });
 
                 // Update URL if new automation
                 if (!flow.id && data.automation.id) {
-                    navigate(`${basePath}/interactive-automation/${data.automation.id}`, {
+                    navigate(`${basePath}/whatsapp/interactive-automation/${data.automation.id}`, {
                         replace: true,
                     });
                 }
+                return true;
             } else {
                 throw new Error(data.error || 'Failed to save');
             }
@@ -763,6 +887,7 @@ export function InteractiveAutomation() {
                 description: err.message || 'Something went wrong',
                 variant: 'destructive',
             });
+            return false;
         } finally {
             setIsSaving(false);
         }
@@ -781,7 +906,10 @@ export function InteractiveAutomation() {
 
         // Save first if dirty
         if (isDirty || !flow.id) {
-            await handleSave();
+            const saveOk = await handleSave();
+            if (!saveOk) {
+                return;
+            }
         }
 
         if (!flow.id) {
@@ -796,8 +924,8 @@ export function InteractiveAutomation() {
         try {
             setIsPublishing(true);
 
-            const res = await fetch(
-                `${API_BASE_URL}/api/whatsapp/interactive-automations/${flow.id}/publish`,
+            const res = await cachedFetch(
+                `${WHATSAPP_REST_API_PREFIX}/interactive-automations/${flow.id}/publish`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -808,7 +936,10 @@ export function InteractiveAutomation() {
             const data = await res.json();
 
             if (data.success) {
-                setFlow((prev) => ({ ...prev, status: 'published' }));
+                setFlow((prev) => ({
+                    ...prev,
+                    status: data.automation?.status || prev.status,
+                }));
                 toast({
                     title: 'Published! 🎉',
                     description: 'Your automation is now live',
@@ -836,6 +967,29 @@ export function InteractiveAutomation() {
         [flow.nodes, selectedNodeId]
     );
 
+    const hasBlockingErrors = useMemo(
+        () => validationIssues.some(issue => issue.severity === 'error'),
+        [validationIssues]
+    );
+
+    const backPath = useMemo(() => {
+        const currentParams = new URLSearchParams(location.search);
+        const params = new URLSearchParams();
+
+        const workspaceIdForBack = workspaceId || currentParams.get('workspace_id');
+        if (workspaceIdForBack) {
+            params.set('workspace_id', workspaceIdForBack);
+        }
+
+        const accountIdForBack = accountId ? String(accountId) : currentParams.get('account_id');
+        if (accountIdForBack) {
+            params.set('account_id', accountIdForBack);
+        }
+
+        const query = params.toString();
+        return `${basePath}/whatsapp/interactive-automation${query ? `?${query}` : ''}`;
+    }, [basePath, workspaceId, accountId, location.search]);
+
     if (isLoading) {
         return (
             <div className="h-screen flex items-center justify-center">
@@ -848,8 +1002,7 @@ export function InteractiveAutomation() {
     }
 
     return (
-        <WhatsAppConnectionGuard feature="Interactive Automation">
-        <div className="h-screen flex flex-col bg-gray-50">
+        <div className="h-screen flex flex-col bg-gray-50 overflow-x-hidden">
             {/* Toolbar */}
             <FlowToolbar
                 flowName={flow.name}
@@ -863,19 +1016,34 @@ export function InteractiveAutomation() {
                 onPublish={handlePublish}
                 onAddMessageNode={handleAddMessageNode}
                 onAddTemplateNode={handleAddTemplateNode}
-                onAddEndNode={handleAddEndNode}
                 onAddInputNode={handleAddInputNode}
                 onAddApiNode={handleAddApiNode}
-                onAddSetStatusNode={handleAddSetStatusNode}
+                onAddLeadNode={handleAddLeadNode}
+                onAddEndNode={handleAddEndNode}
                 onAutoLayout={handleAutoLayout}
-                onOpenAiGenerator={() => setIsAiDialogOpen(true)}
-                onOpenFlowVariables={() => setIsVariablesDialogOpen(true)}
+                onGenerateWithAi={handleOpenAiGenerator}
+                onOpenFlowSettings={() => setVariablesDialogOpen(true)}
+                hasFlowVariables={hasFlowToken}
+            />
+
+            <FlowVariablesDialog
+                open={variablesDialogOpen}
+                onOpenChange={setVariablesDialogOpen}
+                value={flowVariablesState}
+                onSave={handleFlowVariablesSave}
+            />
+
+            <AiFlowGeneratorDialog
+                open={aiDialogOpen}
+                onOpenChange={setAiDialogOpen}
+                workspaceId={workspaceId}
+                onGenerated={handleAiDraftApplied}
             />
 
             {/* Main Content */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex min-w-0 overflow-hidden">
                 {/* Canvas */}
-                <div className="flex-1 relative">
+                <div className="flex-1 min-w-0 relative">
                     <ReactFlow
                         nodes={nodes}
                         edges={edges}
@@ -920,12 +1088,60 @@ export function InteractiveAutomation() {
                                 </div>
                             </Panel>
                         )}
+
+                        {/* Validation Issues Panel */}
+                        {validationIssues.length > 0 && (
+                            <Panel position="bottom-center" className="mb-4 px-2">
+                                <div className={`rounded-lg shadow-lg p-4 w-[calc(100vw-1rem)] sm:w-auto max-w-2xl ${hasBlockingErrors ? 'bg-red-50 border-2 border-red-300' : 'bg-amber-50 border-2 border-amber-300'}`}>
+                                    <div className={`flex items-start gap-3`}>
+                                        <div className="flex-shrink-0">
+                                            {hasBlockingErrors ? (
+                                                <div className="flex items-center justify-center h-6 w-6 rounded-full bg-red-200">
+                                                    <svg className="h-4 w-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center justify-center h-6 w-6 rounded-full bg-amber-200">
+                                                    <svg className="h-4 w-4 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className={`text-sm font-semibold ${hasBlockingErrors ? 'text-red-900' : 'text-amber-900'}`}>
+                                                {hasBlockingErrors ? 'Cannot Publish: Fix These Errors' : 'Warnings'}
+                                            </h3>
+                                            <div className={`mt-2 text-sm ${hasBlockingErrors ? 'text-red-800' : 'text-amber-800'} space-y-1`}>
+                                                {validationIssues.slice(0, 5).map((issue, idx) => (
+                                                    <div key={idx} className="flex gap-2">
+                                                        <span>•</span>
+                                                        <span>{issue.message}</span>
+                                                    </div>
+                                                ))}
+                                                {validationIssues.length > 5 && (
+                                                    <div className="text-xs opacity-75">...and {validationIssues.length - 5} more issues</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Panel>
+                        )}
                     </ReactFlow>
                 </div>
 
                 {/* Node Editor Panel */}
                 {selectedNode && (
-                    <div className="w-80 node-editor-panel">
+                    <>
+                    <button
+                        type="button"
+                        className="fixed inset-0 top-14 bg-black/30 z-20 sm:hidden"
+                        onClick={() => setSelectedNodeId(null)}
+                        aria-label="Close node editor"
+                    />
+                    <div className="fixed top-14 bottom-0 right-0 z-30 w-[92vw] max-w-sm sm:static sm:inset-auto sm:z-auto sm:w-80 max-w-full node-editor-panel">
                         <NodeEditor
                             node={selectedNode}
                             allNodes={flow.nodes}
@@ -941,42 +1157,23 @@ export function InteractiveAutomation() {
                             onRemoveButton={
                                 selectedNode.type === 'message' ? handleRemoveButton : undefined
                             }
+                            templates={templates}
+                            onSelectTemplate={
+                                selectedNode.type === 'template' ? handleSelectTemplate : undefined
+                            }
+                            onUpdateButtonMapping={
+                                selectedNode.type === 'template' ? handleUpdateButtonMapping : undefined
+                            }
+                            workspaceId={workspaceId}
                             flowVariables={flow.variables}
                             automationId={flow.id}
-                            onOpenFlowVariables={() => setIsVariablesDialogOpen(true)}
+                            onOpenFlowVariables={() => setVariablesDialogOpen(true)}
                         />
                     </div>
+                    </>
                 )}
             </div>
-
-            {/* Template Selector Modal */}
-            {accountId && (
-                <TemplateSelectPanel
-                    isOpen={isTemplateSelectOpen}
-                    onClose={() => setIsTemplateSelectOpen(false)}
-                    onSelect={handleTemplateSelected}
-                    accountId={accountId}
-                    workspaceId={workspaceId}
-                />
-            )}
-
-            {/* AI Flow Generator Dialog */}
-            <AiFlowGeneratorDialog
-                open={isAiDialogOpen}
-                onOpenChange={setIsAiDialogOpen}
-                workspaceId={workspaceId}
-                onGenerated={handleAiDraftApplied}
-            />
-
-            {/* Flow Variables Dialog */}
-            <FlowVariablesDialog
-                open={isVariablesDialogOpen}
-                onOpenChange={setIsVariablesDialogOpen}
-                value={flowVariablesState}
-                onSave={handleFlowVariablesSave}
-            />
         </div>
-        </WhatsAppConnectionGuard>
     );
 }
 

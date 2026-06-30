@@ -1,16 +1,9 @@
-/**
- * ApiNode Component
- * =================
- * Calls an external HTTP API mid-flow. Exposes Success, Error and per-branch
- * output handles for routing the conversation based on the response.
- */
-
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { Plug } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import type { ApiNode as ApiNodeType } from '../types';
 import { NODE_COLORS } from '../constants';
+import type { ApiNode as ApiNodeType } from '../types';
+import { Badge } from '@/components/ui/badge';
 
 export const ApiNode = memo(({ data, selected }: NodeProps<ApiNodeType['data']>) => {
     const colors = NODE_COLORS.api;
@@ -24,6 +17,7 @@ export const ApiNode = memo(({ data, selected }: NodeProps<ApiNodeType['data']>)
                 relative px-5 py-4 rounded-xl shadow-lg border-2 min-w-[300px]
                 transition-all duration-200 bg-white
                 ${selected ? 'ring-2 ring-violet-400 ring-offset-0' : ''}
+                ${(data as any).validationIssues?.some((i: any) => !i.handleId) ? 'node-error' : ''}
             `}
             style={{ borderColor: colors.border }}
         >

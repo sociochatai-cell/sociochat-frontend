@@ -23,7 +23,7 @@ export const AnalyticsLoadingScreen: React.FC = () => {
 // ...
                 {/* 1. Pulsing "Brain" / Core Glow */}
                 <motion.div
-                    className="absolute inset-0 bg-emerald-500/20 rounded-full blur-2xl"
+                    className="absolute inset-0 bg-green-500/20 rounded-full blur-2xl"
                     animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
                     transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
                 />
@@ -40,7 +40,7 @@ export const AnalyticsLoadingScreen: React.FC = () => {
                     {bars.map((height, i) => (
                         <motion.div
                             key={i}
-                            className="w-2.5 bg-gradient-to-t from-emerald-600 to-indigo-600 rounded-t-sm"
+                            className="w-2.5 bg-gradient-to-t from-green-600 to-indigo-600 rounded-t-sm"
                             initial={{ height: 0 }}
                             animate={{
                                 height: [`${height * 0.4}%`, `${height}%`, `${height * 0.4}%`],
@@ -95,7 +95,7 @@ export const AnalyticsLoadingScreen: React.FC = () => {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5 }}
             >
-                <h3 className="text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-indigo-600">
+                <h3 className="text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-green-600 to-indigo-600">
                     Generating Insights
                 </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -105,7 +105,7 @@ export const AnalyticsLoadingScreen: React.FC = () => {
                 {/* Progress Line */}
                 <div className="w-64 h-1 bg-slate-200 dark:bg-slate-800 rounded-full mt-4 overflow-hidden mx-auto">
                     <motion.div
-                        className="h-full bg-emerald-500"
+                        className="h-full bg-green-500"
                         animate={{ width: ["0%", "100%"] }}
                         transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                     />

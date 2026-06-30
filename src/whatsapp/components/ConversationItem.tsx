@@ -5,6 +5,7 @@
 import { formatDistanceToNow } from 'date-fns';
 import { Conversation } from '../types';
 import { cn } from '@/lib/utils';
+import { maskPhoneNumber } from '@/lib/phoneMask';
 import { AttributionBadge } from '@/ctwa/components/AttributionBadge';
 import { User, MessageCircle, CheckCheck, Flame } from 'lucide-react';
 
@@ -34,6 +35,7 @@ export function ConversationItem({ conversation, isActive, onClick, onDelete, ne
     if (displayPhone.startsWith('91')) displayPhone = displayPhone.substring(2);
     else if (displayPhone.startsWith('1')) displayPhone = displayPhone.substring(1);
   }
+  const maskedPhone = maskPhoneNumber(displayPhone);
 
   return (
     <div className="relative group/item">
@@ -73,11 +75,11 @@ export function ConversationItem({ conversation, isActive, onClick, onDelete, ne
                   hasUnread && 'text-primary',
                   'group-hover:text-primary'
                 )}>
-                  {conversation.user_name || displayPhone}
+                  {conversation.user_name || maskedPhone}
                 </h4>
                 {conversation.user_name && (
                   <p className="text-xs text-muted-foreground truncate">
-                    {displayPhone}
+                    {maskedPhone}
                   </p>
                 )}
               </div>
@@ -96,8 +98,15 @@ export function ConversationItem({ conversation, isActive, onClick, onDelete, ne
                 </span>
               )}
 
+              {conversation.human_required && (
+                <span className="flex-shrink-0 px-2 py-0.5 text-xs font-bold text-red-700 bg-red-100 rounded-full flex items-center gap-1">
+                  <Flame className="w-3 h-3" />
+                  Human
+                </span>
+              )}
+
               {/* Needs Reply badge - urgent */}
-              {needsReply && (
+              {needsReply && !conversation.human_required && (
                 <span className="flex-shrink-0 px-2 py-0.5 text-xs font-bold text-orange-700 bg-orange-100 rounded-full flex items-center gap-1 animate-pulse">
                   <Flame className="w-3 h-3" />
                   Reply

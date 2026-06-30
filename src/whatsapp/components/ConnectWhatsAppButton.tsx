@@ -1,72 +1,43 @@
 // Connect WhatsApp Button Component
 // ==================================
 // Button to initiate WhatsApp Business Account connection via Facebook Embedded Signup
-// Supports both Standard and Coexistence (existing WABA) modes
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, MessageCircle, Smartphone } from 'lucide-react';
+import { Loader2, MessageCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { API_BASE_URL } from "@/config";
-import { clearCache } from '@/whatsapp/hooks/useDataCache';
+import { WHATSAPP_REST_API_PREFIX } from "@/config";
+import { requestWhatsAppAccountStatusPopup } from '@/whatsapp/utils/accountStatusPopup';
+import { invalidateWhatsAppAccountsCache } from '@/whatsapp/hooks/useWhatsAppData';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+    type ConnectExchangeResponse,
+    type EmbeddedSignupAssets,
+    createOnboardingSession,
+    extractEmbeddedSignupCode,
+    formatConnectExchangeError,
+    formatPaymentReminder,
+    hasEmbeddedSignupAssets,
+    mergeEmbeddedSignupAssets,
+    parseEmbeddedSignupMessage,
+    postEmbeddedSignupEvent,
+    waitForEmbeddedSignupAssets,
+} from '@/whatsapp/utils/embeddedSignupSession';
 
-// Facebook App ID and Config ID fallbacks from environment (SocioChat global App).
-// These are used when the tenant Meta config endpoint is unavailable or returns blanks
-// (e.g. T0000 / unconfigured tenants behave exactly as before).
-const FALLBACK_FB_APP_ID = import.meta.env.VITE_FB_APP_ID || '1616370899364211';
-const FALLBACK_WHATSAPP_CONFIG_ID = import.meta.env.VITE_WHATSAPP_CONFIG_ID || '1684758789571645';
-const FB_SDK_VERSION = 'v25.0'; // SDK init version — must match Meta app dashboard, NOT the Graph API version
-
-interface TenantMetaConfig {
-    appId: string;
-    configId: string;
-}
-
-// Fetch the logged-in user's tenant Meta config (tenant's own app for custom tenants,
-// global env values for T0000 / unconfigured tenants). Never returns a secret.
-// Falls back to the env/default constants on any failure or blank value.
-async function fetchTenantMetaConfig(): Promise<TenantMetaConfig> {
-    try {
-        const res = await fetch(`${API_BASE_URL}/api/tenant/meta-config`, {
-            method: 'GET',
-            credentials: 'include',
-        });
-        if (res.ok) {
-            const data = await res.json();
-            const meta = data?.meta;
-            if (data?.success && meta) {
-                const appId = (meta.app_id || '').trim();
-                const configId = (meta.config_id || '').trim();
-                if (appId && configId) {
-                    return { appId, configId };
-                }
-            }
-        }
-    } catch (err) {
-        console.warn('[whatsapp] Failed to fetch tenant Meta config, using fallback:', err);
-    }
-    return { appId: FALLBACK_FB_APP_ID, configId: FALLBACK_WHATSAPP_CONFIG_ID };
-}
+const FB_APP_ID = import.meta.env.VITE_FB_APP_ID || '1782321995750055';
+const WHATSAPP_CONFIG_ID = import.meta.env.VITE_WHATSAPP_CONFIG_ID || '1210552324305744';
+const FB_GRAPH_VERSION = import.meta.env.VITE_FB_API_VERSION || import.meta.env.VITE_WHATSAPP_API_VERSION || 'v25.0';
 
 interface ConnectWhatsAppButtonProps {
     workspaceId: string;
     onConnected?: () => void;
-    /** Enable coexistence mode — connects existing WhatsApp Business App */
-    coexistenceMode?: boolean;
 }
 
-// Declare FB types
 declare global {
     interface Window {
         FB: {
-            init: (params: {
-                appId: string;
-                autoLogAppEvents?: boolean;
-                cookie?: boolean;
-                xfbml: boolean;
-                version: string;
-            }) => void;
-            login: (callback: (response: FBLoginResponse) => void, options: Record<string, any>) => void;
+            init: (params: { appId: string; cookie: boolean; xfbml: boolean; version: string }) => void;
+            login: (callback: (response: FBLoginResponse) => void, options: { config_id: string; response_type: string; override_default_response_type: boolean; extras: { setup: object; featureType?: string; sessionInfoVersion?: string } }) => void;
         };
         fbAsyncInit: () => void;
     }
@@ -76,162 +47,94 @@ interface FBLoginResponse {
     authResponse?: {
         code?: string;
         accessToken?: string;
-        signedRequest?: string;
     };
     status: string;
 }
 
-interface EmbeddedSignupSessionData {
-    phone_number_id?: string;
-    waba_id?: string;
-}
+async function exchangeEmbeddedSignupCode(
+    workspaceId: string,
+    code: string,
+    assets: EmbeddedSignupAssets,
+    session?: { sessionId?: string; resumeToken?: string },
+): Promise<ConnectExchangeResponse> {
+    const body: Record<string, string> = {
+        code,
+        workspace_id: workspaceId,
+    };
+    if (assets.business_id) body.business_id = assets.business_id;
+    if (assets.waba_id) body.waba_id = assets.waba_id;
+    if (assets.phone_number_id) body.phone_number_id = assets.phone_number_id;
+    if (assets.event) body.embedded_signup_event = assets.event;
+    if (session?.sessionId) body.onboarding_session_id = session.sessionId;
+    if (session?.resumeToken) body.resume_token = session.resumeToken;
 
-function extractEmbeddedSignupCode(authResponse?: FBLoginResponse['authResponse']): string | null {
-    if (!authResponse) return null;
-    const direct = (authResponse.code || '').trim();
-    if (direct) return direct;
-
-    const signed = (authResponse.signedRequest || '').trim();
-    if (!signed) return null;
-
-    try {
-        const payloadPart = signed.split('.')[1];
-        if (!payloadPart) return null;
-        const b64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
-        const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
-        const json = JSON.parse(atob(b64 + pad)) as { code?: string };
-        return (json.code || '').trim() || null;
-    } catch {
-        return null;
-    }
-}
-
-function waitForEmbeddedSignupAssets(
-    getAssets: () => EmbeddedSignupSessionData,
-    timeoutMs = 15000,
-): Promise<EmbeddedSignupSessionData> {
-    return new Promise((resolve) => {
-        const start = Date.now();
-        const tick = () => {
-            const current = getAssets();
-            if ((current.waba_id && current.phone_number_id) || Date.now() - start >= timeoutMs) {
-                resolve(current);
-                return;
-            }
-            window.setTimeout(tick, 300);
-        };
-        tick();
+    const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/connect/exchange`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
     });
+    const data = (await res.json()) as ConnectExchangeResponse;
+    if (!res.ok && !data.error) {
+        data.success = false;
+        data.error = `Connection failed (HTTP ${res.status})`;
+    }
+    return data;
 }
 
-export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMode = false }: ConnectWhatsAppButtonProps) {
+export function ConnectWhatsAppButton({ workspaceId, onConnected }: ConnectWhatsAppButtonProps) {
     const [loading, setLoading] = useState(false);
     const [fbReady, setFbReady] = useState(false);
-    // Resolved tenant Meta config (app_id + config_id). Null until fetched.
-    // Falls back to the env/default constants on any failure.
-    const [metaConfig, setMetaConfig] = useState<TenantMetaConfig | null>(null);
-    const metaConfigRef = useRef<TenantMetaConfig | null>(null);
-    const sessionDataRef = useRef<EmbeddedSignupSessionData>({});
+    const sessionAssetsRef = useRef<EmbeddedSignupAssets>({});
+    const onboardingSessionRef = useRef<{ sessionId?: string; resumeToken?: string }>({});
+    const { user } = useAuth();
 
-    // Resolve the tenant Meta config (app_id + config_id) at runtime before SDK init.
     useEffect(() => {
-        let cancelled = false;
-        void (async () => {
-            const resolved = await fetchTenantMetaConfig();
-            if (cancelled) return;
-            metaConfigRef.current = resolved;
-            setMetaConfig(resolved);
-        })();
-        return () => { cancelled = true; };
+        const handleMessage = (event: MessageEvent) => {
+            const parsed = parseEmbeddedSignupMessage(event);
+            if (!parsed) return;
+            sessionAssetsRef.current = mergeEmbeddedSignupAssets(sessionAssetsRef.current, parsed);
+            console.log('[whatsapp] Embedded Signup session assets:', sessionAssetsRef.current);
+            const sid = onboardingSessionRef.current.sessionId;
+            if (sid && parsed.event) {
+                void postEmbeddedSignupEvent(sid, parsed.event, {
+                    business_id: parsed.business_id,
+                    waba_id: parsed.waba_id,
+                    phone_number_id: parsed.phone_number_id,
+                });
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
     }, []);
 
-    // Load Facebook SDK — gated until the tenant Meta config (app_id) has resolved,
-    // so we never init with a stale/empty appId.
     useEffect(() => {
-        if (!metaConfig) return;
-
-        // Check if SDK is already loaded
         if (window.FB) {
             setFbReady(true);
             return;
         }
 
-        // Save any existing fbAsyncInit (another component may have set it)
-        const existingInit = window.fbAsyncInit;
-
-        // Define the callback for when SDK loads
-        window.fbAsyncInit = function () {
-            window.FB.init({
-                appId: metaConfig.appId,
-                autoLogAppEvents: true,
-                xfbml: true,
-                version: FB_SDK_VERSION
-            });
-            setFbReady(true);
-            console.log('[whatsapp] Facebook SDK initialized (ConnectWhatsAppButton)');
-            // Call any previously-registered fbAsyncInit so other components also get notified
-            if (existingInit && existingInit !== window.fbAsyncInit) {
-                existingInit();
-            }
-        };
-
-        // Load the SDK script
-        if (!document.getElementById('facebook-jssdk')) {
-            const script = document.createElement('script');
-            script.id = 'facebook-jssdk';
-            script.src = 'https://connect.facebook.net/en_US/sdk.js';
-            script.async = true;
-            script.defer = true;
-            script.crossOrigin = 'anonymous';
-            document.body.appendChild(script);
-        }
-    }, [metaConfig]);
-
-    // Poll for FB SDK in case another component initialized it
-    useEffect(() => {
-        if (fbReady) return;
-        const interval = setInterval(() => {
-            if (window.FB) {
-                setFbReady(true);
-                clearInterval(interval);
-            }
-        }, 300);
-        return () => clearInterval(interval);
-    }, [fbReady]);
-
-    // Listen for Embedded Signup session info via postMessage
-    useEffect(() => {
-        const handleMessage = (event: MessageEvent) => {
-            if (typeof event.origin !== 'string' || !event.origin.endsWith('facebook.com')) {
+        window.fbAsyncInit = function() {
+            if (!FB_APP_ID) {
+                console.error('[whatsapp] VITE_FB_APP_ID is not set; Embedded Signup cannot initialize.');
                 return;
             }
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'WA_EMBEDDED_SIGNUP') {
-                    const eventName = data.event;
-                    if (
-                        eventName === 'FINISH' ||
-                        eventName === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'
-                    ) {
-                        const { phone_number_id, waba_id } = data.data || {};
-                        console.log('[whatsapp] Embedded Signup complete — phone:', phone_number_id, 'waba:', waba_id);
-                        sessionDataRef.current = {
-                            phone_number_id: phone_number_id ? String(phone_number_id) : undefined,
-                            waba_id: waba_id ? String(waba_id) : undefined,
-                        };
-                    } else if (eventName === 'CANCEL') {
-                        console.warn('[whatsapp] Embedded Signup cancelled at step:', data.data?.current_step);
-                    } else if (eventName === 'ERROR') {
-                        console.error('[whatsapp] Embedded Signup error:', data.data?.error_message);
-                    }
-                }
-            } catch {
-                // Non-JSON message, ignore
-            }
+            window.FB.init({
+                appId: FB_APP_ID,
+                cookie: true,
+                xfbml: true,
+                version: FB_GRAPH_VERSION
+            });
+            setFbReady(true);
+            console.log('[whatsapp] Facebook SDK initialized');
         };
 
-        window.addEventListener('message', handleMessage);
-        return () => window.removeEventListener('message', handleMessage);
+        const script = document.createElement('script');
+        script.src = 'https://connect.facebook.net/en_US/sdk.js';
+        script.async = true;
+        script.defer = true;
+        script.crossOrigin = 'anonymous';
+        document.body.appendChild(script);
     }, []);
 
     const handleConnect = useCallback(() => {
@@ -244,144 +147,140 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
             return;
         }
 
-        if (!window.FB) {
+        if (!fbReady || !window.FB) {
             toast({
                 title: 'Loading...',
-                description: 'Facebook SDK is still loading. Please try again in a moment.',
+                description: 'Facebook SDK is still loading. Please try again.',
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        if (!FB_APP_ID || !WHATSAPP_CONFIG_ID) {
+            toast({
+                title: 'Configuration error',
+                description: 'Set VITE_FB_APP_ID and VITE_WHATSAPP_CONFIG_ID (Facebook Login for Business configuration ID).',
                 variant: 'destructive',
             });
             return;
         }
 
         setLoading(true);
-        // Clear previous session data
-        sessionDataRef.current = {};
-        console.log(`[whatsapp] Starting Embedded Signup flow (coexistence=${coexistenceMode})`);
+        sessionAssetsRef.current = {};
+        onboardingSessionRef.current = {};
 
-        // Determine the exchange endpoint
-        const exchangeEndpoint = coexistenceMode
-            ? `${API_BASE_URL}/api/whatsapp/coexistence/connect`
-            : `${API_BASE_URL}/api/whatsapp/connect/exchange`;
-
-        // Callback when user completes FB Login
-        const fbLoginCallback = (response: FBLoginResponse) => {
-            console.log('[whatsapp] FB.login response:', response);
-
-            const authCode = extractEmbeddedSignupCode(response.authResponse);
-            if (!authCode) {
-                console.log('[whatsapp] User cancelled or no auth code');
-                toast({
-                    title: 'Cancelled',
-                    description: 'WhatsApp connection was cancelled',
-                    variant: 'destructive',
-                });
-                setLoading(false);
-                return;
+        void (async () => {
+            if (user?.id) {
+                onboardingSessionRef.current = await createOnboardingSession(
+                    workspaceId,
+                    user.id,
+                    { configId: WHATSAPP_CONFIG_ID },
+                );
             }
 
-            void (async () => {
-                const assets = await waitForEmbeddedSignupAssets(() => sessionDataRef.current);
+        console.log('[whatsapp] Starting Embedded Signup flow (sessionInfoVersion 4)');
 
-                try {
-                    const res = await fetch(exchangeEndpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                            code: authCode,
-                            workspace_id: workspaceId,
-                            ...(assets.waba_id && { waba_id: assets.waba_id }),
-                            ...(assets.phone_number_id && { phone_number_id: assets.phone_number_id }),
-                        }),
-                    });
-                    const data = await res.json();
+        window.FB.login(
+            function(response: FBLoginResponse) {
+                void (async () => {
+                console.log('[whatsapp] FB.login response:', response);
 
-                    if (data.success) {
-                        clearCache('whatsapp_connection_');
+                const authCode = extractEmbeddedSignupCode(response.authResponse);
+                if (authCode) {
+                    const assets = await waitForEmbeddedSignupAssets(() => sessionAssetsRef.current, 30000);
+                    if (!hasEmbeddedSignupAssets(assets)) {
                         toast({
-                            title: 'Success!',
-                            description: coexistenceMode
-                                ? `WhatsApp Business App connected in coexistence mode (${data.account?.mps_limit || 20} MPS)`
-                                : 'WhatsApp account connected successfully!',
+                            title: 'Finish Meta signup',
+                            description:
+                                'Facebook logged in, but WhatsApp account details were not received. ' +
+                                'Complete the popup (select your business and phone number), then try again.',
+                            variant: 'destructive',
                         });
-                        if (data.webhook_subscribed === false) {
+                        setLoading(false);
+                        return;
+                    }
+                    exchangeEmbeddedSignupCode(
+                        workspaceId,
+                        authCode,
+                        assets,
+                        onboardingSessionRef.current,
+                    )
+                    .then(data => {
+                        if (data.success) {
+                            invalidateWhatsAppAccountsCache(workspaceId);
+                            const paymentHint = formatPaymentReminder(data.next_steps);
                             toast({
-                                title: 'Webhook Not Subscribed',
-                                description: `Your account was connected, but webhook subscription failed${data.webhook_error ? `: ${data.webhook_error}` : ''}. Incoming messages won't be received until the webhook is subscribed.`,
+                                title: 'WhatsApp connected',
+                                description: paymentHint
+                                    ? `${data.account?.display_phone_number || data.account?.verified_name || 'Account linked'}. ${paymentHint}`
+                                    : `Connected: ${data.account?.display_phone_number || data.account?.verified_name || 'Account linked'}`,
+                            });
+                            requestWhatsAppAccountStatusPopup(workspaceId);
+                            onConnected?.();
+                            return;
+                        }
+
+                        if (data.error_code === 'PROVISIONING_INCOMPLETE' && data.account?.id) {
+                            invalidateWhatsAppAccountsCache(workspaceId);
+                            toast({
+                                title: 'Setup incomplete',
+                                description: formatConnectExchangeError(data),
                                 variant: 'destructive',
                             });
+                            requestWhatsAppAccountStatusPopup(workspaceId);
+                            onConnected?.();
+                            return;
                         }
-                        onConnected?.();
-                        const redirectPath = coexistenceMode ? '/dashboard/coexistence' : '/dashboard/hub';
-                        setTimeout(() => { window.location.href = redirectPath; }, 500);
-                    } else {
-                        throw new Error(data.error || 'Failed to connect account');
-                    }
-                } catch (err: unknown) {
-                    console.error('[whatsapp] Token exchange error:', err);
+
+                        throw new Error(formatConnectExchangeError(data));
+                    })
+                    .catch((err: unknown) => {
+                        console.error('[whatsapp] Token exchange error:', err);
+                        toast({
+                            title: 'Connection Failed',
+                            description: err instanceof Error ? err.message : 'Failed to exchange token',
+                            variant: 'destructive',
+                        });
+                    })
+                    .finally(() => {
+                        setLoading(false);
+                    });
+                } else {
+                    console.log('[whatsapp] User cancelled or no auth code');
                     toast({
-                        title: 'Connection Failed',
-                        description: err instanceof Error ? err.message : 'Failed to exchange token',
+                        title: 'Cancelled',
+                        description: 'WhatsApp connection was cancelled',
                         variant: 'destructive',
                     });
-                } finally {
                     setLoading(false);
                 }
-            })();
-        };
-
-        // Resolve config_id from the fetched tenant Meta config, falling back to env/default.
-        const resolvedConfigId = metaConfigRef.current?.configId || FALLBACK_WHATSAPP_CONFIG_ID;
-
-        // Launch Embedded Signup with Facebook Login (v3 ES format)
-        window.FB.login(fbLoginCallback, {
-            config_id: resolvedConfigId,
-            response_type: 'code',
-            override_default_response_type: true,
-            extras: {
-                version: 'v3',
-                // sessionInfoVersion makes Meta post WA_EMBEDDED_SIGNUP with
-                // waba_id + phone_number_id — required because the ES token
-                // can't discover the WABA via /me (no business_management).
-                sessionInfoVersion: '3',
-                setup: {
-                    business: {
-                        id: null, name: null, email: null,
-                        phone: { code: null, number: null },
-                        website: null,
-                        address: { streetAddress1: null, streetAddress2: null, city: null, state: null, zipPostal: null, country: null },
-                        timezone: null
-                    },
-                    phone: { displayName: null, category: null, description: null },
-                    preVerifiedPhone: { ids: null },
-                    solutionID: null,
-                    whatsAppBusinessAccount: { ids: null },
-                },
-                ...(coexistenceMode && {
-                    featureType: 'whatsapp_business_app_onboarding',
-                }),
+                })();
+            },
+            {
+                config_id: WHATSAPP_CONFIG_ID,
+                response_type: 'code',
+                override_default_response_type: true,
+                extras: {
+                    setup: {},
+                    featureType: '',
+                    sessionInfoVersion: '4',
+                }
             }
-        });
-    }, [workspaceId, fbReady, onConnected, coexistenceMode]);
+        );
+        })();
+    }, [workspaceId, fbReady, onConnected, user?.id]);
 
     return (
         <Button
             onClick={handleConnect}
             disabled={loading || !workspaceId}
-            className={coexistenceMode
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-emerald-600 hover:bg-[#128C7E] text-white"}
+            className="bg-[#25D366] hover:bg-[#128C7E] text-white"
             data-connect-whatsapp="true"
         >
             {loading ? (
                 <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Connecting...
-                </>
-            ) : coexistenceMode ? (
-                <>
-                    <Smartphone className="w-4 h-4 mr-2" />
-                    Connect Existing Account
                 </>
             ) : (
                 <>

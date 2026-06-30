@@ -65,7 +65,8 @@ export function StepCard({
   onAddField,
   showConnector = true
 }: StepCardProps) {
-  const [isExpanded, setIsExpanded] = useState(isSelected);
+  // First step starts expanded so its config is visible (and driveable) on entry.
+  const [isExpanded, setIsExpanded] = useState(isSelected || isFirst);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Auto-expand when selected
@@ -315,7 +316,7 @@ export function StepCard({
                       📅 Date
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => addFieldOfType('time')}>
-                      ⏰ Time
+                      🕐 Time Slot
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -408,7 +409,7 @@ function FieldRow({
   onRemoveOption
 }: FieldRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const hasOptions = ['dropdown', 'radio', 'checkbox'].includes(field.type);
+  const hasOptions = ['dropdown', 'radio', 'checkbox', 'time'].includes(field.type);
 
   return (
     <div 
@@ -457,7 +458,7 @@ function FieldRow({
         </div>
       </div>
 
-      {/* Options (for dropdown/radio/checkbox) */}
+      {/* Options (for dropdown/radio/checkbox/time) */}
       {hasOptions && isExpanded && (
         <div className="mt-2 pl-6 space-y-1">
           {field.options?.map((opt, idx) => (

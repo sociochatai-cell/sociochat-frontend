@@ -741,6 +741,7 @@ function MessageStep({ formData, updateField, errors }: StepProps) {
                     {formData.ice_breakers.map((breaker, index) => (
                         <div key={index} className="flex gap-2">
                             <Input
+                                id={`ice-breaker-${index}`}
                                 value={breaker}
                                 onChange={e => updateIceBreaker(index, e.target.value)}
                                 placeholder={`Option ${index + 1} (e.g., "Tell me about offers")`}

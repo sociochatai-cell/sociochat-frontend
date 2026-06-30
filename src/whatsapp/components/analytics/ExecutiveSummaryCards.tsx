@@ -12,7 +12,6 @@ import {
     CheckCheck,
     Eye,
     Users,
-    Clock,
     TrendingUp,
     TrendingDown,
     Minus,
@@ -29,7 +28,6 @@ interface SummaryData {
         delivery_rate: number;
         read_rate: number;
         active_customers: number;
-        avg_response_time_seconds?: number;
     };
     previous: {
         sent: number;
@@ -67,10 +65,6 @@ const METRIC_INFO: Record<string, { label: string; description: string }> = {
     active_customers: {
         label: 'Active Customers',
         description: 'Unique customers who exchanged messages with you in this period.',
-    },
-    response_speed: {
-        label: 'Response Speed',
-        description: 'Average time to respond to customer messages. Faster responses lead to better satisfaction.',
     },
 };
 
@@ -158,12 +152,12 @@ const MetricCard = ({
     };
     
     return (
-        <Card className="relative overflow-hidden group hover:shadow-lg transition-all duration-300 border-0 shadow-md">
+        <Card className="relative h-full overflow-hidden group hover:shadow-lg transition-all duration-300 border-0 shadow-md">
             <div className={cn(
                 'absolute inset-0 bg-gradient-to-br opacity-60 group-hover:opacity-80 transition-opacity',
                 colorClasses[color]
             )} />
-            <CardContent className="relative p-4 md:p-5">
+            <CardContent className="relative flex h-full flex-col justify-between p-4 md:p-5">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium text-muted-foreground flex items-center">
@@ -197,9 +191,9 @@ const MetricCard = ({
 export function ExecutiveSummaryCards({ data, loading }: ExecutiveSummaryCardsProps) {
     if (loading || !data) {
         return (
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
-                {[...Array(5)].map((_, i) => (
-                    <Card key={i} className="animate-pulse">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                {[...Array(4)].map((_, i) => (
+                    <Card key={i} className="animate-pulse min-h-[132px]">
                         <CardContent className="p-4 md:p-5">
                             <div className="h-4 bg-muted rounded w-24 mb-2" />
                             <div className="h-8 bg-muted rounded w-16 mb-2" />
@@ -211,23 +205,15 @@ export function ExecutiveSummaryCards({ data, loading }: ExecutiveSummaryCardsPr
         );
     }
     
-    // Format response time
-    const formatResponseTime = (seconds?: number) => {
-        if (!seconds) return 'N/A';
-        if (seconds < 60) return `${Math.round(seconds)}s`;
-        if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-        return `${Math.round(seconds / 3600)}h`;
-    };
-    
     return (
         <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-lg font-semibold text-foreground">Executive Summary</h2>
                 <span className="text-xs text-muted-foreground">
                     Last {data.period_days} days vs previous {data.period_days} days
                 </span>
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 <MetricCard
                     label="Messages Sent"
                     businessLabel="Messages Sent"
@@ -264,14 +250,6 @@ export function ExecutiveSummaryCards({ data, loading }: ExecutiveSummaryCardsPr
                     icon={Users}
                     color="orange"
                     metricKey="active_customers"
-                />
-                <MetricCard
-                    label="Response Time"
-                    businessLabel="Response Speed"
-                    value={formatResponseTime(data.current.avg_response_time_seconds)}
-                    icon={Clock}
-                    color="cyan"
-                    metricKey="response_speed"
                 />
             </div>
         </div>

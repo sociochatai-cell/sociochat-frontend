@@ -28,8 +28,6 @@ import {
   sendInteractiveMessage,
 } from '../api';
 
-import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
-
 import type {
   WhatsAppConfig,
   MessageType,
@@ -82,6 +80,7 @@ export default function WhatsAppTestConsole() {
   const [interactiveHeader, setInteractiveHeader] = useState('');
   const [interactiveBody, setInteractiveBody] = useState('');
   const [interactiveFooter, setInteractiveFooter] = useState('');
+  const [interactiveButtonText, setInteractiveButtonText] = useState('Options'); // For list type
   const [interactiveButtons, setInteractiveButtons] = useState<InteractiveButton[]>([]);
   const [interactiveSections, setInteractiveSections] = useState<ListSection[]>([]);
 
@@ -175,7 +174,7 @@ export default function WhatsAppTestConsole() {
               header: interactiveHeader || undefined,
               footer: interactiveFooter || undefined,
               buttons: interactiveType === 'button' ? interactiveButtons : undefined,
-              button: interactiveType === 'list' ? 'View Options' : undefined,
+              button: interactiveType === 'list' ? interactiveButtonText : undefined,
               sections: interactiveType === 'list' ? interactiveSections : undefined,
             },
           });
@@ -216,13 +215,13 @@ export default function WhatsAppTestConsole() {
     setInteractiveHeader('');
     setInteractiveBody('');
     setInteractiveFooter('');
+    setInteractiveButtonText('Options');
     setInteractiveButtons([]);
     setInteractiveSections([]);
     setResponse(null);
   };
 
   return (
-    <WhatsAppConnectionGuard feature="the Test Console">
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b bg-card">
@@ -319,12 +318,14 @@ export default function WhatsAppTestConsole() {
                 headerText={interactiveHeader}
                 bodyText={interactiveBody}
                 footerText={interactiveFooter}
+                buttonText={interactiveButtonText}
                 buttons={interactiveButtons}
                 sections={interactiveSections}
                 onInteractiveTypeChange={setInteractiveType}
                 onHeaderTextChange={setInteractiveHeader}
                 onBodyTextChange={setInteractiveBody}
                 onFooterTextChange={setInteractiveFooter}
+                onButtonTextChange={setInteractiveButtonText}
                 onButtonsChange={setInteractiveButtons}
                 onSectionsChange={setInteractiveSections}
               />
@@ -415,6 +416,5 @@ export default function WhatsAppTestConsole() {
         </div>
       </div>
     </div>
-    </WhatsAppConnectionGuard>
   );
 }

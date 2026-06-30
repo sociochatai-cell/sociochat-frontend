@@ -10,10 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { RefreshCw, Search, Plus, User, FileText, MessageCircle, Inbox, BarChart3, Clock, MessageSquare } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
-import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
-
-// API Base URL from environment
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').toString().replace(/\/$/, '');
+import { getWorkspaceId } from '../utils/workspaceContext';
+import { cachedFetch } from '../utils/waPersistentCache';
+import { WHATSAPP_REST_API_PREFIX } from "@/config";
 
 export default function WhatsAppContacts() {
     const { toast } = useToast();
@@ -25,7 +24,7 @@ export default function WhatsAppContacts() {
 
     // Get workspace ID from storage (standard pattern in this app for now)
     const [workspaceId, setWorkspaceId] = useState<string | null>(
-        localStorage.getItem('sv_whatsapp_workspace_id') || localStorage.getItem('sv_selected_workspace_id')
+        getWorkspaceId()
     );
 
     const [contacts, setContacts] = useState<any[]>([]);
@@ -56,7 +55,7 @@ export default function WhatsAppContacts() {
     const fetchContacts = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/workspaces/${workspaceId}/contacts?page=${page}&q=${debouncedSearch}`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/workspaces/${workspaceId}/contacts?page=${page}&q=${debouncedSearch}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
@@ -91,7 +90,7 @@ export default function WhatsAppContacts() {
         }
         setSubmitting(true);
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/workspaces/${workspaceId}/contacts`, {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/workspaces/${workspaceId}/contacts`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -124,19 +123,18 @@ export default function WhatsAppContacts() {
     }
 
     return (
-        <WhatsAppConnectionGuard feature="Contacts">
-        <div className="p-4 sm:p-6 space-y-6 min-w-0 overflow-x-hidden">
+        <div className="p-6 space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-                        <User className="h-6 w-6 text-green-600 shrink-0" /> WhatsApp Contacts
+                    <h1 className="text-2xl font-bold flex items-center gap-2">
+                        <User className="h-6 w-6 text-green-600" /> WhatsApp Contacts
                     </h1>
-                    <p className="text-muted-foreground text-sm">Manage your unified contact profiles.</p>
+                    <p className="text-muted-foreground">Manage your unified contact profiles.</p>
                 </div>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                     <DialogTrigger asChild>
-                        <Button className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto">
+                        <Button className="bg-green-600 hover:bg-green-700 text-white">
                             <Plus className="mr-2 h-4 w-4" /> Add Contact
                         </Button>
                     </DialogTrigger>
@@ -168,8 +166,8 @@ export default function WhatsAppContacts() {
             </div>
 
             {/* Filters */}
-            <div className="flex gap-2 sm:gap-4 items-center">
-                <div className="relative flex-1 min-w-0 sm:max-w-sm">
+            <div className="flex gap-4 items-center">
+                <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder="Search by name or phone..."
@@ -184,8 +182,7 @@ export default function WhatsAppContacts() {
             </div>
 
             {/* Table */}
-            <Card className="overflow-hidden">
-                <div className="overflow-x-auto">
+            <Card>
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -207,11 +204,11 @@ export default function WhatsAppContacts() {
                         <TooltipProvider>
                             {contacts.map(c => (
                                 <TableRow key={c.id} className="relative">
+                                    {/* Unread message indicator overlay */}
+                                    {c.unread_count > 0 && (
+                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500 rounded-l" />
+                                    )}
                                     <TableCell className="font-medium">
-                                        {/* Unread message indicator overlay */}
-                                        {c.unread_count > 0 && (
-                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500 rounded-l" />
-                                        )}
                                         <div className="flex items-center gap-2">
                                             <span className="truncate max-w-[200px]" title={c.name || "Unknown"}>{c.name || "Unknown"}</span>
                                             {c.unread_count > 0 && (
@@ -264,7 +261,7 @@ export default function WhatsAppContacts() {
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="h-8 w-8 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-                                                                onClick={() => navigate(`${basePath}/inbox`)}
+                                                                onClick={() => navigate(`${basePath}/whatsapp/inbox`)}
                                                             >
                                                                 <Inbox className="h-4 w-4" />
                                                             </Button>
@@ -277,7 +274,7 @@ export default function WhatsAppContacts() {
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="h-8 w-8 text-purple-600 hover:text-purple-800 hover:bg-purple-50"
-                                                                onClick={() => navigate(`${basePath}/analytics?conversation=${c.conversation_id || c.id}`)}
+                                                                onClick={() => navigate(`${basePath}/whatsapp/analytics?conversation=${c.conversation_id || c.id}`)}
                                                             >
                                                                 <BarChart3 className="h-4 w-4" />
                                                             </Button>
@@ -293,7 +290,7 @@ export default function WhatsAppContacts() {
                                                             variant="ghost"
                                                             size="icon"
                                                             className="h-8 w-8 text-green-600 hover:text-green-800 hover:bg-green-50"
-                                                            onClick={() => navigate(`${basePath}/inbox?startNew=${encodeURIComponent(c.phone_normalized || c.phone)}&name=${encodeURIComponent(c.name || '')}`)}
+                                                            onClick={() => navigate(`/whatsapp/inbox?startNew=${encodeURIComponent(c.phone_normalized || c.phone)}&name=${encodeURIComponent(c.name || '')}`)}
                                                         >
                                                             <MessageSquare className="h-4 w-4" />
                                                         </Button>
@@ -308,7 +305,6 @@ export default function WhatsAppContacts() {
                         </TooltipProvider>
                     </TableBody>
                 </Table>
-                </div>
             </Card>
 
             {/* Simple Pagination */}
@@ -320,6 +316,5 @@ export default function WhatsAppContacts() {
                 </div>
             </div>
         </div>
-        </WhatsAppConnectionGuard>
     );
 }

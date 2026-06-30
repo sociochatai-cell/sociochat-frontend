@@ -20,10 +20,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  MapPin,
-  Plus,
-  Trash2,
+import { 
+  MapPin, 
+  Plus, 
+  Trash2, 
   Map as MapIcon,
   Info,
   AlertCircle,
@@ -97,10 +97,10 @@ const MapPreviewModal: React.FC<{
             Adjust the targeting radius for "{location.query}"
           </DialogDescription>
         </DialogHeader>
-
+        
         <div className="space-y-4 py-4">
           {/* Map Placeholder - Replace with Leaflet integration */}
-          <div
+          <div 
             id={mapId}
             className="w-full h-64 bg-muted rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/30"
             role="img"
@@ -110,7 +110,7 @@ const MapPreviewModal: React.FC<{
               <MapIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
               <p className="text-sm">Map Preview</p>
               <p className="text-xs">
-                {location.lat && location.lon
+                {location.lat && location.lon 
                   ? `${location.lat.toFixed(4)}, ${location.lon.toFixed(4)}`
                   : 'Location coordinates not available'}
               </p>
@@ -124,7 +124,7 @@ const MapPreviewModal: React.FC<{
               */}
             </div>
           </div>
-
+          
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label htmlFor="radius-slider">Targeting Radius</Label>
@@ -145,7 +145,7 @@ const MapPreviewModal: React.FC<{
             </p>
           </div>
         </div>
-
+        
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Cancel
@@ -171,19 +171,19 @@ const LocationItem: React.FC<{
   onOpenMap: (location: AudienceLocation) => void;
 }> = ({ location, index, onUpdate, onRemove, onOpenMap }) => {
   const inputId = useId();
-
+  
   return (
     <Card className="group">
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           {/* Drag Handle (visual only for now) */}
-          <div
+          <div 
             className="flex items-center justify-center w-6 h-6 text-muted-foreground cursor-grab opacity-0 group-hover:opacity-100 transition-opacity"
             aria-hidden="true"
           >
             <GripVertical className="w-4 h-4" />
           </div>
-
+          
           <div className="flex-1 space-y-3">
             {/* Location Query Input */}
             <div className="flex items-center gap-2">
@@ -200,13 +200,13 @@ const LocationItem: React.FC<{
                 aria-describedby={`${inputId}-help`}
               />
             </div>
-
+            
             <div className="flex flex-wrap items-center gap-4">
               {/* Radius Display & Edit */}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">
-                  Radius: {location.radius_meters
-                    ? `${metersToKm(location.radius_meters)} km`
+                  Radius: {location.radius_meters 
+                    ? `${metersToKm(location.radius_meters)} km` 
                     : `${DEFAULT_RADIUS_KM} km (default)`}
                 </span>
                 <Button
@@ -219,36 +219,36 @@ const LocationItem: React.FC<{
                   Set on Map
                 </Button>
               </div>
-
+              
               {/* Include/Exclude Toggle */}
               <div className="flex items-center gap-2">
                 <Checkbox
                   id={`${inputId}-included`}
                   checked={location.included}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked) => 
                     onUpdate(location.id, { included: checked === true })
                   }
                   aria-describedby={`${inputId}-included-desc`}
                 />
-                <Label
+                <Label 
                   htmlFor={`${inputId}-included`}
                   className="text-sm cursor-pointer"
                 >
                   {location.included ? 'Include' : 'Exclude'}
                 </Label>
                 <span id={`${inputId}-included-desc`} className="sr-only">
-                  {location.included
-                    ? 'This location is included in targeting'
+                  {location.included 
+                    ? 'This location is included in targeting' 
                     : 'This location is excluded from targeting'}
                 </span>
               </div>
             </div>
-
+            
             <p id={`${inputId}-help`} className="sr-only">
               Enter a city, region, or country name for location {index + 1}
             </p>
           </div>
-
+          
           {/* Remove Button */}
           <TooltipProvider>
             <Tooltip>
@@ -290,7 +290,7 @@ export const MultiLocationPicker: React.FC<MultiLocationPickerProps> = ({
 
   const handleAddLocation = useCallback(() => {
     if (!canAddMore) return;
-
+    
     const newLocation: AudienceLocation = {
       id: generateId(),
       query: '',
@@ -298,13 +298,13 @@ export const MultiLocationPicker: React.FC<MultiLocationPickerProps> = ({
       included: true,
       radius_meters: kmToMeters(DEFAULT_RADIUS_KM),
     };
-
+    
     onChange([...locations, newLocation]);
   }, [locations, onChange, canAddMore]);
 
   const handleUpdateLocation = useCallback((id: string, updates: Partial<AudienceLocation>) => {
     onChange(
-      locations.map((loc) =>
+      locations.map((loc) => 
         loc.id === id ? { ...loc, ...updates } : loc
       )
     );
@@ -339,7 +339,7 @@ export const MultiLocationPicker: React.FC<MultiLocationPickerProps> = ({
           {locations.length} / {maxLocations}
         </span>
       </div>
-
+      
       {locations.length === 0 && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
@@ -348,7 +348,7 @@ export const MultiLocationPicker: React.FC<MultiLocationPickerProps> = ({
           </AlertDescription>
         </Alert>
       )}
-
+      
       <div className="space-y-3" role="list" aria-label="Target locations">
         {locations.map((location, index) => (
           <div key={location.id} role="listitem">
@@ -362,7 +362,7 @@ export const MultiLocationPicker: React.FC<MultiLocationPickerProps> = ({
           </div>
         ))}
       </div>
-
+      
       <Button
         variant="outline"
         onClick={handleAddLocation}
@@ -373,16 +373,16 @@ export const MultiLocationPicker: React.FC<MultiLocationPickerProps> = ({
         <Plus className="w-4 h-4 mr-2" />
         Add another location
       </Button>
-
+      
       {!canAddMore && (
-        <p
-          id={`${componentId}-max-reached`}
+        <p 
+          id={`${componentId}-max-reached`} 
           className="text-sm text-muted-foreground text-center"
         >
           Maximum of {maxLocations} locations reached
         </p>
       )}
-
+      
       {/* Map Modal */}
       {selectedLocation && (
         <MapPreviewModal
@@ -407,9 +407,9 @@ export const ConnectedMultiLocationPicker: React.FC<{
   className?: string;
 }> = ({ className }) => {
   const { audience, setAudience } = useCampaignStore();
-
+  
   // Convert existing store locations to AudienceLocation format
-  const locations: AudienceLocation[] = ((audience as any).locations || []).map((loc: any, index: number) => ({
+  const locations: AudienceLocation[] = (audience.locations || []).map((loc, index) => ({
     id: `loc_${index}`,
     query: loc.city || loc.region || loc.country || '',
     type: loc.city ? 'city' : loc.region ? 'region' : 'country',

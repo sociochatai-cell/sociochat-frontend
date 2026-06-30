@@ -10,7 +10,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Download, FileSpreadsheet, FileText, Loader2, CheckCircle } from 'lucide-react';
-import { API_BASE_URL } from '@/config';
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 
 interface ExportButtonsProps {
     workspaceId: string | null;
@@ -44,7 +44,7 @@ export function ExportButtons({
             }
             
             const response = await fetch(
-                `${API_BASE_URL}/api/whatsapp/analytics/export?${queryParams}`,
+                `${WHATSAPP_REST_API_PREFIX}/analytics/export?${queryParams}`,
                 {
                     credentials: 'include',
                     headers: {

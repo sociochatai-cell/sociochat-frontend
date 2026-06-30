@@ -30,6 +30,18 @@ if (import.meta.env.DEV && IS_DEV_TUNNEL_HOST) {
 
 export const API_ENDPOINT = `${API_BASE_URL}/api`;
 
+/**
+ * WhatsApp API aliases — SAME-ORIGIN.
+ * The ported WhatsApp UI (from the standalone service) imports these expecting a SEPARATE
+ * WhatsApp origin. In this merged monolith everything is same-origin `/api`, so all four
+ * resolve to the shared base. This lets the ~200 source call sites compile unchanged while
+ * routing through the same Vite proxy / Caddy rewrite as the rest of the app.
+ */
+export const WHATSAPP_API_BASE_URL = API_BASE_URL;                       // "" (same-origin)
+export const WHATSAPP_API_ENDPOINT = API_ENDPOINT;                        // "/api"
+export const WHATSAPP_REST_API_PREFIX = `${API_BASE_URL}/api/whatsapp`;   // "/api/whatsapp"
+export const getApiBaseForPath = (_path?: string): string => API_BASE_URL;
+
 export const buildApiUrl = (path: string): string => {
     const cleanPath = path.startsWith("/") ? path : `/${path}`;
     return `${API_BASE_URL}${cleanPath}`;

@@ -4,12 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Calendar, Clock, User, RefreshCw, CheckCircle, XCircle, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
-import { API_BASE_URL } from '@/config';
+import { WHATSAPP_REST_API_PREFIX } from '@/config';
 import { cachedFetch } from '../../utils/waPersistentCache';
 import { cn } from '@/lib/utils';
 import { BookingSettingsPanel } from './BookingSettingsPanel';
-
-const API_PREFIX = `${API_BASE_URL}/api/whatsapp/bookings`;
 
 interface BookingItem { id: number; wa_id: string; booking_date: string; booking_time: string; service_type: string | null; customer_name: string | null; status: string; }
 interface SlotItem { id: number; slot_time: string; max_capacity: number; current_bookings: number; is_blocked: boolean; is_full: boolean; }
@@ -26,29 +24,31 @@ export function BookingsTab({ accountId }: { accountId: string | null }) {
     if (!accountId) return;
     setLoading(true);
     try {
+      const h = { Authorization: `Bearer ${localStorage.getItem('token')}` };
       const [bR, sR, aR] = await Promise.all([
-        cachedFetch(`${API_PREFIX}?account_id=${accountId}&date=${date}`, { credentials: 'include' }),
-        cachedFetch(`${API_PREFIX}/slots/capacity?account_id=${accountId}&date=${date}`, { credentials: 'include' }),
-        cachedFetch(`${API_PREFIX}/analytics?account_id=${accountId}&days=30`, { credentials: 'include' }),
+        cachedFetch(`${WHATSAPP_REST_API_PREFIX}/bookings?account_id=${accountId}&date=${date}`, { headers: h, credentials: 'include' }),
+        cachedFetch(`${WHATSAPP_REST_API_PREFIX}/bookings/slots/capacity?account_id=${accountId}&date=${date}`, { headers: h, credentials: 'include' }),
+        cachedFetch(`${WHATSAPP_REST_API_PREFIX}/bookings/analytics?account_id=${accountId}&days=30`, { headers: h, credentials: 'include' }),
       ]);
       const [bJ, sJ, aJ] = await Promise.all([bR.json(), sR.json(), aR.json()]);
       if (bJ.success) setBookings(bJ.bookings || []);
       if (sJ.success) setSlots(sJ.slots || []);
       if (aJ.success) setAnalytics(aJ);
-    } catch { /* ignore */ } finally { setLoading(false); }
+    } catch { } finally { setLoading(false); }
   }, [accountId, date]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
 
   const action = async (id: number, act: 'cancel' | 'complete') => {
     try {
-      await cachedFetch(`${API_PREFIX}/${id}/${act}`, {
-        method: 'PUT',
-        credentials: 'include',
-        ...(act === 'cancel' ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Admin cancelled' }) } : {}),
+      const h: Record<string, string> = { Authorization: `Bearer ${localStorage.getItem('token')}` };
+      if (act === 'cancel') h['Content-Type'] = 'application/json';
+      await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/bookings/${id}/${act}`, {
+        method: 'PUT', headers: h, credentials: 'include',
+        ...(act === 'cancel' ? { body: JSON.stringify({ reason: 'Admin cancelled' }) } : {}),
       });
       fetch_();
-    } catch { /* ignore */ }
+    } catch { }
   };
 
   const shift = (d: number) => { const dt = new Date(date); dt.setDate(dt.getDate() + d); setDate(dt.toISOString().slice(0, 10)); };
@@ -56,6 +56,7 @@ export function BookingsTab({ accountId }: { accountId: string | null }) {
 
   return (
     <div className="space-y-4">
+      {/* Date nav + KPIs */}
       <div className="flex items-center gap-2 flex-wrap">
         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => shift(-1)}><ChevronLeft className="w-4 h-4" /></Button>
         <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-40 h-8" />
@@ -81,6 +82,7 @@ export function BookingsTab({ accountId }: { accountId: string | null }) {
       {showSettings ? <BookingSettingsPanel accountId={accountId} /> :
       loading ? <div className="flex justify-center py-8"><RefreshCw className="w-5 h-5 animate-spin text-primary" /></div> : (
         <div className="grid md:grid-cols-3 gap-4">
+          {/* Slots */}
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1.5"><Clock className="w-4 h-4 text-primary" />Slots</CardTitle></CardHeader>
             <CardContent className="space-y-1.5">
@@ -90,12 +92,18 @@ export function BookingsTab({ accountId }: { accountId: string | null }) {
                     s.is_blocked ? "bg-red-500/5 border-red-500/20" : s.is_full ? "bg-amber-500/5 border-amber-500/20" : "bg-green-500/5 border-green-500/20"
                   )}>
                     <span className="font-medium text-xs">{s.slot_time}</span>
-                    <span className="text-[10px] text-muted-foreground">{s.current_bookings}/{s.max_capacity}</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-12 h-1 bg-muted rounded-full overflow-hidden">
+                        <div className={cn("h-full rounded-full", s.is_full ? "bg-red-500" : s.current_bookings > 0 ? "bg-amber-500" : "bg-green-500")} style={{ width: `${s.max_capacity > 0 ? (s.current_bookings / s.max_capacity) * 100 : 0}%` }} />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground w-8 text-right">{s.current_bookings}/{s.max_capacity}</span>
+                    </div>
                   </div>
                 ))
               }
             </CardContent>
           </Card>
+          {/* Bookings */}
           <Card className="md:col-span-2">
             <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1.5"><User className="w-4 h-4 text-primary" />Bookings ({bookings.length})</CardTitle></CardHeader>
             <CardContent>

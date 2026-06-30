@@ -25,7 +25,14 @@ import {
     ArrowUpRight,
     RefreshCw,
     AlertCircle,
+    Bot,
+    Sparkles,
 } from 'lucide-react';
+import {
+    AiFlowGeneratorDialog,
+    draftToAutomationFlow,
+    type GeneratedFlowDraft,
+} from './components/AiFlowGeneratorDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -53,10 +60,11 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { getStoredAccountId, getActiveAccountId } from '@/whatsapp/utils/accountContext';
-import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
+import { getWorkspaceId } from '../../utils/workspaceContext';
+import { WHATSAPP_REST_API_PREFIX } from "@/config";
+import { cachedFetch } from '../../utils/waPersistentCache';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE = import.meta.env.VITE_WHATSAPP_API_BASE || import.meta.env.VITE_API_BASE_URL || '';
 
 interface InteractiveAutomation {
     id: number;
@@ -91,25 +99,16 @@ const InteractiveAutomationsList: React.FC = () => {
 
     // Get workspace_id from multiple sources (same as flow builder)
     const workspaceId = searchParams.get('workspace_id')
-        || localStorage.getItem('sv_whatsapp_workspace_id')
-        || sessionStorage.getItem('sv_whatsapp_workspace_id')
+        || getWorkspaceId()
         || localStorage.getItem('current_workspace_id')
         || '';
 
-    // Get account_id from query params or stored value
-    const [accountId, setAccountId] = useState<string>(
-        searchParams.get('account_id')
-        || String(getStoredAccountId() || '')
-    );
-
-    // Auto-fetch account ID if not available
-    useEffect(() => {
-        if (!accountId) {
-            getActiveAccountId(API_BASE).then((id) => {
-                if (id) setAccountId(String(id));
-            });
-        }
-    }, [accountId]);
+    // Get account_id similarly (URL / localStorage seed; resolved from the workspace's
+    // connected account in the effect below when it isn't supplied).
+    const accountIdSeed = searchParams.get('account_id')
+        || localStorage.getItem('current_whatsapp_account_id')
+        || '';
+    const [accountId, setAccountId] = useState<string>(accountIdSeed);
 
     const [automations, setAutomations] = useState<InteractiveAutomation[]>([]);
     const [loading, setLoading] = useState(true);
@@ -117,6 +116,36 @@ const InteractiveAutomationsList: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [automationToDelete, setAutomationToDelete] = useState<InteractiveAutomation | null>(null);
+    const [aiDialogOpen, setAiDialogOpen] = useState(false);
+    const [aiCreating, setAiCreating] = useState(false);
+
+    // Resolve the workspace's connected WhatsApp account when the URL/localStorage didn't
+    // supply one, so "Do with AI", Create Flow and edit links always carry a valid
+    // account_id. Without this the list shows account_id=none and AI generation fails with
+    // "Connect a WhatsApp account…" even though the workspace has a connected number.
+    useEffect(() => {
+        if (accountId || !workspaceId) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(
+                    `${WHATSAPP_REST_API_PREFIX}/accounts?workspace_id=${workspaceId}`,
+                    { credentials: 'include' }
+                );
+                const data = await res.json();
+                const first = data?.success && data.accounts?.length ? data.accounts[0].id : null;
+                if (!cancelled && first) {
+                    setAccountId(String(first));
+                    localStorage.setItem('current_whatsapp_account_id', String(first));
+                }
+            } catch {
+                /* leave unresolved; blank-flow creation still works without an account */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [accountId, workspaceId]);
 
     // Fetch automations
     const fetchAutomations = useCallback(async () => {
@@ -131,14 +160,10 @@ const InteractiveAutomationsList: React.FC = () => {
 
         try {
             setLoading(true);
-            // Workspace-scoped: list ALL automations in the workspace, regardless of
-            // which WhatsApp account is "active". Filtering by account_id caused
-            // automations to disappear when the selected account was stale/mismatched
-            // (e.g. account from another workspace). Automations belong to the workspace.
-            const url = `${API_BASE}/api/whatsapp/interactive-automations?workspace_id=${workspaceId}`;
+            const url = `${WHATSAPP_REST_API_PREFIX}/interactive-automations?workspace_id=${workspaceId}${accountId ? `&account_id=${accountId}` : ''}`;
             console.log('Fetching automations from:', url);
 
-            const response = await fetch(url, {
+            const response = await cachedFetch(url, {
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -180,8 +205,8 @@ const InteractiveAutomationsList: React.FC = () => {
         const isCurrentlyActive = automation.is_active ?? automation.isActive;
         const action = isCurrentlyActive ? 'pause' : 'publish';
         try {
-            const response = await fetch(
-                `${API_BASE}/api/whatsapp/interactive-automations/${automation.id}/${action}`,
+            const response = await cachedFetch(
+                `${WHATSAPP_REST_API_PREFIX}/interactive-automations/${automation.id}/${action}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -206,8 +231,8 @@ const InteractiveAutomationsList: React.FC = () => {
         if (!automationToDelete) return;
 
         try {
-            const response = await fetch(
-                `${API_BASE}/api/whatsapp/interactive-automations/${automationToDelete.id}`,
+            const response = await cachedFetch(
+                `${WHATSAPP_REST_API_PREFIX}/interactive-automations/${automationToDelete.id}`,
                 {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
@@ -226,6 +251,64 @@ const InteractiveAutomationsList: React.FC = () => {
         } catch (error) {
             console.error('Error deleting automation:', error);
             toast.error('Failed to delete automation');
+        }
+    };
+
+    const handleAiGenerated = async (draft: GeneratedFlowDraft) => {
+        if (!workspaceId) {
+            toast.error('Select a workspace first');
+            return;
+        }
+        const parsedAccountId = accountId ? parseInt(accountId, 10) : NaN;
+        if (!parsedAccountId || Number.isNaN(parsedAccountId)) {
+            toast.error('Connect a WhatsApp account before generating a flow');
+            return;
+        }
+
+        setAiCreating(true);
+        try {
+            const flow = draftToAutomationFlow(draft, parsedAccountId, workspaceId);
+            const triggerNode = flow.nodes.find((n) => n.type === 'trigger');
+            const triggerData = (triggerNode?.data || {}) as {
+                triggerType?: string;
+                keywords?: string[];
+            };
+            const trigger = {
+                type: triggerData.triggerType || draft.trigger?.type || 'any_reply',
+                keywords: triggerData.keywords || draft.trigger?.keywords || [],
+                enabled: true,
+            };
+
+            const response = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/interactive-automations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    account_id: parsedAccountId,
+                    workspace_id: workspaceId,
+                    name: flow.name,
+                    description: flow.description,
+                    nodes: flow.nodes,
+                    edges: flow.edges,
+                    trigger,
+                }),
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to save generated flow');
+            }
+
+            toast.success('Flow generated! Opening editor…');
+            navigate(
+                `${basePath}/whatsapp/interactive-automation/${data.automation.id}?workspace_id=${workspaceId}&account_id=${accountId}`
+            );
+        } catch (err) {
+            console.error('AI flow create failed:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to create generated flow');
+            throw err;
+        } finally {
+            setAiCreating(false);
         }
     };
 
@@ -274,27 +357,37 @@ const InteractiveAutomationsList: React.FC = () => {
     };
 
     return (
-        <WhatsAppConnectionGuard feature="Interactive Automation">
         <div className="min-h-screen bg-gray-50">
             <div className="container mx-auto px-6 py-8">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-                            <GitBranch className="w-8 h-8 text-green-600" />
-                            Interactive Automations
+                            <Bot className="w-8 h-8 text-orange-500" />
+                            Conversational Flows
                         </h1>
                         <p className="text-gray-500 mt-2">
-                            Create and manage visual conversation flows for WhatsApp
+                            Create and manage visual chatbot conversation flows for WhatsApp
                         </p>
                     </div>
-                    <Button
-                        onClick={() => navigate(`${basePath}/interactive-automation/new?workspace_id=${workspaceId}&account_id=${accountId}`)}
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                    >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Automation
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setAiDialogOpen(true)}
+                            disabled={aiCreating}
+                            className="border-violet-200 text-violet-700 hover:bg-violet-50"
+                        >
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Do with AI
+                        </Button>
+                        <Button
+                            onClick={() => navigate(`${basePath}/whatsapp/interactive-automation/new?workspace_id=${workspaceId}&account_id=${accountId}`)}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Create Flow
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Search and Filters */}
@@ -302,7 +395,7 @@ const InteractiveAutomationsList: React.FC = () => {
                     <div className="relative flex-1 max-w-md">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <Input
-                            placeholder="Search automations..."
+                            placeholder="Search flows..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="pl-10 bg-white border-gray-200 text-gray-800 placeholder:text-gray-400"
@@ -355,22 +448,33 @@ const InteractiveAutomationsList: React.FC = () => {
                     <Card className="bg-white border-gray-200 shadow-sm">
                         <CardContent className="flex flex-col items-center justify-center py-16">
                             <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                                <GitBranch className="w-8 h-8 text-gray-400" />
+                                <Bot className="w-8 h-8 text-gray-400" />
                             </div>
                             <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                                No automations yet
+                                No flows yet
                             </h3>
                             <p className="text-gray-500 mb-6 text-center max-w-md">
-                                Create your first interactive automation to build engaging
-                                WhatsApp conversation flows with buttons and branching logic.
+                                Create your first conversational flow to build engaging
+                                WhatsApp chatbot experiences with buttons and branching logic.
                             </p>
-                            <Button
-                                onClick={() => navigate(`${basePath}/interactive-automation/new?workspace_id=${workspaceId}&account_id=${accountId}`)}
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                            >
-                                <Plus className="w-4 h-4 mr-2" />
-                                Create Your First Automation
-                            </Button>
+                            <div className="flex flex-wrap gap-3 justify-center">
+                                <Button
+                                    onClick={() => setAiDialogOpen(true)}
+                                    disabled={aiCreating}
+                                    className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white"
+                                >
+                                    <Sparkles className="w-4 h-4 mr-2" />
+                                    Do with AI
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => navigate(`${basePath}/whatsapp/interactive-automation/new?workspace_id=${workspaceId}&account_id=${accountId}`)}
+                                    className="border-gray-300"
+                                >
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Blank Flow
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
                 )}
@@ -382,7 +486,7 @@ const InteractiveAutomationsList: React.FC = () => {
                             <Card
                                 key={automation.id}
                                 className="bg-white border-gray-200 hover:border-green-300 hover:shadow-md transition-all cursor-pointer group"
-                                onClick={() => navigate(`${basePath}/interactive-automation/${automation.id}?workspace_id=${workspaceId}&account_id=${accountId}`)}
+                                onClick={() => navigate(`${basePath}/whatsapp/interactive-automation/${automation.id}?workspace_id=${workspaceId}&account_id=${accountId}`)}
                             >
                                 <CardHeader className="pb-3">
                                     <div className="flex items-start justify-between">
@@ -409,7 +513,7 @@ const InteractiveAutomationsList: React.FC = () => {
                                                 <DropdownMenuItem
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        navigate(`${basePath}/interactive-automation/${automation.id}?workspace_id=${workspaceId}&account_id=${accountId}`);
+                                                        navigate(`${basePath}/whatsapp/interactive-automation/${automation.id}?workspace_id=${workspaceId}&account_id=${accountId}`);
                                                     }}
                                                     className="text-gray-700 hover:bg-gray-100"
                                                 >
@@ -473,11 +577,18 @@ const InteractiveAutomationsList: React.FC = () => {
                     </div>
                 )}
 
+                <AiFlowGeneratorDialog
+                    open={aiDialogOpen}
+                    onOpenChange={setAiDialogOpen}
+                    workspaceId={workspaceId}
+                    onGenerated={handleAiGenerated}
+                />
+
                 {/* Delete Confirmation Dialog */}
                 <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                     <AlertDialogContent className="bg-white border-gray-200">
                         <AlertDialogHeader>
-                            <AlertDialogTitle className="text-gray-800">Delete Automation?</AlertDialogTitle>
+                            <AlertDialogTitle className="text-gray-800">Delete Conversational Flow?</AlertDialogTitle>
                             <AlertDialogDescription className="text-gray-500">
                                 This will permanently delete "{automationToDelete?.name}".
                                 This action cannot be undone.
@@ -498,7 +609,6 @@ const InteractiveAutomationsList: React.FC = () => {
                 </AlertDialog>
             </div>
         </div>
-        </WhatsAppConnectionGuard>
     );
 };
 

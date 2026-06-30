@@ -8,12 +8,57 @@
  */
 
 import apiClient from '@/lib/apiClient';
+import { WHATSAPP_REST_API_PREFIX } from '@/config';
 
 // ============================================================
 // Base Configuration
 // ============================================================
 
 const WHATSAPP_API_BASE = '/whatsapp';
+
+/** Linking routes live on whatsapp-api (not sociovia-api-v2 monolith). */
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const userId =
+      localStorage.getItem('sv_user_id') ||
+      (() => {
+        const raw = localStorage.getItem('sv_user');
+        return raw ? String(JSON.parse(raw)?.id || '') : '';
+      })();
+    if (userId) headers['X-User-Id'] = userId;
+    const token = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  } catch {
+    /* ignore storage errors */
+  }
+  return headers;
+}
+
+async function whatsappLinkingRequest<T>(
+  path: string,
+  init: RequestInit & { params?: Record<string, string> } = {},
+): Promise<{ ok: boolean; status: number; data?: T; error?: { message?: string } }> {
+  const { params, ...rest } = init;
+  let url = `${WHATSAPP_REST_API_PREFIX}${path.startsWith('/') ? path : `/${path}`}`;
+  if (params && Object.keys(params).length) {
+    url += `?${new URLSearchParams(params).toString()}`;
+  }
+  const res = await fetch(url, {
+    ...rest,
+    credentials: 'include',
+    headers: { ...getAuthHeaders(), ...(rest.headers as Record<string, string> | undefined) },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status,
+      error: { message: body.error || body.message || `HTTP ${res.status}` },
+    };
+  }
+  return { ok: true, status: res.status, data: body as T };
+}
 
 // ============================================================
 // Types
@@ -92,7 +137,7 @@ export interface Conversation {
 export interface ConversationMessage {
   id: string;
   conversation_id: string;
-  direction: 'inbound' | 'outbound';
+  direction: 'inbound' | 'outbound' | 'echo';  // echo = sent from mobile app (coexistence)
   type: 'text' | 'template' | 'image' | 'video' | 'document' | 'audio';
   content: string;
   media_url?: string;
@@ -454,6 +499,19 @@ export async function getConversation(
   if (!response.ok) {
     return { conversation: null, error: response.error?.message || 'Failed to get conversation' };
   }
+  
+  // Transform backend direction values to frontend format
+  // Backend: 'incoming' | 'outgoing' | 'echo' → Frontend: 'inbound' | 'outbound'
+  const conversation = response.data;
+  if (conversation?.messages) {
+    conversation.messages = conversation.messages.map(msg => ({
+      ...msg,
+      direction: msg.direction === 'incoming' ? 'inbound' 
+        : (msg.direction === 'outgoing' || msg.direction === 'echo') ? 'outbound' 
+        : msg.direction,
+    })) as ConversationMessage[];
+  }
+  
   return { conversation: response.data || null };
 }
 
@@ -557,9 +615,9 @@ export async function publishCampaign(campaignId: string): Promise<{ success: bo
  * Manual Linking (existing account) based on workspace state.
  */
 export async function getConnectionPath(workspaceId: string): Promise<ConnectionPathResponse> {
-  const response = await apiClient.get<ConnectionPathResponse>(
-    `${WHATSAPP_API_BASE}/connection-path`,
-    { workspace_id: workspaceId }
+  const response = await whatsappLinkingRequest<ConnectionPathResponse>(
+    '/connection-path',
+    { params: { workspace_id: workspaceId } },
   );
   if (!response.ok) {
     return {
@@ -591,9 +649,9 @@ export async function getConnectionPath(workspaceId: string): Promise<Connection
  * from an existing WhatsApp Cloud API setup.
  */
 export async function connectManual(request: ManualConnectRequest): Promise<ManualConnectResponse> {
-  const response = await apiClient.post<ManualConnectResponse>(
-    `${WHATSAPP_API_BASE}/connect/manual`,
-    request
+  const response = await whatsappLinkingRequest<ManualConnectResponse>(
+    '/connect/manual',
+    { method: 'POST', body: JSON.stringify(request) },
   );
   if (!response.ok) {
     return {
@@ -612,9 +670,9 @@ export async function connectManual(request: ManualConnectRequest): Promise<Manu
  * to save it. Helps users debug token issues.
  */
 export async function validateToken(accessToken: string): Promise<ValidateTokenResponse> {
-  const response = await apiClient.post<ValidateTokenResponse>(
-    `${WHATSAPP_API_BASE}/connection-path/validate-token`,
-    { access_token: accessToken }
+  const response = await whatsappLinkingRequest<ValidateTokenResponse>(
+    '/connection-path/validate-token',
+    { method: 'POST', body: JSON.stringify({ access_token: accessToken }) },
   );
   if (!response.ok) {
     return {
@@ -632,6 +690,7 @@ export async function validateToken(accessToken: string): Promise<ValidateTokenR
 export interface NotificationSettingsResponse {
   success: boolean;
   notification_phone_number: string | null;
+  notification_email?: string | null;
   error?: string;
 }
 
@@ -639,6 +698,7 @@ export interface UpdateNotificationSettingsResponse {
   success: boolean;
   message?: string;
   notification_phone_number: string | null;
+  notification_email?: string | null;
   error?: string;
 }
 
@@ -677,14 +737,16 @@ export async function getNotificationSettings(params: {
 export async function updateNotificationSettings(params: {
   workspace_id?: string;
   account_id?: string | number;
-  notification_phone_number: string;
+  notification_phone_number?: string;
+  notification_email?: string;
 }): Promise<UpdateNotificationSettingsResponse> {
   const response = await apiClient.post<UpdateNotificationSettingsResponse>(
     `${WHATSAPP_API_BASE}/notification-settings`,
     {
       workspace_id: params.workspace_id,
       account_id: params.account_id,
-      notification_phone_number: params.notification_phone_number
+      notification_phone_number: params.notification_phone_number,
+      notification_email: params.notification_email,
     }
   );
   if (!response.ok) {

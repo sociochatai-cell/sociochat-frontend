@@ -67,16 +67,19 @@ const MetricBox = ({
     );
 };
 
-export function ConversationInsights({ conversations }: ConversationInsightsProps) {
-    if (!conversations) {
+export function ConversationInsights({ conversations, loading = false }: ConversationInsightsProps) {
+    if (loading || !conversations) {
         return (
             <Card className="border-0 shadow-md">
                 <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-lg">
                         💬 Conversation Insights
                     </CardTitle>
+                    <CardDescription>
+                        Team efficiency and conversation management
+                    </CardDescription>
                 </CardHeader>
-                <CardContent className="pt-4">
+                <CardContent className="pt-4 space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {[...Array(4)].map((_, i) => (
                             <div key={i} className="animate-pulse p-4 bg-muted/30 rounded-xl">
@@ -84,6 +87,14 @@ export function ConversationInsights({ conversations }: ConversationInsightsProp
                                 <div className="h-8 bg-muted rounded w-12" />
                             </div>
                         ))}
+                    </div>
+                    <div className="p-4 bg-muted/30 rounded-xl animate-pulse space-y-3">
+                        <div className="h-4 w-36 rounded bg-muted" />
+                        <div className="h-4 w-full rounded-full bg-muted" />
+                        <div className="flex items-center justify-between">
+                            <div className="h-3 w-20 rounded bg-muted" />
+                            <div className="h-3 w-20 rounded bg-muted" />
+                        </div>
                     </div>
                 </CardContent>
             </Card>

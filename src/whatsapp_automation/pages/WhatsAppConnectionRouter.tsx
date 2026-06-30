@@ -38,6 +38,8 @@ import { ExistingAccountConnect } from './ExistingAccountConnect';
 import { FacebookLoginButton } from '@/whatsapp/components/FacebookLoginButton';
 import { ConnectWhatsAppButton } from '@/whatsapp/components/ConnectWhatsAppButton';
 import { setStoredAccountId } from '@/whatsapp/utils/accountContext';
+import { requestWhatsAppAccountStatusPopup } from '@/whatsapp/utils/accountStatusPopup';
+import { WHATSAPP_API_BASE_URL } from '@/config';
 
 // ============================================================
 // Props
@@ -134,7 +136,7 @@ const ConnectedAccountView: React.FC<{
             {/* Quick Actions */}
             <div className="grid gap-3 sm:grid-cols-3">
                 <Button
-                    onClick={() => navigate('/dashboard/inbox')}
+                    onClick={() => navigate('/dashboard/whatsapp/inbox')}
                     className="w-full !bg-green-600 hover:!bg-green-700 !text-white"
                 >
                     <MessageCircle className="w-4 h-4 mr-2" />
@@ -142,14 +144,14 @@ const ConnectedAccountView: React.FC<{
                 </Button>
                 <Button
                     variant="outline"
-                    onClick={() => navigate('/dashboard/templates')}
+                    onClick={() => navigate('/dashboard/whatsapp/templates')}
                     className="w-full"
                 >
                     Templates
                 </Button>
                 <Button
                     variant="outline"
-                    onClick={() => navigate('/dashboard/settings')}
+                    onClick={() => navigate('/dashboard/whatsapp/settings')}
                     className="w-full"
                 >
                     <Settings className="w-4 h-4 mr-2" />
@@ -180,14 +182,15 @@ const EmbeddedSignupView: React.FC<{
 
     const handleStartSignup = () => {
         // Navigate to the Embedded Signup flow
-        navigate(`/dashboard/setup?workspace_id=${workspaceId}`);
+        navigate(`/dashboard/whatsapp/setup?workspace_id=${workspaceId}`);
     };
 
     const handleFacebookLoginSuccess = (accessToken: string) => {
-        // Store credentials for display
+        // Keep the token in component state only for the manual connect step.
+        // Do NOT persist a high-privilege Meta token in localStorage (XSS-exfiltratable,
+        // and nothing reads it back).
         console.log('[WhatsApp] Facebook login successful, received token');
         setFbCredentials({ accessToken });
-        localStorage.setItem('fb_access_token', accessToken);
     };
 
     const copyToClipboard = (text: string, field: string) => {
@@ -208,7 +211,7 @@ const EmbeddedSignupView: React.FC<{
         setDiscoveryError(null);
 
         try {
-            const res = await fetch('/api/whatsapp/oauth/discover-waba', {
+            const res = await fetch(`${WHATSAPP_API_BASE_URL}/api/whatsapp/oauth/discover-waba`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -390,7 +393,7 @@ const EmbeddedSignupView: React.FC<{
             </div>
 
             {/* Connection Options - Column Layout */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Tile 1: New WhatsApp Number */}
                 <Card
                     className="hover:border-green-400 hover:shadow-md transition-all border-2 flex flex-col"
@@ -431,7 +434,9 @@ const EmbeddedSignupView: React.FC<{
                             </div>
                             <h4 className="font-semibold text-lg mb-2">Log in with Facebook</h4>
                             <p className="text-sm text-muted-foreground mb-4 flex-1">
-                                Login to already created WhatsApp Business account in WhatsApp manager with Facebook.
+                                Link an existing number in the client&apos;s WhatsApp Manager. Connection and inbox work
+                                immediately; <strong>outbound messaging may require</strong> partner authorization or a
+                                System User token (not provided by Facebook Login).
                             </p>
                             <div className="w-full mt-auto" onClick={(e) => e.stopPropagation()}>
                                 {!showFacebookLogin ? (
@@ -475,33 +480,6 @@ const EmbeddedSignupView: React.FC<{
                         </div>
                     </CardContent>
                 </Card>
-
-                {/* Tile 4: Coexistence — Connect Existing WhatsApp Business App */}
-                <Card
-                    className="hover:border-purple-400 hover:shadow-md transition-all border-2 flex flex-col"
-                >
-                    <CardContent className="p-6 flex flex-col flex-1">
-                        <div className="flex flex-col items-center text-center flex-1">
-                            <div className="p-4 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 mb-4">
-                                <Phone className="w-8 h-8 text-white" />
-                            </div>
-                            <div className="flex items-center gap-2 mb-2 flex-wrap justify-center">
-                                <h4 className="font-semibold text-lg">Existing App</h4>
-                                <Badge className="bg-purple-100 text-purple-800 text-xs">Coexistence</Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-4 flex-1">
-                                Keep using your WhatsApp Business mobile app while connecting to Cloud API. 5 MPS limit applies.
-                            </p>
-                            <div className="w-full mt-auto" onClick={(e) => e.stopPropagation()}>
-                                <ConnectWhatsAppButton
-                                    workspaceId={workspaceId}
-                                    onConnected={onSuccess}
-                                    coexistenceMode={true}
-                                />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
             </div>
         </div>
     );
@@ -520,6 +498,13 @@ export const WhatsAppConnectionRouter: React.FC<WhatsAppConnectionRouterProps> =
     const [connectionData, setConnectionData] = useState<ConnectionPathResponse | null>(null);
     const [showManualForm, setShowManualForm] = useState(false);
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('manual') === '1') {
+            setShowManualForm(true);
+        }
+    }, []);
+
     const fetchConnectionPath = async () => {
         setIsLoading(true);
         setError(null);
@@ -527,6 +512,11 @@ export const WhatsAppConnectionRouter: React.FC<WhatsAppConnectionRouterProps> =
         try {
             const result = await whatsappApi.getConnectionPath(workspaceId);
             setConnectionData(result);
+
+            // If already connected, redirect to dashboard
+            if (result.status === 'CONNECTED') {
+                onConnectionComplete?.();
+            }
         } catch (err) {
             setError('Failed to check WhatsApp connection status');
         } finally {
@@ -537,9 +527,6 @@ export const WhatsAppConnectionRouter: React.FC<WhatsAppConnectionRouterProps> =
     useEffect(() => {
         if (workspaceId) {
             fetchConnectionPath();
-        } else {
-            setIsLoading(false);
-            setError('No workspace found. Please go to Settings to configure your workspace first.');
         }
     }, [workspaceId]);
 
@@ -554,6 +541,7 @@ export const WhatsAppConnectionRouter: React.FC<WhatsAppConnectionRouterProps> =
             console.log('[WhatsApp] Stored new account ID:', result.account_summary.id);
         }
 
+        requestWhatsAppAccountStatusPopup(workspaceId);
         onConnectionComplete?.();
     };
 

@@ -16,10 +16,10 @@ import { FileText, Sparkles, LayoutTemplate } from 'lucide-react';
 interface TemplatesPanelProps {
     accountId: number | null;
     recipientPhone: string;
-    recipientName?: string;
+    recipientName?: string;  // Customer name for tracking
     phoneNumberId: string;
+    onMessageSent?: () => void;
     trigger?: React.ReactNode;
-    onTemplateSent?: (message: any, conversationId: number) => void;
 }
 
 export function TemplatesPanel({
@@ -27,8 +27,8 @@ export function TemplatesPanel({
     recipientPhone,
     recipientName,
     phoneNumberId,
+    onMessageSent,
     trigger,
-    onTemplateSent,
 }: TemplatesPanelProps) {
     const [open, setOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('my-templates');
@@ -110,10 +110,7 @@ export function TemplatesPanel({
                 recipientPhone={recipientPhone}
                 recipientName={recipientName}
                 phoneNumberId={phoneNumberId}
-                onTemplateSent={(msg, cid) => {
-                    setOpen(false); // Close panel when sent
-                    if (onTemplateSent) onTemplateSent(msg, cid);
-                }}
+                onMessageSent={onMessageSent}
             />
 
             {/* Create Modal for suggestions */}
