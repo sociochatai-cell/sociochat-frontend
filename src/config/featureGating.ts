@@ -22,7 +22,8 @@ export type FeatureKey =
     | 'human_agent_whatsapp'
     | 'unified_dashboard_analytics'
     | 'crm'
-    | 'whatsapp_coexistence';
+    | 'whatsapp_coexistence'
+    | 'whatsapp_bookings';
 
 export type PlanName = 'beta' | 'starter' | 'growth' | 'enterprise';
 
@@ -44,6 +45,8 @@ export const ROUTE_FEATURE_MAP: Record<string, FeatureKey> = {
     '/dashboard/tracking': 'whatsapp_tracking',
     '/dashboard/catalog': 'whatsapp_catalog',
     '/dashboard/coexistence': 'whatsapp_coexistence',
+    '/dashboard/bookings': 'whatsapp_bookings',
+    '/dashboard/bookings/settings': 'whatsapp_bookings',
     '/dashboard/crm': 'crm',
     '/dashboard/crm/leads': 'crm',
     '/dashboard/crm/deals': 'crm',
@@ -123,6 +126,7 @@ export const FEATURE_PLAN_MAP: Record<FeatureKey, PlanName> = {
     unified_dashboard_analytics: 'starter',
     crm: 'starter',
     whatsapp_coexistence: 'starter',
+    whatsapp_bookings: 'starter',
 };
 
 export default ROUTE_FEATURE_MAP;

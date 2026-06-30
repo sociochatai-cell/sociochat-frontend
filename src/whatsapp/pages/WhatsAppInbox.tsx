@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { toast } from 'sonner';
 import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 import { getWorkspaceId, setWorkspaceId } from '../utils/workspaceContext';
+import crmApi from '@/crm/api';
 import {
   Building2,
   ChevronDown,
@@ -27,7 +28,8 @@ import {
   Workflow,
   Inbox,
   LayoutTemplate,
-  ExternalLink
+  ExternalLink,
+  UserPlus
 } from 'lucide-react';
 import {
   addMessageLocally,
@@ -79,6 +81,7 @@ export function WhatsAppInbox() {
   const [creatingChat, setCreatingChat] = useState(false);
   const [contactPanelOpen, setContactPanelOpen] = useState(false);
   const [flowPanelOpen, setFlowPanelOpen] = useState(false);
+  const [addingToCrm, setAddingToCrm] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const [inboxFilter, setInboxFilter] = useState<InboxFilterType>(initialFilter);
   const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1280);
@@ -429,6 +432,21 @@ export function WhatsAppInbox() {
     }
   };
 
+  // Promote the selected conversation into the CRM as a lead. Only enabled
+  // for real (persisted) conversations — see the button's guard below.
+  const handleAddToCrm = async () => {
+    if (!selectedConversation?.id) return;
+    setAddingToCrm(true);
+    try {
+      await crmApi.addLeadFromConversation(String(selectedConversation.id));
+      toast.success('Added to CRM');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add to CRM');
+    } finally {
+      setAddingToCrm(false);
+    }
+  };
+
   if (!workspaceId) {
     return <InboxLoadingScreen />;
   }
@@ -476,6 +494,18 @@ export function WhatsAppInbox() {
                 title="View linked CRM lead"
               >
                 <ExternalLink className="w-4 h-4" /> View lead
+              </Button>
+            )}
+            {selectedConversation && selectedConversation.id > 0 && (
+              <Button
+                variant="outline"
+                className="gap-2 h-11 hover:bg-primary/10"
+                onClick={handleAddToCrm}
+                disabled={addingToCrm}
+                title="Add this conversation to CRM"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span className="hidden sm:inline">{addingToCrm ? 'Adding...' : 'Add to CRM'}</span>
               </Button>
             )}
             {selectedConversation && isDesktop && (
