@@ -1874,6 +1874,14 @@ export default function WhatsAppAutomation() {
     // All features unlocked by default (no enterprise lock)
     const [unlockedLevel, setUnlockedLevel] = useState<number>(3);
 
+    // Upgrade prompt entry point. Features are unlocked by default, so this is a
+    // no-op placeholder that keeps the onUnlock callbacks wired without surfacing
+    // a paywall dialog.
+    const openUnlockDialog = (_level: number, _planName: string) => {
+        void _level;
+        void _planName;
+    };
+
     // Fetch accounts on mount - filter by current workspace
     useEffect(() => {
         async function loadAccounts() {

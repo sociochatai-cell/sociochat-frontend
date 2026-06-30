@@ -504,12 +504,16 @@ export async function getConversation(
   // Backend: 'incoming' | 'outgoing' | 'echo' → Frontend: 'inbound' | 'outbound'
   const conversation = response.data;
   if (conversation?.messages) {
-    conversation.messages = conversation.messages.map(msg => ({
-      ...msg,
-      direction: msg.direction === 'incoming' ? 'inbound' 
-        : (msg.direction === 'outgoing' || msg.direction === 'echo') ? 'outbound' 
-        : msg.direction,
-    })) as ConversationMessage[];
+    conversation.messages = conversation.messages.map(msg => {
+      // Backend may send raw 'incoming'/'outgoing'; normalize to the frontend union.
+      const rawDirection = msg.direction as string;
+      return {
+        ...msg,
+        direction: rawDirection === 'incoming' ? 'inbound'
+          : (rawDirection === 'outgoing' || rawDirection === 'echo') ? 'outbound'
+          : msg.direction,
+      };
+    }) as ConversationMessage[];
   }
   
   return { conversation: response.data || null };

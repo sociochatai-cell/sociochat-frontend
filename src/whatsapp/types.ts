@@ -130,7 +130,11 @@ export interface Conversation {
   close_reason?: 'agent' | 'expired' | 'never_opened' | null; // Why session is closed
   closed_by_agent?: boolean; // If manually closed by agent
   needs_attention?: boolean;
+  needs_attention_reason?: string | null;
+  needs_attention_at?: string | null;
   human_required?: boolean;
+  human_required_reason?: string | null;
+  human_required_at?: string | null;
   ai_paused_by_agent?: boolean;
   ai_paused_by_agent_at?: string | null;
   opted_out?: boolean;
@@ -216,7 +220,19 @@ export const STORAGE_KEYS = {
 // Real-Time Event Types
 export type WhatsAppRealtimeEvent =
   | { type: 'whatsapp_message_received'; data: MessageReceivedEvent }
-  | { type: 'whatsapp_message_status'; data: MessageStatusEvent };
+  | { type: 'whatsapp_message_status'; data: MessageStatusEvent }
+  | { type: 'whatsapp_conversation_updated'; data: ConversationUpdatedEvent };
+
+// Emitted when a conversation's metadata changes (e.g. human-escalation flags
+// toggled) without a new message. `conversation` carries a partial patch.
+export interface ConversationUpdatedEvent {
+  conversation_id: number;
+  account_id?: number;
+  workspace_id?: string;
+  human_required?: boolean;
+  needs_attention?: boolean;
+  conversation?: Partial<Conversation>;
+}
 
 export interface MessageReceivedEvent {
   message: ConversationMessage;

@@ -113,7 +113,7 @@ export interface LeadAction {
 // NODE TYPES
 // =============================================================================
 
-export type NodeType = 'trigger' | 'message' | 'template' | 'end' | 'input' | 'api' | 'lead';
+export type NodeType = 'trigger' | 'message' | 'template' | 'end' | 'input' | 'api' | 'lead' | 'set_status';
 
 export interface Position {
     x: number;
@@ -313,7 +313,25 @@ export interface LeadNode extends BaseNode {
     };
 }
 
-export type FlowNode = TriggerNode | MessageNode | TemplateNode | EndNode | InputNode | ApiNode | LeadNode;
+// Lead CRM status options the flow can assign
+export type LeadStatus = 'new' | 'contacted' | 'qualified';
+
+// How the status is applied:
+// - 'advance' only moves the lead forward in the funnel (never downgrades)
+// - 'set' forces the exact status (can downgrade)
+export type SetStatusMode = 'advance' | 'set';
+
+// Set Status node - silently sets the lead's CRM status when reached (no message sent)
+export interface SetStatusNode extends BaseNode {
+    type: 'set_status';
+    data: {
+        status: LeadStatus;
+        mode: SetStatusMode;
+        targetNodeId?: string | null; // Next node after the status is applied
+    };
+}
+
+export type FlowNode = TriggerNode | MessageNode | TemplateNode | EndNode | InputNode | ApiNode | LeadNode | SetStatusNode;
 
 // =============================================================================
 // EDGE (CONNECTION) TYPES

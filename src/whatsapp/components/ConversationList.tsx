@@ -370,8 +370,6 @@ export function ConversationList({
                             ? "bg-orange-100 text-orange-600"
                             : filter.key === 'human_required'
                               ? "bg-red-100 text-red-600"
-                            : filter.key === 'human_required'
-                              ? "bg-red-100 text-red-600"
                               : filter.key === 'opted_out'
                                 ? "bg-slate-100 text-slate-600"
                                 : "bg-muted text-muted-foreground"

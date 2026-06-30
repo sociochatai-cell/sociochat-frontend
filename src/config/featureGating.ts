@@ -75,4 +75,54 @@ export function getUpgradeMessage(featureKey: string): string {
     return `${label.charAt(0).toUpperCase() + label.slice(1)} is not included in your current plan`;
 }
 
+/* ----------------------------------------------------------------------------
+ * Plan-tier compatibility layer
+ * ----------------------------------------------------------------------------
+ * Some ported source components (e.g. NavigationCommandCenter) gate features by
+ * comparing the user's plan against a minimum required plan, rather than the
+ * backend-driven `features` map. The helpers below provide that thin compat
+ * surface on top of this module's plan model.
+ */
+
+/** Plan hierarchy (higher index = higher tier). Beta is most permissive. */
+export const PLAN_HIERARCHY: PlanName[] = ['starter', 'growth', 'enterprise', 'beta'];
+
+/** Numeric tier level for a plan name. */
+export function getPlanLevel(plan: string | undefined): number {
+    if (!plan) return 0;
+    const idx = PLAN_HIERARCHY.indexOf(plan as PlanName);
+    return idx === -1 ? 0 : idx;
+}
+
+/** Whether `userPlan` meets the minimum `requiredPlan`. */
+export function hasAccess(userPlan: string | undefined, requiredPlan: PlanName): boolean {
+    // Beta & Enterprise have ALL features — always allow.
+    if (userPlan === 'beta' || userPlan === 'enterprise') return true;
+    return getPlanLevel(userPlan) >= getPlanLevel(requiredPlan);
+}
+
+/** Feature key → minimum plan required. Defaults to 'starter' (available to all). */
+export const FEATURE_PLAN_MAP: Record<FeatureKey, PlanName> = {
+    whatsapp_inbox: 'starter',
+    whatsapp_templates: 'starter',
+    whatsapp_automation: 'starter',
+    whatsapp_drip: 'starter',
+    whatsapp_interactive_automation: 'starter',
+    whatsapp_flows: 'starter',
+    whatsapp_analytics: 'starter',
+    whatsapp_contacts: 'starter',
+    whatsapp_datasets: 'starter',
+    whatsapp_bulk_messaging: 'starter',
+    whatsapp_tracking: 'starter',
+    whatsapp_catalog: 'growth',
+    whatsapp_ctwa: 'growth',
+    whatsapp_smart_ai: 'growth',
+    image_generation: 'growth',
+    ai_chatbot_dashboard: 'growth',
+    human_agent_whatsapp: 'growth',
+    unified_dashboard_analytics: 'starter',
+    crm: 'starter',
+    whatsapp_coexistence: 'starter',
+};
+
 export default ROUTE_FEATURE_MAP;

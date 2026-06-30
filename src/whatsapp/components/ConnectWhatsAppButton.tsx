@@ -31,6 +31,9 @@ const FB_GRAPH_VERSION = import.meta.env.VITE_FB_API_VERSION || import.meta.env.
 interface ConnectWhatsAppButtonProps {
     workspaceId: string;
     onConnected?: () => void;
+    // When true, the button is rendered in the coexistence onboarding flow
+    // (connecting an existing WhatsApp number that's also used on the mobile app).
+    coexistenceMode?: boolean;
 }
 
 declare global {

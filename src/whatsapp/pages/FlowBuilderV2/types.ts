@@ -96,7 +96,7 @@ export interface MetaScreen {
   title: string;
   terminal?: boolean;
   success?: boolean;
-  data?: Record<string, { type: string; __example__?: string }>;
+  data?: Record<string, { type: string; items?: { type: string }; __example__?: unknown }>;
   layout: {
     type: string;
     children: MetaComponent[];

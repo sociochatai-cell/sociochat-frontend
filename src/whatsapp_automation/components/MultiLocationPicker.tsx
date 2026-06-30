@@ -408,8 +408,10 @@ export const ConnectedMultiLocationPicker: React.FC<{
 }> = ({ className }) => {
   const { audience, setAudience } = useCampaignStore();
   
-  // Convert existing store locations to AudienceLocation format
-  const locations: AudienceLocation[] = (audience.locations || []).map((loc, index) => ({
+  // Convert existing store locations to AudienceLocation format.
+  // The campaign store types `audience` loosely, so read `locations` defensively.
+  const storeLocations = (audience as { locations?: any[] }).locations || [];
+  const locations: AudienceLocation[] = storeLocations.map((loc: any, index: number) => ({
     id: `loc_${index}`,
     query: loc.city || loc.region || loc.country || '',
     type: loc.city ? 'city' : loc.region ? 'region' : 'country',

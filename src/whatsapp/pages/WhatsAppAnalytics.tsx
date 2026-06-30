@@ -819,7 +819,7 @@ export function WhatsAppAnalytics() {
                         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
                         <h2 className="text-lg font-semibold mb-2">Failed to load analytics</h2>
                         <p className="text-muted-foreground mb-4">{error}</p>
-                        <Button onClick={fetchAnalytics}>Try Again</Button>
+                        <Button onClick={() => fetchAnalytics()}>Try Again</Button>
                     </CardContent>
                 </Card>
             </div>
