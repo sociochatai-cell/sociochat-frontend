@@ -8,8 +8,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ConversationList, ConversationThread, TemplatesPanel, InboxLoadingScreen, ContactInfoPanel } from '../components';
 import { Conversation, WhatsAppRealtimeEvent } from '../types';
 import { useWhatsAppRealtime } from '../hooks/useWhatsAppRealtime';
-import { Inbox, LayoutTemplate, Plus, X, PanelRight, ArrowLeft } from 'lucide-react';
+import { Inbox, LayoutTemplate, Plus, X, PanelRight, ArrowLeft, UserPlus } from 'lucide-react';
 import logo from '@/assets/sociovia_logo.png';
+import crmApi from '@/crm/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -50,6 +51,7 @@ export function WhatsAppInbox() {
   const [newChatPhone, setNewChatPhone] = useState('');
   const [creatingChat, setCreatingChat] = useState(false);
   const [contactPanelOpen, setContactPanelOpen] = useState(false);
+  const [addingToCrm, setAddingToCrm] = useState(false);
   const isMobile = useIsMobile();
   const [mobilePane, setMobilePane] = useState<'list' | 'thread'>('list');
 
@@ -308,6 +310,19 @@ export function WhatsAppInbox() {
     }
   };
 
+  const handleAddToCrm = async () => {
+    if (!selectedConversation?.id) return;
+    setAddingToCrm(true);
+    try {
+      await crmApi.addLeadFromConversation(String(selectedConversation.id));
+      toast.success('Added to CRM');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add to CRM');
+    } finally {
+      setAddingToCrm(false);
+    }
+  };
+
   // Show loading state
   if (accountLoading) {
     return <InboxLoadingScreen />;
@@ -391,6 +406,20 @@ export function WhatsAppInbox() {
               >
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">New Chat</span>
+              </Button>
+            )}
+
+            {selectedConversation && selectedConversation.id > 0 && (!isMobile || mobilePane === 'thread') && (
+              <Button
+                variant="outline"
+                size={isMobile ? 'sm' : 'default'}
+                className="gap-1 sm:gap-2 hover:bg-primary/10"
+                onClick={handleAddToCrm}
+                disabled={addingToCrm}
+                title="Add this conversation to CRM"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span className="hidden sm:inline">{addingToCrm ? 'Adding...' : 'Add to CRM'}</span>
               </Button>
             )}
 

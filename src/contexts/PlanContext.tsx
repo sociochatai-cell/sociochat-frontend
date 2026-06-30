@@ -51,9 +51,13 @@ export function PlanProvider({ children }: { children: ReactNode }) {
         }
 
         try {
+            const svToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
             const res = await fetch(`${API_BASE_URL}/api/subscription/limits`, {
                 credentials: 'include',
-                headers: { 'X-User-Id': String(userId) },
+                headers: {
+                    ...(userId ? { 'X-User-Id': String(userId) } : {}),
+                    ...(svToken ? { Authorization: `Bearer ${svToken}` } : {}),
+                },
             });
             const data = await res.json();
             if (data.success) {

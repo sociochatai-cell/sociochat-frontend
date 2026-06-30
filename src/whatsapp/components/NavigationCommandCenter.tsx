@@ -135,6 +135,15 @@ const navigationItems: NavigationItem[] = [
         color: 'text-slate-500',
         gradient: 'from-slate-500/20 to-gray-500/20',
     },
+    {
+        id: 'subscription',
+        label: 'Subscription',
+        description: 'View & upgrade your plan',
+        icon: <Sparkles className="w-6 h-6" />,
+        route: '/subscription',
+        color: 'text-amber-500',
+        gradient: 'from-amber-500/20 to-yellow-500/20',
+    },
 ];
 
 interface NavigationCommandCenterProps {

@@ -11,6 +11,7 @@ import type {
     EndNode,
     InputNode,
     ApiNode,
+    SetStatusNode,
     AutomationFlow,
     TriggerConfig
 } from './types';
@@ -48,6 +49,7 @@ export const NODE_DIMENSIONS = {
     template: { width: 320, height: 220 },
     input: { width: 320, height: 220 },
     api: { width: 320, height: 240 },
+    set_status: { width: 320, height: 220 },
     end: { width: 240, height: 100 },
 } as const;
 
@@ -129,6 +131,20 @@ export const createDefaultInputNode = (
     },
 });
 
+export const createDefaultSetStatusNode = (
+    id: string,
+    position: { x: number; y: number }
+): SetStatusNode => ({
+    id,
+    type: 'set_status',
+    position,
+    data: {
+        status: 'qualified',
+        mode: 'advance',
+        targetNodeId: null,
+    },
+});
+
 export const createDefaultApiNode = (
     id: string,
     position: { x: number; y: number }
@@ -197,6 +213,11 @@ export const NODE_COLORS = {
         border: '#7C3AED', // violet-600
         text: '#5B21B6', // violet-800
     },
+    set_status: {
+        bg: '#ECFDF5', // emerald-50
+        border: '#059669', // emerald-600
+        text: '#065F46', // emerald-800
+    },
     end: {
         bg: '#FEF3C7', // amber-100
         border: '#F59E0B', // amber-500
@@ -249,4 +270,19 @@ export const VALIDATION_TYPE_LABELS = {
     pincode: 'PIN / Postal Code',
     enum: 'Multiple Choice (Enum)',
     regex: 'Custom Regex',
+} as const;
+
+// =============================================================================
+// SET STATUS LABELS
+// =============================================================================
+
+export const LEAD_STATUS_LABELS = {
+    new: 'New',
+    contacted: 'Contacted',
+    qualified: 'Qualified',
+} as const;
+
+export const SET_STATUS_MODE_LABELS = {
+    advance: 'Advance (forward only)',
+    set: 'Set exact (allow downgrade)',
 } as const;

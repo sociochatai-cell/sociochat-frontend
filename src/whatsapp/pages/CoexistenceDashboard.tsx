@@ -50,6 +50,7 @@ import {
 import { API_BASE_URL } from '@/config';
 import { getWorkspaceId } from '../utils/workspaceContext';
 import { ConnectWhatsAppButton } from '../components/ConnectWhatsAppButton';
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 
 // ── Helpers ──
 
@@ -266,6 +267,7 @@ export function CoexistenceDashboard({ accountId: propAccountId }: CoexistenceDa
   }
 
   return (
+    <WhatsAppConnectionGuard feature="Coexistence">
     <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -858,6 +860,7 @@ export function CoexistenceDashboard({ accountId: propAccountId }: CoexistenceDa
         </TabsContent>
       </Tabs>
     </div>
+    </WhatsAppConnectionGuard>
   );
 }
 

@@ -92,10 +92,9 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
           { id: '', type: 'date', label: 'Preferred Date', required: true },
           {
             id: '',
-            type: 'radio',
+            type: 'time',
             label: 'Preferred Time',
-            required: true,
-            options: ['Morning (9-12)', 'Afternoon (12-5)', 'Evening (5-8)']
+            required: true
           }
         ],
         button: { label: 'Confirm Booking', goesToStepId: null },

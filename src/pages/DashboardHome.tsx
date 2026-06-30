@@ -6,6 +6,7 @@ import {
     Lock, Crown, MessageCircle, Users, Megaphone, BarChart3, Loader2
 } from 'lucide-react';
 import { API_BASE_URL } from '@/config';
+import { useBranding } from '@/branding/BrandingContext';
 
 const WhatsAppAnalytics = lazy(() => import('../whatsapp/pages/WhatsAppAnalytics'));
 
@@ -86,6 +87,7 @@ function ConnectScreen({
     setShowConnectModal: (v: boolean) => void;
     navigate: ReturnType<typeof useNavigate>;
 }) {
+    const { branding } = useBranding();
     // 3D Parallax logic
     const x = useMotionValue(0);
     const y = useMotionValue(0);
@@ -122,7 +124,7 @@ function ConnectScreen({
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-50 border border-amber-200/50 text-amber-700 font-semibold text-sm shadow-[0_4px_20px_rgba(217,119,6,0.15)] pointer-events-none mt-2 mb-3"
                     style={{ transform: 'translateZ(10px)' }}
                 >
-                    <Crown className="w-4 h-4" /> SocioChat AI
+                    <Crown className="w-4 h-4" /> {branding.company_name} AI
                 </motion.div>
 
                 {/* Main Command Orb 3D Container */}
@@ -138,13 +140,18 @@ function ConnectScreen({
 
                     <div className="w-48 h-48 md:w-56 md:h-56 rounded-full relative z-10 flex items-center justify-center p-1 transition-transform duration-500 group-hover:scale-105"
                         style={{
-                            background: 'linear-gradient(135deg, #a7f3d0, #059669)',
-                            boxShadow: 'inset -10px -10px 30px rgba(0,0,0,0.3), inset 10px 10px 30px rgba(255,255,255,0.8), 0 30px 60px -15px rgba(5,150,105,0.5)',
+                            background: 'linear-gradient(135deg, rgb(var(--brand-200)), rgb(var(--brand-600)))',
+                            boxShadow: 'inset -10px -10px 30px rgba(0,0,0,0.3), inset 10px 10px 30px rgba(255,255,255,0.8), 0 30px 60px -15px rgb(var(--brand-600) / 0.5)',
                             transform: 'translateZ(30px)'
                         }}>
                         <div className="w-full h-full rounded-full bg-white/20 backdrop-blur-sm border border-white/50 flex flex-col items-center justify-center relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/40 blur-2xl rounded-full translate-x-10 -translate-y-10" />
-                            <img src="/sociochat_logo.png" alt="SocioChat.ai" className="w-16 h-16 md:w-20 md:h-20 rounded-3xl shadow-2xl mb-2 z-10 pointer-events-none" />
+                            <img
+                                src={branding.logo_url}
+                                alt={`${branding.company_name}${branding.name_suffix}`}
+                                className="w-16 h-16 md:w-20 md:h-20 rounded-3xl shadow-2xl mb-2 z-10 pointer-events-none"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                            />
                             <h2 className="text-xl md:text-2xl font-black text-emerald-950 tracking-tight z-10 drop-shadow-sm pointer-events-none">Command Center</h2>
                         </div>
                     </div>
@@ -236,7 +243,7 @@ function ConnectScreen({
                                 <X className="w-5 h-5" />
                             </button>
 
-                            <div className="w-20 h-20 rounded-[1.8rem] bg-gradient-to-br from-emerald-100 to-emerald-50 flex items-center justify-center mb-6 ring-1 ring-emerald-200 shadow-[inset_0_2px_10px_rgba(255,255,255,1),_0_10px_20px_rgba(16,185,129,0.2)] relative z-10">
+                            <div className="w-20 h-20 rounded-[1.8rem] bg-gradient-to-br from-emerald-100 to-emerald-50 flex items-center justify-center mb-6 ring-1 ring-emerald-200 shadow-[inset_0_2px_10px_rgba(255,255,255,1),_0_10px_20px_rgb(var(--brand-500)/0.2)] relative z-10">
                                 <Phone className="w-10 h-10 text-emerald-600" />
                                 <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md border border-emerald-50">
                                     <ShieldCheck className="w-5 h-5 text-emerald-500" />

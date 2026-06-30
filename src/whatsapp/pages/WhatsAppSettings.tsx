@@ -13,6 +13,7 @@ import { WhatsAppAccountCard } from '../components/WhatsAppAccountCard';
 import { SettingsLoadingScreen } from '../components/SettingsLoadingScreen';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AgentsManager from '@/agent_frontend/components/AgentsManager';
+import { useFeatureGate } from '@/hooks/useFeatureGate';
 import {
   ChevronDown,
   MessageCircle,
@@ -41,7 +42,9 @@ import {
   Edit2,
   Save,
   X,
-  HelpCircle
+  HelpCircle,
+  Lock,
+  Sparkles
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -398,6 +401,7 @@ function NotificationSettingsSection({ accountId, workspaceId }: { accountId: nu
 export function WhatsAppSettings() {
   const navigate = useNavigate();
   const location = useLocation();
+  const agentGate = useFeatureGate('ai_chatbot_dashboard');
   const [searchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -614,7 +618,7 @@ export function WhatsAppSettings() {
         {/* Simple Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#25D366] to-[#128C7E] shadow-lg">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-lg">
               <MessageCircle className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1">
@@ -769,7 +773,7 @@ export function WhatsAppSettings() {
               <Button
                 size="lg"
                 onClick={() => navigate(`${basePath}/whatsapp/setup`)}
-                className="bg-gradient-to-r from-[#25D366] to-[#128C7E] hover:from-[#128C7E] hover:to-[#075E54] text-white gap-2 px-8 shadow-lg"
+                className="bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-brand-700 hover:to-brand-800 text-white gap-2 px-8 shadow-lg"
               >
                 <Zap className="w-5 h-5" />
                 Get Started
@@ -1114,24 +1118,33 @@ export function WhatsAppSettings() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue={String(workspaces[0]?.id || '')} className="w-full">
-                {workspaces.length > 1 && (
-                  <div className="overflow-x-auto pb-2 mb-4">
-                    <TabsList className="inline-flex w-max">
-                      {workspaces.map((ws) => (
-                        <TabsTrigger key={ws.id} value={String(ws.id)} className="whitespace-nowrap">
-                          {ws.name}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                  </div>
-                )}
-                {workspaces.map((ws) => (
-                  <TabsContent key={ws.id} value={String(ws.id)}>
-                    <AgentsManager workspaceId={Number(ws.id)} />
-                  </TabsContent>
-                ))}
-              </Tabs>
+              {!agentGate.allowed ? (
+                <LockedFeatureBanner
+                  title="AI Agents"
+                  description={`AI agent accounts and the chatbot dashboard are available on ${agentGate.requiredPlanLabel} and above plans. Upgrade to unlock.`}
+                  level={agentGate.requiredPlanLabel || 'Growth'}
+                  onUnlock={() => navigate('/subscription')}
+                />
+              ) : (
+                <Tabs defaultValue={String(workspaces[0]?.id || '')} className="w-full">
+                  {workspaces.length > 1 && (
+                    <div className="overflow-x-auto pb-2 mb-4">
+                      <TabsList className="inline-flex w-max">
+                        {workspaces.map((ws) => (
+                          <TabsTrigger key={ws.id} value={String(ws.id)} className="whitespace-nowrap">
+                            {ws.name}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </div>
+                  )}
+                  {workspaces.map((ws) => (
+                    <TabsContent key={ws.id} value={String(ws.id)}>
+                      <AgentsManager workspaceId={Number(ws.id)} />
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1147,4 +1160,22 @@ export function WhatsAppSettings() {
       </div>
     </div>
   );
+}
+
+function LockedFeatureBanner({ title, description, level, onUnlock }: { title: string, description: string, level: string, onUnlock: () => void }) {
+    return (
+        <Card className="border-dashed border-2 border-slate-300 bg-slate-50 p-12 text-center shadow-none">
+            <div className="flex flex-col items-center justify-center max-w-lg mx-auto">
+                <div className="bg-white p-4 rounded-full shadow-sm mb-6 animate-pulse">
+                    <Lock className="w-10 h-10 text-slate-400" />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-800 mb-3">{title} is Locked</h3>
+                <p className="text-slate-500 mb-8 text-lg">{description}</p>
+                <Button onClick={onUnlock} size="lg" className="bg-slate-900 text-white hover:bg-slate-800 shadow-lg hover:shadow-xl transition-all">
+                    <Sparkles className="w-4 h-4 mr-2 text-yellow-400" />
+                    Unlock {level} Plan
+                </Button>
+            </div>
+        </Card>
+    );
 }

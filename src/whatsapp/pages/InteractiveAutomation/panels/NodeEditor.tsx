@@ -21,7 +21,8 @@ import {
     FileText,
     CheckCircle,
     Keyboard,
-    Plug
+    Plug,
+    Tag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,12 +40,15 @@ import type {
     EndNode,
     InputNode as InputNodeType,
     ApiNode as ApiNodeType,
+    SetStatusNode as SetStatusNodeType,
     MessageButton,
     ButtonActionType,
     TriggerType,
-    ValidationType
+    ValidationType,
+    LeadStatus,
+    SetStatusMode
 } from '../types';
-import { LIMITS, BUTTON_ACTION_LABELS, TRIGGER_TYPE_LABELS, VALIDATION_TYPE_LABELS } from '../constants';
+import { LIMITS, BUTTON_ACTION_LABELS, TRIGGER_TYPE_LABELS, VALIDATION_TYPE_LABELS, LEAD_STATUS_LABELS, SET_STATUS_MODE_LABELS } from '../constants';
 import { ApiNodeEditor } from './ApiNodeEditor';
 
 interface NodeEditorProps {
@@ -87,7 +91,7 @@ export function NodeEditor({
 }: NodeEditorProps) {
     // Get available target nodes for quick_reply buttons
     const targetNodes = allNodes.filter(n =>
-        n.id !== node.id && (n.type === 'message' || n.type === 'template' || n.type === 'end' || n.type === 'input' || n.type === 'api')
+        n.id !== node.id && (n.type === 'message' || n.type === 'template' || n.type === 'end' || n.type === 'input' || n.type === 'api' || n.type === 'set_status')
     );
 
     // Human-readable label for a node when listed as a navigation target
@@ -101,6 +105,8 @@ export function NodeEditor({
                 return `Input: ${(n.data as InputNodeType['data']).body?.slice(0, 20) || 'Question'}`;
             case 'api':
                 return `API: ${(n.data as ApiNodeType['data']).label || 'API Call'}`;
+            case 'set_status':
+                return `Set Status: ${LEAD_STATUS_LABELS[(n.data as SetStatusNodeType['data']).status] || 'Status'}`;
             case 'message':
             default:
                 return `Message: ${(n.data as MessageNode['data']).body?.slice(0, 20) || 'New message'}...`;
@@ -477,6 +483,61 @@ export function NodeEditor({
         );
     };
 
+    const renderStatusEditor = () => {
+        const data = node.data as SetStatusNodeType['data'];
+        // Fall back to defaults so legacy nodes saved without status/mode still show a valid option.
+        const status = data.status || 'qualified';
+        const mode = data.mode || 'advance';
+
+        return (
+            <div className="space-y-4">
+                {/* Status */}
+                <div>
+                    <Label>Status</Label>
+                    <Select
+                        value={status}
+                        onValueChange={(value: LeadStatus) => onUpdate({ status: value })}
+                    >
+                        <SelectTrigger className="mt-1.5">
+                            <SelectValue placeholder="Select status..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Object.entries(LEAD_STATUS_LABELS).map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                    {label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                {/* Mode */}
+                <div>
+                    <Label>Mode</Label>
+                    <Select
+                        value={mode}
+                        onValueChange={(value: SetStatusMode) => onUpdate({ mode: value })}
+                    >
+                        <SelectTrigger className="mt-1.5">
+                            <SelectValue placeholder="Select mode..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Object.entries(SET_STATUS_MODE_LABELS).map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                    {label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                    This silently sets the lead's CRM status when the flow reaches here (no message sent).
+                </p>
+            </div>
+        );
+    };
+
     const renderApiEditor = () => {
         return (
             <ApiNodeEditor
@@ -587,6 +648,7 @@ export function NodeEditor({
             case 'template': return <FileText className="w-5 h-5 text-blue-600" />;
             case 'input': return <Keyboard className="w-5 h-5 text-sky-600" />;
             case 'api': return <Plug className="w-5 h-5 text-violet-600" />;
+            case 'set_status': return <Tag className="w-5 h-5 text-emerald-600" />;
             case 'end': return <CheckCircle className="w-5 h-5 text-amber-600" />;
             default: return null;
         }
@@ -599,6 +661,7 @@ export function NodeEditor({
             case 'template': return 'Template Settings';
             case 'input': return 'Input Settings';
             case 'api': return 'API Call Settings';
+            case 'set_status': return 'Set Status Settings';
             case 'end': return 'End Settings';
             default: return 'Node Settings';
         }
@@ -624,6 +687,7 @@ export function NodeEditor({
                 {node.type === 'template' && renderTemplateEditor()}
                 {node.type === 'input' && renderInputEditor()}
                 {node.type === 'api' && renderApiEditor()}
+                {node.type === 'set_status' && renderStatusEditor()}
                 {node.type === 'end' && renderEndEditor()}
             </div>
 

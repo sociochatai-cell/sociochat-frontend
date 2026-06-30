@@ -41,3 +41,9 @@ tsconfig.tsbuildinfo
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# --- safety additions (wa-rebase) ---
+.env
+.env.*
+node_modules/
+dist/

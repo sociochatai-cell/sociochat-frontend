@@ -83,7 +83,7 @@ const AgentChatPanel: React.FC = () => {
             <div
               className="flex items-center gap-2 px-4 py-3 border-b border-gray-100"
               style={{
-                background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
+                background: 'linear-gradient(135deg, rgb(var(--brand-50)) 0%, rgb(var(--brand-100)) 100%)',
               }}
             >
               <Sparkles className="w-5 h-5 text-emerald-600" />

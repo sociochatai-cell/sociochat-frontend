@@ -15,7 +15,7 @@ const AgentFAB: React.FC = () => {
       onClick={toggle}
       className="fixed right-0 top-3/4 -translate-y-1/2 z-50 flex items-center justify-center pl-3 pr-2 py-4 rounded-l-2xl shadow-xl focus:outline-none border-y border-l border-emerald-400/30"
       style={{
-        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+        background: 'linear-gradient(135deg, rgb(var(--brand-500)) 0%, rgb(var(--brand-600)) 100%)',
       }}
       whileHover={{ scale: 1.05, x: -4 }}
       whileTap={{ scale: 0.95 }}

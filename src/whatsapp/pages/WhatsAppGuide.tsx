@@ -113,7 +113,7 @@ export function WhatsAppGuide() {
                     </div>
 
                     <div className="flex gap-3">
-                        <Button onClick={() => navigate('/dashboard/setup')} className="bg-[#25D366] hover:bg-[#128C7E]">
+                        <Button onClick={() => navigate('/dashboard/setup')} className="bg-brand-500 hover:bg-brand-700">
                             <Zap className="w-4 h-4 mr-2" />
                             Connect Now
                         </Button>
@@ -591,7 +591,7 @@ export function WhatsAppGuide() {
                     </Button>
 
                     <div className="flex items-center gap-4">
-                        <div className="p-3 rounded-2xl bg-gradient-to-br from-[#25D366] to-[#128C7E] shadow-lg">
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-lg">
                             <BookOpen className="w-8 h-8 text-white" />
                         </div>
                         <div>

@@ -19,6 +19,7 @@ interface ConversationInsightsProps {
         with_unread: number;
         active_sessions: number;
     } | null;
+    loading?: boolean;
 }
 
 const MetricBox = ({

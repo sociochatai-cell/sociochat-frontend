@@ -25,6 +25,7 @@ import {
     MessageCircle, FileText, Sparkles, GripVertical
 } from 'lucide-react';
 import { API_BASE_URL } from "@/config";
+import { cachedFetch } from "../utils/waPersistentCache";
 
 const API_BASE = API_BASE_URL;
 
@@ -1006,7 +1007,7 @@ export function FlowBuilder() {
         const fetchAccount = async () => {
             if (!workspaceId) return;
             try {
-                const res = await fetch(`${API_BASE}/api/whatsapp/accounts?workspace_id=${workspaceId}`);
+                const res = await cachedFetch(`${API_BASE}/api/whatsapp/accounts?workspace_id=${workspaceId}`);
                 const data = await res.json();
                 if (data.success && data.accounts?.length > 0) {
                     setAccountId(data.accounts[0].id);
@@ -1028,7 +1029,7 @@ export function FlowBuilder() {
     const loadFlow = async (flowId: number) => {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE}/api/whatsapp/flows/${flowId}`);
+            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flowId}`);
             const data = await res.json();
 
             if (data.success) {
@@ -1049,7 +1050,7 @@ export function FlowBuilder() {
     // Validate flow
     const validateFlow = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE}/api/whatsapp/flows/validate`, {
+            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/validate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ flow_json: flowJson, entry_screen_id: entryScreenId })
@@ -1084,10 +1085,10 @@ export function FlowBuilder() {
         try {
             setSaving(true);
 
-            const url = flowId ? `/api/whatsapp/flows/${flowId}` : '/api/whatsapp/flows';
+            const url = flowId ? `${API_BASE}/api/whatsapp/flows/${flowId}` : `${API_BASE}/api/whatsapp/flows`;
             const method = flowId ? 'PUT' : 'POST';
 
-            const res = await fetch(url, {
+            const res = await cachedFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1130,7 +1131,7 @@ export function FlowBuilder() {
             setPublishing(true);
 
             // Publish directly to Meta (no demo mode)
-            const res = await fetch(`${API_BASE}/api/whatsapp/flows/${flowId}/publish`, {
+            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flowId}/publish`, {
                 method: 'POST'
             });
 

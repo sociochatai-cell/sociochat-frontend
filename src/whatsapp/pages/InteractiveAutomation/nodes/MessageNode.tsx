@@ -67,7 +67,7 @@ export const MessageNode = memo(({ data, selected }: NodeProps<MessageNodeData>)
                 type="target"
                 position={Position.Top}
                 id="input"
-                className="w-4 h-4 !bg-green-500 border-2 border-white shadow-md"
+                className="w-4 h-4 !bg-emerald-500 border-2 border-white shadow-md"
                 style={{ top: -8 }}
             />
 

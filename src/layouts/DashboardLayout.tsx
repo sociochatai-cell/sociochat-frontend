@@ -8,6 +8,8 @@ import {
     Inbox, LogOut, Link2, User, ChevronRight,
     ChevronDown, Home, ClipboardList,
     ChevronsLeft, ChevronsRight, Smartphone, Menu,
+    LayoutDashboard, UserPlus, Handshake, Contact2, SlidersHorizontal,
+    CreditCard,
 } from 'lucide-react';
 import {
     motion,
@@ -23,6 +25,8 @@ import { AdminInspectBanner } from '@/components/admin/AdminInspectBanner';
 import { clearAllUserData } from '@/lib/userSession';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { MobileNavSheet } from '@/components/layout/MobileNavSheet';
+import { useBranding } from '@/branding/BrandingContext';
+import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
 
 /* ══════════════════════════════════════════════
    NAV ITEMS
@@ -42,10 +46,39 @@ const NAV_ITEMS = [
     { label: 'Datasets', path: '/dashboard/datasets', icon: Database },
     { label: 'Tracking', path: '/dashboard/tracking', icon: BarChart3 },
     { label: 'Coexistence', path: '/dashboard/coexistence', icon: Smartphone },
+    { label: 'CRM Dashboard', path: '/dashboard/crm', icon: LayoutDashboard, exact: true },
+    { label: 'Leads', path: '/dashboard/crm/leads', icon: UserPlus },
+    { label: 'Deals', path: '/dashboard/crm/deals', icon: Handshake },
+    { label: 'CRM Contacts', path: '/dashboard/crm/contacts', icon: Contact2 },
+    { label: 'CRM Settings', path: '/dashboard/crm/settings', icon: SlidersHorizontal },
+    { label: 'Subscription', path: '/subscription', icon: CreditCard },
 ];
 
 const SIDEBAR_COLLAPSED_W = 72;
 const SIDEBAR_EXPANDED_W = 240;
+
+/* ══════════════════════════════════════════════
+   BRANDED LOGO — tenant logo with dark-mode + error fallback
+   ══════════════════════════════════════════════ */
+function useBrandLogo(): string {
+    const { branding } = useBranding();
+    const [isDark, setIsDark] = useState<boolean>(
+        () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
+    );
+
+    // Keep in sync with runtime theme-mode toggles on <html class="dark">.
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+        const root = document.documentElement;
+        const update = () => setIsDark(root.classList.contains('dark'));
+        update();
+        const observer = new MutationObserver(update);
+        observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
+
+    return isDark && branding.logo_dark_url ? branding.logo_dark_url : branding.logo_url;
+}
 
 /* ══════════════════════════════════════════════
    DOCK ITEM — fish-eye magnification (collapsed)
@@ -111,9 +144,9 @@ function DockItem({
                 `}
                 animate={{
                     boxShadow: isHovered && !isActive
-                        ? '0 0 16px rgba(16,185,129,0.35), 0 0 4px rgba(16,185,129,0.2)'
+                        ? '0 0 16px rgb(var(--brand-500) / 0.35), 0 0 4px rgb(var(--brand-500) / 0.2)'
                         : isActive
-                            ? '0 4px 16px rgba(16,185,129,0.25)'
+                            ? '0 4px 16px rgb(var(--brand-500) / 0.25)'
                             : '0 1px 4px rgba(0,0,0,0.04)',
                 }}
             >
@@ -126,7 +159,7 @@ function DockItem({
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.15 }}
-                            style={{ boxShadow: '0 0 12px rgba(16,185,129,0.3)' }}
+                            style={{ boxShadow: '0 0 12px rgb(var(--brand-500) / 0.3)' }}
                         />
                     )}
                 </AnimatePresence>
@@ -171,6 +204,8 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
     const location = useLocation();
     const mouseY = useMotionValue(Infinity);
     const { isFeatureEnabled } = usePlan();
+    const { branding } = useBranding();
+    const logoSrc = useBrandLogo();
     const visibleNav = NAV_ITEMS.filter(item => {
         const key = ROUTE_FEATURE_MAP[item.path];
         return !key || isFeatureEnabled(key);
@@ -194,7 +229,12 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
             <div className={`flex items-center gap-3 py-4 ${expanded ? 'px-5' : 'px-0 justify-center'}`}>
                 <NavLink to="/dashboard" className="group flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md ring-1 ring-white/50 group-hover:ring-emerald-400/40 transition-all flex-shrink-0">
-                        <img src="/sociochat_logo.png" alt="SocioChat" className="w-full h-full object-cover" />
+                        <img
+                            src={logoSrc}
+                            alt={branding.company_name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
                     </div>
                     {expanded && (
                         <motion.div
@@ -203,7 +243,7 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
                             exit={{ opacity: 0, x: -8 }}
                             className="flex flex-col"
                         >
-                            <span className="text-base font-bold text-slate-800">SocioChat<span className="text-emerald-600">.ai</span></span>
+                            <span className="text-base font-bold text-slate-800">{branding.short_name}<span style={{ color: 'var(--brand-primary)' }}>{branding.name_suffix}</span></span>
                             <span className="text-[10px] text-slate-400 -mt-0.5">WhatsApp Business</span>
                         </motion.div>
                     )}
@@ -217,7 +257,7 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
             {/* Nav Items */}
             {expanded ? (
                 /* ── EXPANDED: standard sidebar with icon + label ── */
-                <nav className="flex-1 overflow-y-auto py-1 px-3 space-y-0.5 no-scrollbar">
+                <nav className="flex-1 min-h-0 overflow-y-auto py-1 px-3 space-y-0.5 no-scrollbar">
                     {visibleNav.map(({ label, path, icon: Icon, exact }) => {
                         const isActive = exact
                             ? location.pathname === path
@@ -250,9 +290,9 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
                 </nav>
             ) : (
                 /* ── COLLAPSED: dock with fish-eye magnification ── */
-                <div className="flex-1 mx-1.5 relative" style={{ overflow: 'visible' }}>
+                <div className="flex-1 min-h-0 mx-1.5 relative overflow-y-auto overflow-x-visible no-scrollbar">
                     <div
-                        className="h-full flex flex-col items-center gap-1 py-2 px-1.5 rounded-[20px]"
+                        className="min-h-full flex flex-col items-center gap-1 py-2 px-1.5 rounded-[20px]"
                         style={{
                             background: 'linear-gradient(180deg, rgba(241,245,249,0.85) 0%, rgba(226,232,240,0.7) 100%)',
                             backdropFilter: 'blur(24px) saturate(1.8)',
@@ -348,6 +388,7 @@ function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     const navigate = useNavigate();
     const [userName, setUserName] = useState('User');
     const [userEmail, setUserEmail] = useState('');
+    const [userRole, setUserRole] = useState('');
     const [showDropdown, setShowDropdown] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -356,6 +397,7 @@ function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             const u = JSON.parse(localStorage.getItem('sv_user') || sessionStorage.getItem('sv_user') || '{}');
             setUserName(u.name || 'User');
             setUserEmail(u.email || '');
+            setUserRole(u.role || '');
         } catch { /* ignore */ }
     }, []);
 
@@ -413,6 +455,10 @@ function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             </div>
 
             <div className="flex items-center gap-2">
+                <WorkspaceSwitcher />
+
+                <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block" />
+
                 <span className="hidden md:inline text-xs text-slate-500 tabular-nums mr-1">
                     {dateTimeLabel}
                 </span>
@@ -447,6 +493,14 @@ function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                                     <p className="text-xs text-slate-400 mt-0.5">{userEmail}</p>
                                 </div>
                                 <div className="p-1.5">
+                                    {(userRole === 'tenant_admin' || userRole === 'admin') && (
+                                        <button
+                                            onClick={() => { setShowDropdown(false); navigate('/tenant-admin'); }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
+                                        >
+                                            <Users className="w-4 h-4" /> Team Management
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => { setShowDropdown(false); navigate('/dashboard/settings'); }}
                                         className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
@@ -558,20 +612,25 @@ export default function DashboardLayout() {
     const isMobile = useIsMobile();
     const navigate = useNavigate();
     const setNavigate = useAgentStore((s) => s.setNavigate);
+    const { branding } = useBranding();
 
     useEffect(() => {
         setNavigate(navigate);
     }, [navigate, setNavigate]);
 
+    useEffect(() => {
+        document.title = `${branding.company_name}${branding.name_suffix}`;
+    }, [branding.company_name, branding.name_suffix]);
+
     const sidebarMargin = isMobile ? 0 : (expanded ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W);
 
     return (
-        <div className="flex min-h-screen overflow-x-hidden" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #ecfdf5 100%)' }}>
+        <div className="flex min-h-screen overflow-x-hidden" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, rgb(var(--brand-500) / 0.08) 100%)' }}>
             <Sidebar expanded={expanded} onToggle={() => setExpanded(!expanded)} />
             <MobileNavSheet
                 open={mobileNavOpen}
                 onOpenChange={setMobileNavOpen}
-                title="SocioChat"
+                title={branding.short_name}
                 items={NAV_ITEMS}
             />
             <motion.div

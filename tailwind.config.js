@@ -11,18 +11,46 @@ export default {
     theme: {
         extend: {
             colors: {
+                // Brand scale is driven by CSS variables (channel form) so a
+                // tenant's primary color can re-theme the whole palette at
+                // runtime. Defaults live in index.css :root and reproduce the
+                // original hand-picked hexes exactly. `<alpha-value>` keeps
+                // Tailwind opacity modifiers (e.g. bg-brand-500/20) working.
                 brand: {
-                    50: "#ecfdf5",
-                    100: "#d1fae5",
-                    200: "#a7f3d0",
-                    300: "#6ee7b7",
-                    400: "#34d399",
-                    500: "#25D366",
-                    600: "#1aab52",
-                    700: "#128C7E",
-                    800: "#0a6847",
-                    900: "#064e3b",
-                    950: "#022c22",
+                    50: "rgb(var(--brand-50) / <alpha-value>)",
+                    100: "rgb(var(--brand-100) / <alpha-value>)",
+                    200: "rgb(var(--brand-200) / <alpha-value>)",
+                    300: "rgb(var(--brand-300) / <alpha-value>)",
+                    400: "rgb(var(--brand-400) / <alpha-value>)",
+                    500: "rgb(var(--brand-500) / <alpha-value>)",
+                    600: "rgb(var(--brand-600) / <alpha-value>)",
+                    700: "rgb(var(--brand-700) / <alpha-value>)",
+                    800: "rgb(var(--brand-800) / <alpha-value>)",
+                    900: "rgb(var(--brand-900) / <alpha-value>)",
+                    950: "rgb(var(--brand-950) / <alpha-value>)",
+                    DEFAULT: "rgb(var(--brand-500) / <alpha-value>)",
+                },
+                // The app paints a lot of brand UI with Tailwind's built-in
+                // `emerald` palette (text-emerald-600, bg-emerald-500, …), which
+                // would otherwise never theme. Re-point `emerald` at the SAME
+                // `--brand-*` vars the `brand` palette uses so every emerald-*
+                // class follows the tenant's primary color. `green` is left
+                // untouched (it stays the generic success-green). Defaults come
+                // from :root, so emerald-* renders the SocioChat green out of the
+                // box (a small, intended shift from Tailwind's stock emerald).
+                emerald: {
+                    50: "rgb(var(--brand-50) / <alpha-value>)",
+                    100: "rgb(var(--brand-100) / <alpha-value>)",
+                    200: "rgb(var(--brand-200) / <alpha-value>)",
+                    300: "rgb(var(--brand-300) / <alpha-value>)",
+                    400: "rgb(var(--brand-400) / <alpha-value>)",
+                    500: "rgb(var(--brand-500) / <alpha-value>)",
+                    600: "rgb(var(--brand-600) / <alpha-value>)",
+                    700: "rgb(var(--brand-700) / <alpha-value>)",
+                    800: "rgb(var(--brand-800) / <alpha-value>)",
+                    900: "rgb(var(--brand-900) / <alpha-value>)",
+                    950: "rgb(var(--brand-950) / <alpha-value>)",
+                    DEFAULT: "rgb(var(--brand-500) / <alpha-value>)",
                 },
                 lime: {
                     400: "#a8e063",
@@ -67,7 +95,9 @@ export default {
                 sm: "calc(var(--radius) - 4px)",
             },
             fontFamily: {
-                sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
+                // Driven by the branding CSS var so a tenant's selected font
+                // applies app-wide; falls back to Inter when unset.
+                sans: ["var(--font-sans)", "Inter", "system-ui", "-apple-system", "sans-serif"],
             },
             boxShadow: {
                 'skeu': '0 1px 2px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.1)',

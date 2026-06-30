@@ -10,6 +10,7 @@ interface DeliveryFunnelProps {
     delivered: number;
     read: number;
     failed?: number;
+    loading?: boolean;
 }
 
 export function DeliveryFunnel({ sent, delivered, read, failed = 0 }: DeliveryFunnelProps) {

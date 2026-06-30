@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { RefreshCw, Plus, Database, Upload, ArrowLeft, Trash2, FileSpreadsheet, Users, Link2, Edit, CloudDownload, Settings, MessageCircle } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').toString().replace(/\/$/, '');
 
@@ -192,7 +193,10 @@ export default function WhatsAppDatasets() {
                 datasetFetchInit({
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newName, description: newDesc }),
+                    // Seed default columns so the manual Add-Row form renders real
+                    // inputs. Without columns the form falls back to a dead placeholder
+                    // input and saves empty rows. Users can add/rename via Manage Columns.
+                    body: JSON.stringify({ name: newName, description: newDesc, columns: ['name', 'phone'] }),
                 })
             );
             const data = await res.json();
@@ -816,6 +820,7 @@ export default function WhatsAppDatasets() {
     // ========== DETAIL VIEW ==========
     if (selectedDataset && datasetDetails) {
         return (
+            <WhatsAppConnectionGuard feature="Datasets">
             <div className="p-6 space-y-6">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -1059,11 +1064,13 @@ export default function WhatsAppDatasets() {
                     </CardContent>
                 </Card>
             </div>
+            </WhatsAppConnectionGuard>
         );
     }
 
     // ========== LIST VIEW ==========
     return (
+        <WhatsAppConnectionGuard feature="Datasets">
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
                 <div>
@@ -1684,5 +1691,6 @@ export default function WhatsAppDatasets() {
                 )}
             </div>
         </div>
+        </WhatsAppConnectionGuard>
     );
 }

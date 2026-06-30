@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { GatedRoute } from '@/components/feature-gate/GatedRoute';
 import RequireAdmin from '@/components/auth/RequireAdmin';
+import RequireTenantAdmin from '@/components/auth/RequireTenantAdmin';
 
 // New Layouts & Pages
 import DashboardLayout from './layouts/DashboardLayout';
@@ -11,9 +12,12 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
+const PaymentResult = lazy(() => import('./pages/PaymentResult'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+// Local-testing tenant switch: /t/:code sets a tenant override + reloads.
+const TenantSwitch = lazy(() => import('./domain/TenantSwitch'));
 import LandingPage from './pages/LandingPage';
 
 // Admin
@@ -25,6 +29,20 @@ const AdminReview = lazy(() => import('./pages/admin/AdminReview'));
 const AdminSubscriptions = lazy(() => import('./pages/admin/AdminSubscriptions'));
 const AdminPlans = lazy(() => import('./pages/admin/AdminPlans'));
 const AdminPrivateSlot = lazy(() => import('./pages/admin/AdminPrivateSlot'));
+
+// Super Admin — Tenant Management (multi-tenant white-label)
+const TenantListPage = lazy(() => import('./pages/superadmin/TenantListPage'));
+const TenantWizardPage = lazy(() => import('./pages/superadmin/TenantWizardPage'));
+const TenantEditPage = lazy(() => import('./pages/superadmin/TenantEditPage'));
+const TenantPlansPage = lazy(() => import('./pages/superadmin/TenantPlansPage'));
+
+// Tenant Admin portal — tenant-scoped user management
+const TenantAdminLayout = lazy(() => import('./pages/tenant-admin/TenantAdminLayout'));
+const TenantAdminOverview = lazy(() => import('./pages/tenant-admin/TenantAdminOverview'));
+const TenantAdminUsers = lazy(() => import('./pages/tenant-admin/TenantAdminUsers'));
+const TenantAdminPlan = lazy(() => import('./pages/tenant-admin/TenantAdminPlan'));
+const TenantAdminSubscription = lazy(() => import('./pages/tenant-admin/TenantAdminSubscription'));
+const TenantAdminPrivateSlot = lazy(() => import('./pages/tenant-admin/TenantAdminPrivateSlot'));
 
 /* ── Lazy-loaded WhatsApp pages ── */
 const WhatsAppInbox = lazy(() => import('./whatsapp/pages/WhatsAppInbox').then(m => ({ default: m.WhatsAppInbox })));
@@ -55,6 +73,13 @@ const ConversationsInbox = lazy(() => import('./whatsapp_automation/pages/Conver
 const AdCreatorWizard = lazy(() => import('./ctwa/pages/AdCreatorWizard'));
 const CampaignsListPage = lazy(() => import('./ctwa/pages/CampaignsListPage'));
 
+/* ── Lazy-loaded CRM pages ── */
+const CRMDashboard = lazy(() => import('./crm/pages/CRMDashboard'));
+const CRMLeads = lazy(() => import('./crm/pages/Leads'));
+const CRMDeals = lazy(() => import('./crm/pages/Deals'));
+const CRMContacts = lazy(() => import('./crm/pages/Contacts'));
+const CRMSettings = lazy(() => import('./crm/pages/CRMSettings'));
+
 function PageLoader() {
   return (
     <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -79,9 +104,13 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SignupPage /></Suspense>} />
       <Route path="/login" element={<Suspense fallback={<PageLoader />}><LoginPage /></Suspense>} />
+      {/* Local-testing: switch which tenant the whole app renders as (platform hosts only). */}
+      <Route path="/t" element={<Suspense fallback={<PageLoader />}><TenantSwitch /></Suspense>} />
+      <Route path="/t/:code" element={<Suspense fallback={<PageLoader />}><TenantSwitch /></Suspense>} />
       <Route path="/verify-email" element={<Suspense fallback={<PageLoader />}><VerifyEmailPage /></Suspense>} />
       <Route path="/pricing" element={<Suspense fallback={<PageLoader />}><PricingPage /></Suspense>} />
       <Route path="/subscription" element={<Suspense fallback={<PageLoader />}><SubscriptionPage /></Suspense>} />
+      <Route path="/payment/result" element={<Suspense fallback={<PageLoader />}><PaymentResult /></Suspense>} />
       <Route path="/forgot-password" element={<Suspense fallback={<PageLoader />}><ForgotPasswordPage /></Suspense>} />
       <Route path="/reset-password" element={<Suspense fallback={<PageLoader />}><ResetPasswordPage /></Suspense>} />
       <Route path="/privacy-policy" element={<Suspense fallback={<PageLoader />}><PrivacyPolicy /></Suspense>} />
@@ -96,6 +125,24 @@ export default function App() {
         <Route path="subscriptions" element={<Suspense fallback={<PageLoader />}><AdminSubscriptions /></Suspense>} />
         <Route path="plans" element={<Suspense fallback={<PageLoader />}><AdminPlans /></Suspense>} />
         <Route path="private-slot" element={<Suspense fallback={<PageLoader />}><AdminPrivateSlot /></Suspense>} />
+      </Route>
+
+      {/* Super Admin — Tenant Management (platform-admin only; rendered inside the admin shell) */}
+      <Route path="/superadmin" element={<RequireAdmin><Suspense fallback={<PageLoader />}><AdminLayout /></Suspense></RequireAdmin>}>
+        <Route index element={<Navigate to="/superadmin/tenants" replace />} />
+        <Route path="tenants" element={<Suspense fallback={<PageLoader />}><TenantListPage /></Suspense>} />
+        <Route path="tenants/new" element={<Suspense fallback={<PageLoader />}><TenantWizardPage /></Suspense>} />
+        <Route path="tenants/:id" element={<Suspense fallback={<PageLoader />}><TenantEditPage /></Suspense>} />
+        <Route path="tenant-plans" element={<Suspense fallback={<PageLoader />}><TenantPlansPage /></Suspense>} />
+      </Route>
+
+      {/* Tenant Admin portal — tenant-scoped user management (role: tenant_admin) */}
+      <Route path="/tenant-admin" element={<RequireTenantAdmin><Suspense fallback={<PageLoader />}><TenantAdminLayout /></Suspense></RequireTenantAdmin>}>
+        <Route index element={<Suspense fallback={<PageLoader />}><TenantAdminOverview /></Suspense>} />
+        <Route path="users" element={<Suspense fallback={<PageLoader />}><TenantAdminUsers /></Suspense>} />
+        <Route path="plan" element={<Suspense fallback={<PageLoader />}><TenantAdminPlan /></Suspense>} />
+        <Route path="subscription" element={<Suspense fallback={<PageLoader />}><TenantAdminSubscription /></Suspense>} />
+        <Route path="private-slot" element={<Suspense fallback={<PageLoader />}><TenantAdminPrivateSlot /></Suspense>} />
       </Route>
 
       <Route path="/dashboard" element={<DashboardLayout />}>
@@ -135,9 +182,15 @@ export default function App() {
         <Route path="whatsapp/setup" element={<WhatsAppSetupPage />} />
         <Route path="guide" element={<WhatsAppGuide />} />
         <Route path="whatsapp/guide" element={<WhatsAppGuide />} />
-        <Route path="coexistence" element={<CoexistenceDashboard />} />
+        <Route path="coexistence" element={<G feature="whatsapp_coexistence"><CoexistenceDashboard /></G>} />
         <Route path="catalog" element={<G feature="whatsapp_catalog"><WhatsAppCatalog /></G>} />
         <Route path="campaign/create" element={<G feature="whatsapp_ctwa"><CreateCTWA /></G>} />
+        {/* CRM — gated by 'crm' feature key */}
+        <Route path="crm" element={<G feature="crm"><CRMDashboard /></G>} />
+        <Route path="crm/leads" element={<G feature="crm"><CRMLeads /></G>} />
+        <Route path="crm/deals" element={<G feature="crm"><CRMDeals /></G>} />
+        <Route path="crm/contacts" element={<G feature="crm"><CRMContacts /></G>} />
+        <Route path="crm/settings" element={<G feature="crm"><CRMSettings /></G>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
 

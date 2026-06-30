@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useState, useLayoutEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Users, CreditCard, LayoutGrid, LogOut, ShieldCheck, UserSearch, ClipboardList, Menu, Lock } from 'lucide-react';
+import { Users, CreditCard, LayoutGrid, LogOut, ShieldCheck, UserSearch, ClipboardList, Menu, Lock, Building2, ScrollText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { adminApi } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { MobileNavSheet } from '@/components/layout/MobileNavSheet';
+import { applyBranding, DEFAULT_BRANDING, clearBrandingCache } from '@/branding/branding';
+import { clearCache } from '@/whatsapp/hooks/useDataCache';
 
 const navItems = [
+    { path: '/superadmin/tenants', label: 'Tenant Management', icon: Building2 },
+    { path: '/superadmin/tenant-plans', label: 'Tenant Plans', icon: ScrollText },
     { path: '/admin/users', label: 'Users', icon: Users },
     { path: '/admin/inspect-login', label: 'Inspect Login', icon: UserSearch },
     { path: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
@@ -22,11 +26,28 @@ export default function AdminLayout() {
     const { logoutLocal } = useAuth();
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+    // The platform Admin / Super-Admin portal ALWAYS renders in the default
+    // SocioChat theme. A tenant's branding (custom colors, and especially a
+    // "dark" theme) is applied to the global document by applyBranding(), so
+    // without this it would bleed into the portal after viewing/impersonating
+    // a tenant (e.g. black cards). useLayoutEffect resets it before paint.
+    useLayoutEffect(() => {
+        applyBranding(DEFAULT_BRANDING);
+    }, [location.pathname]);
+
     const handleLogout = async () => {
         await adminApi.logout();
         localStorage.removeItem('sv_admin_id');
         sessionStorage.removeItem('sv_admin_id');
+        localStorage.removeItem('sv_token');
+        sessionStorage.removeItem('sv_token');
         logoutLocal();
+        // Wipe the in-memory WhatsApp data cache and reset branding to the
+        // SocioChat default so the next user/login never inherits a previous
+        // tenant's cached data or colors.
+        clearCache();
+        clearBrandingCache();
+        applyBranding(DEFAULT_BRANDING);
         navigate('/admin/login');
     };
 

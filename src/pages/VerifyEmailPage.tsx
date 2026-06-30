@@ -80,9 +80,13 @@ export default function VerifyEmailPage() {
                 localStorage.setItem('sv_user_id', String(data.user.id));
                 sessionStorage.setItem('sv_user', JSON.stringify(data.user));
             }
+            if (data.token) {
+                localStorage.setItem('sv_token', data.token);
+                sessionStorage.setItem('sv_token', data.token);
+            }
 
             setSuccess('Email verified successfully!');
-            setTimeout(() => navigate('/pricing'), 800);
+            setTimeout(() => navigate('/subscription'), 800);
         } catch (err) {
             setError('Network error. Please try again.');
         } finally {
@@ -105,6 +109,10 @@ export default function VerifyEmailPage() {
             if (data.success) {
                 const channels = [data.email_sent && 'email', data.sms_sent && 'SMS'].filter(Boolean).join(' & ');
                 setSuccess(`New code sent via ${channels || 'email'}!`);
+                if (data.email_sent && !data.sms_sent) {
+                    // SMS gateway not configured/failed for this tenant — code still went by email.
+                    setError('');
+                }
                 setResendCooldown(60);
                 setCode(['', '', '', '', '', '']);
                 inputRefs.current[0]?.focus();
@@ -123,8 +131,8 @@ export default function VerifyEmailPage() {
                 <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 p-8 border border-slate-100">
                     {/* Header */}
                     <div className="text-center mb-8">
-                        <div className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 mb-4">
-                            <MailCheck className="w-10 h-10 text-[#25D366]" />
+                        <div className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-brand-50 mb-4">
+                            <MailCheck className="w-10 h-10 text-emerald-600" />
                         </div>
                         <h2 className="text-2xl font-bold text-slate-900 mb-2">Verify your account</h2>
                         <p className="text-sm text-slate-500">
@@ -153,13 +161,13 @@ export default function VerifyEmailPage() {
                                     value={digit}
                                     onChange={e => handleChange(i, e.target.value)}
                                     onKeyDown={e => handleKeyDown(i, e)}
-                                    className="w-12 h-14 text-center text-xl font-bold rounded-xl border-2 border-slate-200 bg-slate-50 focus:border-[#25D366] focus:ring-2 focus:ring-[#25D366]/20 focus:bg-white outline-none transition-all"
+                                    className="w-12 h-14 text-center text-xl font-bold rounded-xl border-2 border-slate-200 bg-slate-50 focus:border-emerald-500 focus:ring-2 focus:ring-brand-500/20 focus:bg-white outline-none transition-all"
                                 />
                             ))}
                         </div>
 
                         <button type="submit" disabled={loading || code.join('').length !== 6}
-                            className="w-full py-3 px-6 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-[#0a6847] to-[#128C7E] hover:from-[#074b33] hover:to-[#0d7a6d] shadow-lg shadow-[#25D366]/20 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
+                            className="w-full py-3 px-6 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-brand-800 to-brand-700 hover:from-brand-900 hover:to-brand-800 shadow-lg shadow-brand-500/20 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
                             {loading ? (
                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                             ) : 'Verify Email'}
@@ -171,7 +179,7 @@ export default function VerifyEmailPage() {
                         <p className="text-sm text-slate-500">
                             Didn't receive the code?{' '}
                             <button onClick={handleResend} disabled={resendCooldown > 0}
-                                className="font-semibold text-[#128C7E] hover:text-[#0a6847] disabled:text-slate-400 transition-colors inline-flex items-center gap-1">
+                                className="font-semibold text-brand-700 hover:text-brand-800 disabled:text-slate-400 transition-colors inline-flex items-center gap-1">
                                 <RefreshCw className="w-3.5 h-3.5" />
                                 {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
                             </button>

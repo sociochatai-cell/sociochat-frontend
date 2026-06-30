@@ -17,6 +17,7 @@ import { useDataCache } from '../hooks/useDataCache';
 import { CACHE_KEYS, POLL_INTERVALS, useWhatsAppConnection } from '../hooks/useWhatsAppData';
 import { getWorkspaceId } from '../utils/workspaceContext';
 import { cachedFetch } from '../utils/waPersistentCache';
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 
 const API_BASE = API_BASE_URL;
 
@@ -164,7 +165,7 @@ export function FlowsList() {
             case 'PUBLISHED':
                 return <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white"><CheckCircle className="w-3 h-3 mr-1" /> Published</Badge>;
             case 'DRAFT':
-                return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" /> Draft</Badge>;
+                return <Badge className="bg-gray-100 text-gray-600 border-gray-200"><Clock className="w-3 h-3 mr-1" /> Draft</Badge>;
             case 'DEPRECATED':
                 return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" /> Deprecated</Badge>;
             default:
@@ -180,6 +181,7 @@ export function FlowsList() {
     ];
 
     return (
+        <WhatsAppConnectionGuard feature="Forms">
         <div className="container mx-auto px-4 py-8">
             <div className="flex justify-between items-center mb-4">
                 <div>
@@ -244,7 +246,7 @@ export function FlowsList() {
                         <ClipboardList className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                         <h3 className="text-lg font-medium mb-2">No WhatsApp Account Connected</h3>
                         <p className="text-muted-foreground mb-4">Connect a WhatsApp Business Account to create forms</p>
-                        <Button onClick={() => navigate('/dashboard/setup')} className="w-full bg-gradient-to-r from-[#25D366] to-[#128C7E] text-white gap-2">
+                        <Button onClick={() => navigate('/dashboard/setup')} className="w-full bg-gradient-to-r from-brand-500 to-brand-700 text-white gap-2">
                             <MessageCircle className="w-5 h-5" />
                             Connect WhatsApp Account
                         </Button>
@@ -320,5 +322,6 @@ export function FlowsList() {
             )}
             </>)}
         </div>
+        </WhatsAppConnectionGuard>
     );
 }

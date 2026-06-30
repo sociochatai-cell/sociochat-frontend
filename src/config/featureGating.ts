@@ -20,7 +20,9 @@ export type FeatureKey =
     | 'image_generation'
     | 'ai_chatbot_dashboard'
     | 'human_agent_whatsapp'
-    | 'unified_dashboard_analytics';
+    | 'unified_dashboard_analytics'
+    | 'crm'
+    | 'whatsapp_coexistence';
 
 export type PlanName = 'beta' | 'starter' | 'growth' | 'enterprise';
 
@@ -41,6 +43,12 @@ export const ROUTE_FEATURE_MAP: Record<string, FeatureKey> = {
     '/dashboard/bulk': 'whatsapp_bulk_messaging',
     '/dashboard/tracking': 'whatsapp_tracking',
     '/dashboard/catalog': 'whatsapp_catalog',
+    '/dashboard/coexistence': 'whatsapp_coexistence',
+    '/dashboard/crm': 'crm',
+    '/dashboard/crm/leads': 'crm',
+    '/dashboard/crm/deals': 'crm',
+    '/dashboard/crm/contacts': 'crm',
+    '/dashboard/crm/settings': 'crm',
     '/ctwa/create': 'whatsapp_ctwa',
     '/ctwa/campaigns': 'whatsapp_ctwa',
 };

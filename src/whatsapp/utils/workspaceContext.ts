@@ -14,6 +14,17 @@
 
 const WS_KEY = 'sv_whatsapp_workspace_id';
 const WS_FALLBACK_KEY = 'sv_selected_workspace_id';
+const WS_LIST_KEY = 'sv_workspaces';
+
+/**
+ * A workspace as returned by GET /api/workspaces.
+ * `business_name` is optional (sub-workspaces may not have one).
+ */
+export interface Workspace {
+    id: number | string;
+    name: string;
+    business_name?: string;
+}
 
 /**
  * Get the stored active WhatsApp workspace ID.
@@ -45,4 +56,43 @@ export function setWorkspaceId(workspaceId: string | number): void {
 export function clearWorkspaceId(): void {
     localStorage.removeItem(WS_KEY);
     sessionStorage.removeItem(WS_KEY);
+}
+
+/**
+ * Get the cached list of the user's workspaces (from localStorage key
+ * `sv_workspaces`). Returns an empty array if nothing is cached or the
+ * cached value is malformed.
+ */
+export function getWorkspaces(): Workspace[] {
+    try {
+        const raw = localStorage.getItem(WS_LIST_KEY) || sessionStorage.getItem(WS_LIST_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? (parsed as Workspace[]) : [];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Cache the full list of the user's workspaces.
+ * Writes to BOTH localStorage and sessionStorage for consistency with the
+ * active-id helpers.
+ */
+export function setWorkspaces(list: Workspace[]): void {
+    try {
+        const value = JSON.stringify(Array.isArray(list) ? list : []);
+        localStorage.setItem(WS_LIST_KEY, value);
+        sessionStorage.setItem(WS_LIST_KEY, value);
+    } catch {
+        /* ignore quota / serialization errors */
+    }
+}
+
+/**
+ * Clear the cached workspace list (e.g., on logout).
+ */
+export function clearWorkspaces(): void {
+    localStorage.removeItem(WS_LIST_KEY);
+    sessionStorage.removeItem(WS_LIST_KEY);
 }

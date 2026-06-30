@@ -33,6 +33,7 @@ import {
   Pencil
 } from 'lucide-react';
 import { API_BASE_URL } from '@/config';
+import { cachedFetch } from '../../utils/waPersistentCache';
 
 import { StepCard } from './StepCard';
 import { BlockPalette, BlockPaletteHorizontal } from './BlockPalette';
@@ -112,7 +113,7 @@ export function FlowBuilderV2() {
     const fetchAccount = async () => {
       if (!workspaceId) return;
       try {
-        const res = await fetch(`${API_BASE}/api/whatsapp/accounts?workspace_id=${workspaceId}`);
+        const res = await cachedFetch(`${API_BASE}/api/whatsapp/accounts?workspace_id=${workspaceId}`);
         const data = await res.json();
         if (data.success && data.accounts?.length > 0) {
           setAccountId(data.accounts[0].id);
@@ -144,7 +145,7 @@ export function FlowBuilderV2() {
   const loadFlow = async (flowId: number) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/api/whatsapp/flows/${flowId}`);
+      const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flowId}`);
       const data = await res.json();
 
       if (data.success && data.flow) {
@@ -435,14 +436,17 @@ export function FlowBuilderV2() {
   // SAVE & PUBLISH
   // ==========================================================================
 
-  const saveDraft = async () => {
+  const saveDraft = async (): Promise<number | null> => {
+    // Bail if a request is already in flight (prevents concurrent / rapid-repeat submits)
+    if (saving || publishing) return null;
+
     if (!state.name.trim()) {
       toast({
         title: 'Name required',
         description: 'Please enter a flow name',
         variant: 'destructive'
       });
-      return;
+      return null;
     }
 
     try {
@@ -464,13 +468,23 @@ export function FlowBuilderV2() {
         : `${API_BASE}/api/whatsapp/flows`;
       const method = state.id ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await cachedFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
       const data = await res.json();
+
+      // Handle 409 (name already exists) with a clear message
+      if (res.status === 409 || (data && data.code === 'DUPLICATE_NAME')) {
+        toast({
+          title: 'Duplicate name',
+          description: `A flow named "${state.name}" already exists — rename it or open the existing flow to edit.`,
+          variant: 'destructive'
+        });
+        return null;
+      }
 
       if (data.success) {
         setState(prev => ({
@@ -488,8 +502,10 @@ export function FlowBuilderV2() {
         if (!state.id && data.flow.id) {
           navigate(`/dashboard/flows/${data.flow.id}/edit`, { replace: true });
         }
+
+        return data.flow.id;
       } else {
-        throw new Error(data.error || 'Failed to save');
+        throw new Error(data.message || data.error || 'Failed to save');
       }
     } catch (err: any) {
       toast({
@@ -497,12 +513,16 @@ export function FlowBuilderV2() {
         description: err.message || 'Something went wrong',
         variant: 'destructive'
       });
+      return null;
     } finally {
       setSaving(false);
     }
   };
 
   const publishFlow = async () => {
+    // Bail if a request is already in flight (prevents concurrent / rapid-repeat submits)
+    if (saving || publishing) return;
+
     // Validate first
     const hints = validateFlow(state);
     if (hasErrors(hints)) {
@@ -514,12 +534,13 @@ export function FlowBuilderV2() {
       return;
     }
 
-    // Save first if dirty
-    if (state.isDirty || !state.id) {
-      await saveDraft();
+    // Save first if dirty (use the returned id to avoid the stale-closure race)
+    let flowId = state.id;
+    if (state.isDirty || !flowId) {
+      flowId = await saveDraft();
     }
 
-    if (!state.id) {
+    if (!flowId) {
       toast({
         title: 'Save required',
         description: 'Please save the flow first',
@@ -531,7 +552,7 @@ export function FlowBuilderV2() {
     try {
       setPublishing(true);
 
-      const res = await fetch(`${API_BASE}/api/whatsapp/flows/${state.id}/publish`, {
+      const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flowId}/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -555,7 +576,7 @@ export function FlowBuilderV2() {
           navigate('/dashboard/flows');
         }, 1500);
       } else {
-        throw new Error(data.error || 'Publish failed');
+        throw new Error(data.message || data.error || 'Publish failed');
       }
     } catch (err: any) {
       toast({
@@ -680,7 +701,7 @@ export function FlowBuilderV2() {
             variant="outline"
             size="sm"
             onClick={saveDraft}
-            disabled={saving || !state.isDirty}
+            disabled={saving || publishing || !state.isDirty}
           >
             {saving ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -694,7 +715,7 @@ export function FlowBuilderV2() {
           <Button
             size="sm"
             onClick={publishFlow}
-            disabled={publishing || errorCount > 0 || state.status === 'published'}
+            disabled={saving || publishing || errorCount > 0 || state.status === 'published'}
             className="bg-green-600 hover:bg-green-700"
           >
             {publishing ? (

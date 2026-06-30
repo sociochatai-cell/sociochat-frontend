@@ -24,9 +24,20 @@ interface Plan {
     slug: string;
     name: string;
     is_active?: boolean;
+    billing_period?: string;
+    price_monthly_inr?: number | null;
+    offer_text?: string | null;
     user_count?: number;
     is_deletable?: boolean;
 }
+
+const BILLING_PERIODS: { value: string; label: string }[] = [
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: 'Quarterly' },
+    { value: 'yearly', label: 'Yearly' },
+];
+const billingLabel = (period?: string) =>
+    BILLING_PERIODS.find(b => b.value === period)?.label ?? 'Monthly';
 
 interface Feature {
     key: string;
@@ -44,7 +55,7 @@ export default function AdminPrivateSlot() {
     const [globalPlanOptions, setGlobalPlanOptions] = useState<string[]>([]);
     const [features, setFeatures] = useState<Feature[]>([]);
     const [matrix, setMatrix] = useState<Matrix>({});
-    const [planEdits, setPlanEdits] = useState<Record<string, { name: string; is_active: boolean }>>({});
+    const [planEdits, setPlanEdits] = useState<Record<string, { name: string; is_active: boolean; offer_text: string; price_monthly_inr: string; billing_period: string }>>({});
     const [stats, setStats] = useState({ private_count: 0, global_count: 0 });
     const [search, setSearch] = useState('');
     const [memberSearch, setMemberSearch] = useState('');
@@ -52,7 +63,7 @@ export default function AdminPrivateSlot() {
     const [userPickerOpen, setUserPickerOpen] = useState(false);
     const [scopeFilter, setScopeFilter] = useState<'all' | 'global' | 'private'>('all');    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState<string | null>(null);
-    const [newPlan, setNewPlan] = useState({ slug: '', name: '' });
+    const [newPlan, setNewPlan] = useState({ slug: '', name: '', billing_period: 'monthly', price_monthly_inr: '', offer_text: '' });
     const { toast } = useToast();
 
     const load = async (q?: string) => {
@@ -67,9 +78,15 @@ export default function AdminPrivateSlot() {
             setFeatures(res.features || []);
             setMatrix(res.matrix || {});
             setStats(res.stats || { private_count: 0, global_count: 0 });
-            const edits: Record<string, { name: string; is_active: boolean }> = {};
+            const edits: Record<string, { name: string; is_active: boolean; offer_text: string; price_monthly_inr: string; billing_period: string }> = {};
             list.forEach(p => {
-                edits[p.slug] = { name: p.name, is_active: p.is_active !== false };
+                edits[p.slug] = {
+                    name: p.name,
+                    is_active: p.is_active !== false,
+                    offer_text: p.offer_text ?? '',
+                    price_monthly_inr: p.price_monthly_inr != null ? String(p.price_monthly_inr) : '',
+                    billing_period: p.billing_period || 'monthly',
+                };
             });
             setPlanEdits(edits);
         } else {
@@ -199,9 +216,13 @@ export default function AdminPrivateSlot() {
             return;
         }
         setSaving(`meta-${slug}`);
+        const priceNum = parseFloat(edit.price_monthly_inr);
         const res = await adminApi.updatePrivatePlan(slug, {
             name: edit.name.trim(),
             is_active: edit.is_active,
+            offer_text: edit.offer_text ?? '',
+            billing_period: edit.billing_period,
+            ...(edit.price_monthly_inr.trim() !== '' && !isNaN(priceNum) ? { price_monthly_inr: priceNum } : {}),
         });
         if (res.success) {
             toast({ title: 'Plan updated' });
@@ -214,10 +235,18 @@ export default function AdminPrivateSlot() {
 
     const createPlan = async () => {
         if (!newPlan.slug || !newPlan.name) return;
-        const res = await adminApi.createPrivatePlan(newPlan);
+        const priceNum = parseFloat(newPlan.price_monthly_inr);
+        const payload = {
+            slug: newPlan.slug,
+            name: newPlan.name,
+            billing_period: newPlan.billing_period,
+            offer_text: newPlan.offer_text,
+            ...(newPlan.price_monthly_inr.trim() !== '' && !isNaN(priceNum) ? { price_monthly_inr: priceNum } : {}),
+        };
+        const res = await adminApi.createPrivatePlan(payload);
         if (res.success) {
             toast({ title: 'Private plan created' });
-            setNewPlan({ slug: '', name: '' });
+            setNewPlan({ slug: '', name: '', billing_period: 'monthly', price_monthly_inr: '', offer_text: '' });
             load(search || undefined);
         } else {
             toast({ title: 'Error', description: res.error, variant: 'destructive' });
@@ -460,7 +489,13 @@ export default function AdminPrivateSlot() {
                         <p className="text-sm text-muted-foreground">No private plans yet. Create one below.</p>
                     )}
                     {plans.map(plan => {
-                        const edit = planEdits[plan.slug] || { name: plan.name, is_active: true };
+                        const edit = planEdits[plan.slug] || {
+                            name: plan.name,
+                            is_active: true,
+                            offer_text: plan.offer_text ?? '',
+                            price_monthly_inr: plan.price_monthly_inr != null ? String(plan.price_monthly_inr) : '',
+                            billing_period: plan.billing_period || 'monthly',
+                        };
                         return (
                             <div key={plan.slug} className="flex flex-wrap items-center gap-3 p-3 border rounded-lg">
                                 <div className="flex-1 min-w-[180px]">
@@ -473,8 +508,45 @@ export default function AdminPrivateSlot() {
                                         className="h-8 max-w-[200px] font-medium"
                                     />
                                     <p className="text-xs text-muted-foreground mt-1">
-                                        slug: {plan.slug} · {plan.user_count ?? 0} private user(s)
+                                        slug: {plan.slug} · {plan.user_count ?? 0} private user(s) · {billingLabel(plan.billing_period)}
                                     </p>
+                                </div>
+                                <Input
+                                    placeholder="e.g. 20% off for the first 3 months"
+                                    value={edit.offer_text}
+                                    onChange={e => setPlanEdits(prev => ({
+                                        ...prev,
+                                        [plan.slug]: { ...edit, offer_text: e.target.value },
+                                    }))}
+                                    className="h-8 w-full sm:w-64"
+                                />
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">Price (₹)</span>
+                                    <Input
+                                        type="number"
+                                        placeholder="0"
+                                        value={edit.price_monthly_inr}
+                                        onChange={e => setPlanEdits(prev => ({
+                                            ...prev,
+                                            [plan.slug]: { ...edit, price_monthly_inr: e.target.value },
+                                        }))}
+                                        className="h-8 w-24"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">Billing</span>
+                                    <select
+                                        className="h-8 rounded-md border bg-white px-2 text-sm"
+                                        value={edit.billing_period}
+                                        onChange={e => setPlanEdits(prev => ({
+                                            ...prev,
+                                            [plan.slug]: { ...edit, billing_period: e.target.value },
+                                        }))}
+                                    >
+                                        {BILLING_PERIODS.map(b => (
+                                            <option key={b.value} value={b.value}>{b.label}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs">Active</span>
@@ -515,6 +587,28 @@ export default function AdminPrivateSlot() {
                         onChange={e => setNewPlan(p => ({ ...p, name: e.target.value }))}
                         className="w-48"
                     />
+                    <Input
+                        type="number"
+                        placeholder="Price (₹/period)"
+                        value={newPlan.price_monthly_inr}
+                        onChange={e => setNewPlan(p => ({ ...p, price_monthly_inr: e.target.value }))}
+                        className="w-40"
+                    />
+                    <Input
+                        placeholder="Offer text (e.g. 20% off for the first 3 months)"
+                        value={newPlan.offer_text}
+                        onChange={e => setNewPlan(p => ({ ...p, offer_text: e.target.value }))}
+                        className="w-72"
+                    />
+                    <select
+                        className="h-10 rounded-md border bg-white px-2 text-sm"
+                        value={newPlan.billing_period}
+                        onChange={e => setNewPlan(p => ({ ...p, billing_period: e.target.value }))}
+                    >
+                        {BILLING_PERIODS.map(b => (
+                            <option key={b.value} value={b.value}>{b.label}</option>
+                        ))}
+                    </select>
                     <Button onClick={createPlan} className="bg-violet-600 hover:bg-violet-700">
                         <Plus className="h-4 w-4 mr-1" /> Create
                     </Button>

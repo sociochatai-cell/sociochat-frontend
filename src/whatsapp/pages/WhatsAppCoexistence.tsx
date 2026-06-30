@@ -49,6 +49,7 @@ import { API_BASE_URL } from '@/config';
 import { getWorkspaceId } from '../utils/workspaceContext';
 import { toast } from '@/hooks/use-toast';
 import { ConnectWhatsAppButton } from '../components/ConnectWhatsAppButton';
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 
 const API_BASE = API_BASE_URL;
 
@@ -325,7 +326,7 @@ function NotConnectedView({
     <div className="space-y-8">
       {/* Hero Section */}
       <div className="text-center py-8">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#25D366] to-[#128C7E] mb-6">
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 mb-6">
           <Smartphone className="w-10 h-10 text-white" />
         </div>
         <h2 className="text-2xl font-bold mb-3">WhatsApp Coexistence Mode</h2>
@@ -1198,6 +1199,7 @@ export function WhatsAppCoexistence() {
   }
 
   return (
+    <WhatsAppConnectionGuard feature="Coexistence">
     <div className="container mx-auto max-w-4xl py-8 px-4">
       <Card>
         <CardHeader>
@@ -1233,6 +1235,7 @@ export function WhatsAppCoexistence() {
         </CardContent>
       </Card>
     </div>
+    </WhatsAppConnectionGuard>
   );
 }
 

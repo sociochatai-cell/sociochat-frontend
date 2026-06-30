@@ -14,8 +14,10 @@ export default defineConfig(({ mode }) => {
       host: "::",
       port: 5173,
       strictPort: true,
-      // Required for Microsoft Dev Tunnels hostnames (avoids "Blocked request" 403).
-      allowedHosts: [".devtunnels.ms", "localhost", "127.0.0.1"],
+      // Accept ANY hostname on the dev server. This lets you test tenant custom
+      // domains locally (e.g. http://abc.127.0.0.1.nip.io:5173) with no per-tenant
+      // config. DEV-ONLY: the production build ignores this entirely.
+      allowedHosts: true,
       // Only when the frontend itself is served via Dev Tunnels (HTTPS on 443).
       ...(useDevTunnel ? { hmr: { clientPort: 443 } } : {}),
       proxy: {

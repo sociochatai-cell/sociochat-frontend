@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { RefreshCw, Search, Plus, User, FileText, MessageCircle, Inbox, BarChart3, Clock, MessageSquare } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 
 // API Base URL from environment
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').toString().replace(/\/$/, '');
@@ -123,6 +124,7 @@ export default function WhatsAppContacts() {
     }
 
     return (
+        <WhatsAppConnectionGuard feature="Contacts">
         <div className="p-4 sm:p-6 space-y-6 min-w-0 overflow-x-hidden">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -318,5 +320,6 @@ export default function WhatsAppContacts() {
                 </div>
             </div>
         </div>
+        </WhatsAppConnectionGuard>
     );
 }

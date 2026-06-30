@@ -12,6 +12,8 @@ interface Plan {
     slug: string;
     name: string;
     price_monthly_inr?: number | null;
+    billing_period?: string;
+    offer_text?: string | null;
     is_active?: boolean;
     is_public?: boolean;
     user_count?: number;
@@ -21,14 +23,22 @@ interface Plan {
 interface Feature { key: string; label: string; feature_type: string; category: string }
 type Matrix = Record<string, Record<string, { enabled: boolean; limit_value?: number | null }>>
 
+const BILLING_PERIODS: { value: string; label: string; suffix: string }[] = [
+    { value: 'monthly', label: 'Monthly', suffix: 'month' },
+    { value: 'quarterly', label: 'Quarterly', suffix: 'quarter' },
+    { value: 'yearly', label: 'Yearly', suffix: 'year' },
+];
+const billingSuffix = (period?: string) =>
+    BILLING_PERIODS.find(b => b.value === period)?.suffix ?? 'month';
+
 export default function AdminPlans() {
     const [plans, setPlans] = useState<Plan[]>([]);
     const [features, setFeatures] = useState<Feature[]>([]);
     const [matrix, setMatrix] = useState<Matrix>({});
-    const [planEdits, setPlanEdits] = useState<Record<string, { name: string; is_active: boolean }>>({});
+    const [planEdits, setPlanEdits] = useState<Record<string, { name: string; is_active: boolean; billing_period: string; offer_text: string; price_monthly_inr: string }>>({});
     const [saving, setSaving] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [newPlan, setNewPlan] = useState({ slug: '', name: '' });
+    const [newPlan, setNewPlan] = useState({ slug: '', name: '', billing_period: 'monthly', price_monthly_inr: '', offer_text: '' });
     const { toast } = useToast();
 
     const load = async () => {
@@ -39,9 +49,15 @@ export default function AdminPlans() {
             setPlans(list);
             setFeatures(res.features || []);
             setMatrix(res.matrix || {});
-            const edits: Record<string, { name: string; is_active: boolean }> = {};
+            const edits: Record<string, { name: string; is_active: boolean; billing_period: string; offer_text: string; price_monthly_inr: string }> = {};
             list.forEach(p => {
-                edits[p.slug] = { name: p.name, is_active: p.is_active !== false };
+                edits[p.slug] = {
+                    name: p.name,
+                    is_active: p.is_active !== false,
+                    billing_period: p.billing_period || 'monthly',
+                    offer_text: p.offer_text ?? '',
+                    price_monthly_inr: p.price_monthly_inr != null ? String(p.price_monthly_inr) : '',
+                };
             });
             setPlanEdits(edits);
         }
@@ -88,9 +104,13 @@ export default function AdminPlans() {
             return;
         }
         setSaving(`meta-${slug}`);
+        const priceNum = parseFloat(edit.price_monthly_inr);
         const res = await adminApi.updatePlanCatalog(slug, {
             name: edit.name.trim(),
             is_active: edit.is_active,
+            billing_period: edit.billing_period || 'monthly',
+            offer_text: edit.offer_text ?? '',
+            ...(edit.price_monthly_inr.trim() !== '' && !isNaN(priceNum) ? { price_monthly_inr: priceNum } : {}),
         });
         if (res.success) {
             toast({ title: 'Plan updated', description: `${edit.name} saved` });
@@ -123,10 +143,18 @@ export default function AdminPlans() {
 
     const createPlan = async () => {
         if (!newPlan.slug || !newPlan.name) return;
-        const res = await adminApi.createPlan(newPlan);
+        const priceNum = parseFloat(newPlan.price_monthly_inr);
+        const payload = {
+            slug: newPlan.slug,
+            name: newPlan.name,
+            billing_period: newPlan.billing_period,
+            offer_text: newPlan.offer_text,
+            ...(newPlan.price_monthly_inr.trim() !== '' && !isNaN(priceNum) ? { price_monthly_inr: priceNum } : {}),
+        };
+        const res = await adminApi.createPlan(payload);
         if (res.success) {
             toast({ title: 'Plan created' });
-            setNewPlan({ slug: '', name: '' });
+            setNewPlan({ slug: '', name: '', billing_period: 'monthly', price_monthly_inr: '', offer_text: '' });
             load();
         } else {
             toast({ title: 'Error', description: res.error || 'Create failed', variant: 'destructive' });
@@ -154,7 +182,13 @@ export default function AdminPlans() {
                 <CardHeader><CardTitle className="text-base">All subscription plans</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                     {plans.map(plan => {
-                        const edit = planEdits[plan.slug] || { name: plan.name, is_active: plan.is_active !== false };
+                        const edit = planEdits[plan.slug] || {
+                            name: plan.name,
+                            is_active: plan.is_active !== false,
+                            billing_period: plan.billing_period || 'monthly',
+                            offer_text: plan.offer_text ?? '',
+                            price_monthly_inr: plan.price_monthly_inr != null ? String(plan.price_monthly_inr) : '',
+                        };
                         const active = edit.is_active;
                         return (
                             <div key={plan.slug} className="flex flex-wrap items-center gap-3 p-3 border rounded-lg bg-white">
@@ -177,8 +211,48 @@ export default function AdminPlans() {
                                     </div>
                                     <p className="text-xs text-muted-foreground">
                                         slug: {plan.slug} · {plan.user_count ?? 0} user(s)
+                                        {plan.price_monthly_inr != null && (
+                                            <> · ₹{plan.price_monthly_inr} / {billingSuffix(edit.billing_period)}</>
+                                        )}
                                     </p>
                                 </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">Billing</span>
+                                    <select
+                                        className="h-8 rounded-md border bg-white px-2 text-sm"
+                                        value={edit.billing_period || 'monthly'}
+                                        onChange={e => setPlanEdits(prev => ({
+                                            ...prev,
+                                            [plan.slug]: { ...edit, billing_period: e.target.value },
+                                        }))}
+                                    >
+                                        {BILLING_PERIODS.map(b => (
+                                            <option key={b.value} value={b.value}>{b.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">Price</span>
+                                    <Input
+                                        type="number"
+                                        placeholder="₹/period"
+                                        value={edit.price_monthly_inr}
+                                        onChange={e => setPlanEdits(prev => ({
+                                            ...prev,
+                                            [plan.slug]: { ...edit, price_monthly_inr: e.target.value },
+                                        }))}
+                                        className="h-8 w-28"
+                                    />
+                                </div>
+                                <Input
+                                    placeholder="e.g. 20% off for the first 3 months"
+                                    value={edit.offer_text}
+                                    onChange={e => setPlanEdits(prev => ({
+                                        ...prev,
+                                        [plan.slug]: { ...edit, offer_text: e.target.value },
+                                    }))}
+                                    className="h-8 w-full sm:w-64"
+                                />
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs text-muted-foreground">Active</span>
                                     <Switch
@@ -226,6 +300,28 @@ export default function AdminPlans() {
                 <CardContent className="flex flex-wrap gap-2">
                     <Input placeholder="slug (e.g. pro)" value={newPlan.slug} onChange={e => setNewPlan(p => ({ ...p, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') }))} className="w-40" />
                     <Input placeholder="Display name" value={newPlan.name} onChange={e => setNewPlan(p => ({ ...p, name: e.target.value }))} className="w-48" />
+                    <Input
+                        type="number"
+                        placeholder="Price (₹/period)"
+                        value={newPlan.price_monthly_inr}
+                        onChange={e => setNewPlan(p => ({ ...p, price_monthly_inr: e.target.value }))}
+                        className="w-40"
+                    />
+                    <Input
+                        placeholder="Offer text (e.g. 20% off for the first 3 months)"
+                        value={newPlan.offer_text}
+                        onChange={e => setNewPlan(p => ({ ...p, offer_text: e.target.value }))}
+                        className="w-72"
+                    />
+                    <select
+                        className="h-10 rounded-md border bg-white px-2 text-sm"
+                        value={newPlan.billing_period}
+                        onChange={e => setNewPlan(p => ({ ...p, billing_period: e.target.value }))}
+                    >
+                        {BILLING_PERIODS.map(b => (
+                            <option key={b.value} value={b.value}>{b.label}</option>
+                        ))}
+                    </select>
                     <Button onClick={createPlan}><Plus className="h-4 w-4 mr-1" /> Create</Button>
                 </CardContent>
             </Card>

@@ -38,6 +38,7 @@ import {
 import { buildApiUrl } from '@/config';
 import { getWorkspaceId } from '../utils/workspaceContext';
 import { toast } from '@/hooks/use-toast';
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -51,10 +52,23 @@ interface Catalog {
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
 function catalogApi(path: string, options?: RequestInit) {
+  // Read the workspace id fresh on every call so a workspace switch is always
+  // reflected. The backend REQUIRES workspace_id on every catalog route to
+  // resolve the correct tenant's WhatsApp account — it no longer falls back to
+  // the "first active account". We always ride it on the query string (works
+  // for GET/DELETE and for POST/PUT alongside an untouched JSON body, since the
+  // backend reads it from query OR body).
   const workspaceId = getWorkspaceId();
   let url = buildApiUrl(`/api/whatsapp${path}`);
   if (workspaceId) {
     url += `${url.includes('?') ? '&' : '?'}workspace_id=${encodeURIComponent(workspaceId)}`;
+  } else {
+    // Still send the request — the backend will return a clear 400, which is
+    // safer than silently hitting another tenant via a removed fallback.
+    console.warn(
+      `[catalogApi] No workspace_id available for "${path}". ` +
+        'Sending request without it; backend will reject with 400.',
+    );
   }
 
   return fetch(url, {
@@ -78,12 +92,15 @@ export function WhatsAppCatalog() {
   // Connected catalogs
   const [connected, setConnected] = useState<Catalog[]>([]);
   const [loadingConnected, setLoadingConnected] = useState(false);
+  const [connectedError, setConnectedError] = useState<string | null>(null);
 
   // Available (business-owned) catalogs
   const [available, setAvailable] = useState<Catalog[]>([]);
   const [loadingAvailable, setLoadingAvailable] = useState(false);
   const [availableError, setAvailableError] = useState<string | null>(null);
   const [needsBusinessId, setNeedsBusinessId] = useState(false);
+  const [businessIdInput, setBusinessIdInput] = useState('');
+  const [savingBusinessId, setSavingBusinessId] = useState(false);
 
   // Connect existing
   const [connectingId, setConnectingId] = useState<string | null>(null);
@@ -105,14 +122,20 @@ export function WhatsAppCatalog() {
       const { ok, data } = await catalogApi('/catalogs');
       if (ok) {
         setConnected(data.catalogs ?? []);
+        setConnectedError(null);
       } else {
+        const message = data.needs_permission
+          ? "WhatsApp is connected, but catalog access isn't granted. Reconnect WhatsApp and approve Catalog management & Business management permissions."
+          : data.error || 'Failed to load connected catalogs';
+        setConnectedError(message);
         toast({
           title: 'Failed to load catalogs',
-          description: data.error || 'Unknown error',
+          description: message,
           variant: 'destructive',
         });
       }
     } catch {
+      setConnectedError('Network error — could not reach server');
       toast({ title: 'Network error', description: 'Could not reach server', variant: 'destructive' });
     } finally {
       setLoadingConnected(false);
@@ -139,6 +162,34 @@ export function WhatsAppCatalog() {
       setLoadingAvailable(false);
     }
   }, []);
+
+  // ── Save Meta Business Manager ID manually ───────────────────────────────
+  const saveBusinessId = useCallback(async () => {
+    const bid = businessIdInput.trim();
+    if (!bid) return;
+    setSavingBusinessId(true);
+    try {
+      const { ok, data } = await catalogApi('/catalogs/business-id', {
+        method: 'POST',
+        body: JSON.stringify({ business_id: bid }),
+      });
+      if (ok) {
+        toast({ title: 'Business ID saved', description: 'Loading your catalogs…' });
+        setBusinessIdInput('');
+        await fetchAvailable();
+      } else {
+        toast({
+          title: 'Could not save Business ID',
+          description: data.error || 'Unknown error',
+          variant: 'destructive',
+        });
+      }
+    } catch {
+      toast({ title: 'Network error', variant: 'destructive' });
+    } finally {
+      setSavingBusinessId(false);
+    }
+  }, [businessIdInput, fetchAvailable]);
 
   useEffect(() => {
     fetchConnected();
@@ -248,6 +299,7 @@ export function WhatsAppCatalog() {
   const connectedIds = new Set(connected.map((c) => c.id));
 
   return (
+    <WhatsAppConnectionGuard feature="the Catalog">
     <div className="max-w-3xl mx-auto py-8 px-4 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -299,6 +351,12 @@ export function WhatsAppCatalog() {
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading…
             </div>
+          ) : connectedError ? (
+            <Alert variant="destructive" className="py-3">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle className="text-sm">Could not load connected catalogs</AlertTitle>
+              <AlertDescription className="text-xs">{connectedError}</AlertDescription>
+            </Alert>
           ) : connected.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
               <PackageOpen className="h-8 w-8 opacity-40" />
@@ -375,17 +433,21 @@ export function WhatsAppCatalog() {
                   <AlertDescription className="text-xs">
                     {availableError}
                     {needsBusinessId && (
-                      <span>
-                        {' '}
-                        Go to{' '}
-                        <button
-                          className="underline font-medium"
-                          onClick={() => navigate('/dashboard/whatsapp/settings')}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Input
+                          value={businessIdInput}
+                          onChange={(e) => setBusinessIdInput(e.target.value)}
+                          placeholder="Meta Business Manager ID"
+                          className="h-8 max-w-[260px]"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={saveBusinessId}
+                          disabled={savingBusinessId || !businessIdInput.trim()}
                         >
-                          WhatsApp Settings
-                        </button>{' '}
-                        to add your Meta Business Manager ID.
-                      </span>
+                          {savingBusinessId ? 'Saving…' : 'Save Business ID'}
+                        </Button>
+                      </div>
                     )}
                   </AlertDescription>
                 </Alert>
@@ -553,6 +615,7 @@ export function WhatsAppCatalog() {
         </TabsContent>
       </Tabs>
     </div>
+    </WhatsAppConnectionGuard>
   );
 }
 

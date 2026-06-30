@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TemplateButton, ButtonType, TemplateCategory } from '../../utils/templateUtils';
 import { Plus, Trash2, ExternalLink, Phone, MessageSquare, AlertCircle, Workflow, Copy, PhoneCall, Store } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { API_BASE_URL } from '@/config';
 
 interface Flow {
     id: number;
@@ -44,9 +45,13 @@ export function ButtonEditor({ buttons, category, onChange, error, accountId }: 
         if (!accountId) return;
         try {
             setLoadingFlows(true);
-            const url = `/api/whatsapp/flows?account_id=${accountId}&status=PUBLISHED`;
+            // Must use API_BASE_URL (frontend and API are different origins in
+            // production) and send the session cookie — otherwise the request
+            // hits the frontend's own origin / is unauthenticated and the flow
+            // dropdown comes back empty in prod while working on local same-origin.
+            const url = `${API_BASE_URL}/api/whatsapp/flows?account_id=${accountId}&status=PUBLISHED`;
             console.log('[ButtonEditor] Fetching flows from:', url);
-            const res = await fetch(url);
+            const res = await fetch(url, { credentials: 'include' });
             const data = await res.json();
             console.log('[ButtonEditor] Flows API response:', data);
             if (data.success) {

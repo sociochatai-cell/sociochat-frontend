@@ -10,10 +10,43 @@ import { toast } from '@/hooks/use-toast';
 import { API_BASE_URL } from "@/config";
 import { clearCache } from '@/whatsapp/hooks/useDataCache';
 
-// Facebook App ID and Config ID from environment (SocioChat App)
-const FB_APP_ID = import.meta.env.VITE_FB_APP_ID || '1616370899364211';
-const WHATSAPP_CONFIG_ID = import.meta.env.VITE_WHATSAPP_CONFIG_ID || '1684758789571645';
+// Facebook App ID and Config ID fallbacks from environment (SocioChat global App).
+// These are used when the tenant Meta config endpoint is unavailable or returns blanks
+// (e.g. T0000 / unconfigured tenants behave exactly as before).
+const FALLBACK_FB_APP_ID = import.meta.env.VITE_FB_APP_ID || '1616370899364211';
+const FALLBACK_WHATSAPP_CONFIG_ID = import.meta.env.VITE_WHATSAPP_CONFIG_ID || '1684758789571645';
 const FB_SDK_VERSION = 'v25.0'; // SDK init version — must match Meta app dashboard, NOT the Graph API version
+
+interface TenantMetaConfig {
+    appId: string;
+    configId: string;
+}
+
+// Fetch the logged-in user's tenant Meta config (tenant's own app for custom tenants,
+// global env values for T0000 / unconfigured tenants). Never returns a secret.
+// Falls back to the env/default constants on any failure or blank value.
+async function fetchTenantMetaConfig(): Promise<TenantMetaConfig> {
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/tenant/meta-config`, {
+            method: 'GET',
+            credentials: 'include',
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const meta = data?.meta;
+            if (data?.success && meta) {
+                const appId = (meta.app_id || '').trim();
+                const configId = (meta.config_id || '').trim();
+                if (appId && configId) {
+                    return { appId, configId };
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('[whatsapp] Failed to fetch tenant Meta config, using fallback:', err);
+    }
+    return { appId: FALLBACK_FB_APP_ID, configId: FALLBACK_WHATSAPP_CONFIG_ID };
+}
 
 interface ConnectWhatsAppButtonProps {
     workspaceId: string;
@@ -94,10 +127,29 @@ function waitForEmbeddedSignupAssets(
 export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMode = false }: ConnectWhatsAppButtonProps) {
     const [loading, setLoading] = useState(false);
     const [fbReady, setFbReady] = useState(false);
+    // Resolved tenant Meta config (app_id + config_id). Null until fetched.
+    // Falls back to the env/default constants on any failure.
+    const [metaConfig, setMetaConfig] = useState<TenantMetaConfig | null>(null);
+    const metaConfigRef = useRef<TenantMetaConfig | null>(null);
     const sessionDataRef = useRef<EmbeddedSignupSessionData>({});
 
-    // Load Facebook SDK
+    // Resolve the tenant Meta config (app_id + config_id) at runtime before SDK init.
     useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            const resolved = await fetchTenantMetaConfig();
+            if (cancelled) return;
+            metaConfigRef.current = resolved;
+            setMetaConfig(resolved);
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Load Facebook SDK — gated until the tenant Meta config (app_id) has resolved,
+    // so we never init with a stale/empty appId.
+    useEffect(() => {
+        if (!metaConfig) return;
+
         // Check if SDK is already loaded
         if (window.FB) {
             setFbReady(true);
@@ -110,7 +162,7 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
         // Define the callback for when SDK loads
         window.fbAsyncInit = function () {
             window.FB.init({
-                appId: FB_APP_ID,
+                appId: metaConfig.appId,
                 autoLogAppEvents: true,
                 xfbml: true,
                 version: FB_SDK_VERSION
@@ -133,7 +185,7 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
             script.crossOrigin = 'anonymous';
             document.body.appendChild(script);
         }
-    }, []);
+    }, [metaConfig]);
 
     // Poll for FB SDK in case another component initialized it
     useEffect(() => {
@@ -278,9 +330,12 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
             })();
         };
 
+        // Resolve config_id from the fetched tenant Meta config, falling back to env/default.
+        const resolvedConfigId = metaConfigRef.current?.configId || FALLBACK_WHATSAPP_CONFIG_ID;
+
         // Launch Embedded Signup with Facebook Login (v3 ES format)
         window.FB.login(fbLoginCallback, {
-            config_id: WHATSAPP_CONFIG_ID,
+            config_id: resolvedConfigId,
             response_type: 'code',
             override_default_response_type: true,
             extras: {
@@ -315,7 +370,7 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected, coexistenceMod
             disabled={loading || !workspaceId}
             className={coexistenceMode
                 ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-[#25D366] hover:bg-[#128C7E] text-white"}
+                : "bg-emerald-600 hover:bg-[#128C7E] text-white"}
             data-connect-whatsapp="true"
         >
             {loading ? (

@@ -556,7 +556,7 @@ export default function WhatsAppDashboard() {
                                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                                     <Button
                                         onClick={() => navigate('/dashboard/whatsapp/setup')}
-                                        className="bg-gradient-to-r from-[#25D366] to-[#128C7E] hover:from-[#128C7E] hover:to-[#075E54] text-white gap-2"
+                                        className="bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-brand-700 hover:to-brand-800 text-white gap-2"
                                     >
                                         <MessageCircle className="w-5 h-5" />
                                         Connect WhatsApp Account

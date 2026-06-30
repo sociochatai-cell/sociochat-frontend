@@ -23,6 +23,7 @@ import { ArrowLeft } from 'lucide-react';
 import logo from '@/assets/sociovia_logo.png';
 import { Button } from '@/components/ui/button';
 import { API_BASE_URL } from "@/config";
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 
 const API_BASE = API_BASE_URL;
 
@@ -201,6 +202,7 @@ export function TemplateBuilderPage() {
     }
 
     return (
+        <WhatsAppConnectionGuard feature="Templates">
         <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
             {/* Page Header */}
             <header className="border-b bg-card px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-4 shrink-0 min-w-0">
@@ -241,6 +243,7 @@ export function TemplateBuilderPage() {
                 </div>
             </div>
         </div>
+        </WhatsAppConnectionGuard>
     );
 }
 

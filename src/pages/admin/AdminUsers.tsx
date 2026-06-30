@@ -41,6 +41,8 @@ interface UserFeaturesResponse {
     features: FeatureDef[];
     plan_defaults: Record<string, boolean>;
     overrides: Record<string, boolean>;
+    // Present on the PUT response: per-user numeric limit overrides (e.g. workspaces).
+    limit_overrides?: Record<string, number | null>;
 }
 
 type FeatureChoice = 'inherit' | 'on' | 'off';
@@ -60,6 +62,8 @@ export default function AdminUsers() {
     const [featuresData, setFeaturesData] = useState<UserFeaturesResponse | null>(null);
     const [featureChoices, setFeatureChoices] = useState<Record<string, FeatureChoice>>({});
     const [featuresSaving, setFeaturesSaving] = useState(false);
+    // Per-user "Max workspaces" cap. '' = inherit plan/tenant; -1 = unlimited.
+    const [maxWorkspaces, setMaxWorkspaces] = useState('');
 
     const load = async () => {
         setLoading(true);
@@ -109,6 +113,7 @@ export default function AdminUsers() {
         setFeaturesLoading(true);
         setFeaturesData(null);
         setFeatureChoices({});
+        setMaxWorkspaces('');
         try {
             const data: UserFeaturesResponse = await adminApi.getUserFeatures(userId);
             if (!data.success) {
@@ -136,11 +141,16 @@ export default function AdminUsers() {
         if (featuresUserId == null || !featuresData) return;
         setFeaturesSaving(true);
         try {
-            const payload: Record<string, boolean | null> = {};
+            const payload: Record<string, boolean | number | null> = {};
             for (const f of featuresData.features) {
                 const choice = featureChoices[f.key] ?? 'inherit';
                 payload[f.key] = choice === 'inherit' ? null : choice === 'on';
             }
+            // Per-user "Max workspaces" cap: '' = inherit (null), else an int
+            // (-1 = unlimited). Sent in the same overrides map; the backend
+            // routes LIMIT keys to numeric handling.
+            const wsTrim = maxWorkspaces.trim();
+            payload.workspaces = wsTrim === '' ? null : (Number.parseInt(wsTrim, 10) || 0);
             const res = await adminApi.setUserFeatures(featuresUserId, payload);
             if (res.success) {
                 toast({ title: 'Features updated' });
@@ -217,11 +227,31 @@ export default function AdminUsers() {
 
                     {featuresLoading ? (
                         <p className="text-sm text-muted-foreground py-6">Loading features...</p>
-                    ) : !featuresData || featuresData.features.length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-6">No access features available for this user.</p>
+                    ) : !featuresData ? (
+                        <p className="text-sm text-muted-foreground py-6">No features available for this user.</p>
                     ) : (
                         <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-1">
-                            {featuresData.features.map(f => {
+                            {/* Per-user numeric limit override: Max workspaces */}
+                            <div className="flex flex-wrap items-center gap-3 p-3 border rounded-lg">
+                                <div className="flex-1 min-w-[180px]">
+                                    <p className="font-medium text-sm">Max workspaces</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        workspaces · blank = inherit plan/tenant, -1 = unlimited
+                                    </p>
+                                </div>
+                                <Input
+                                    type="number"
+                                    className="w-44"
+                                    placeholder="Inherit"
+                                    value={maxWorkspaces}
+                                    onChange={e => setMaxWorkspaces(e.target.value)}
+                                />
+                            </div>
+                            {featuresData.features.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-3">
+                                    No access features available for this user.
+                                </p>
+                            ) : featuresData.features.map(f => {
                                 const planOn = !!featuresData.plan_defaults[f.key];
                                 const choice = featureChoices[f.key] ?? 'inherit';
                                 return (
@@ -260,7 +290,7 @@ export default function AdminUsers() {
                         </Button>
                         <Button
                             onClick={saveFeatures}
-                            disabled={featuresSaving || featuresLoading || !featuresData || featuresData.features.length === 0}
+                            disabled={featuresSaving || featuresLoading || !featuresData}
                         >
                             {featuresSaving ? 'Saving...' : 'Save'}
                         </Button>

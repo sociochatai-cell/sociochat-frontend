@@ -54,6 +54,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { getStoredAccountId, getActiveAccountId } from '@/whatsapp/utils/accountContext';
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -130,7 +131,11 @@ const InteractiveAutomationsList: React.FC = () => {
 
         try {
             setLoading(true);
-            const url = `${API_BASE}/api/whatsapp/interactive-automations?workspace_id=${workspaceId}${accountId ? `&account_id=${accountId}` : ''}`;
+            // Workspace-scoped: list ALL automations in the workspace, regardless of
+            // which WhatsApp account is "active". Filtering by account_id caused
+            // automations to disappear when the selected account was stale/mismatched
+            // (e.g. account from another workspace). Automations belong to the workspace.
+            const url = `${API_BASE}/api/whatsapp/interactive-automations?workspace_id=${workspaceId}`;
             console.log('Fetching automations from:', url);
 
             const response = await fetch(url, {
@@ -269,6 +274,7 @@ const InteractiveAutomationsList: React.FC = () => {
     };
 
     return (
+        <WhatsAppConnectionGuard feature="Interactive Automation">
         <div className="min-h-screen bg-gray-50">
             <div className="container mx-auto px-6 py-8">
                 {/* Header */}
@@ -492,6 +498,7 @@ const InteractiveAutomationsList: React.FC = () => {
                 </AlertDialog>
             </div>
         </div>
+        </WhatsAppConnectionGuard>
     );
 };
 

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config';
 import { DripEnrollmentDialog } from '../components/DripEnrollmentDialog';
 import { getActiveAccountId } from '../utils/accountContext';
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 
 const API_BASE = API_BASE_URL;
 
@@ -197,6 +198,8 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
             if (res.ok) {
                 const data = await res.json();
                 setCampaigns(data.campaigns || []);
+            } else {
+                toast.error("Failed to load campaigns");
             }
         } catch (err) {
             console.error('Failed to load campaigns:', err);
@@ -254,9 +257,12 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
             if (res.ok) {
                 const data = await res.json();
                 setTemplates(data.templates || []);
+            } else {
+                toast.error("Failed to load templates");
             }
         } catch (err) {
             console.error('Failed to load templates:', err);
+            toast.error("Failed to load templates");
         } finally {
             setLoadingTemplates(false);
         }
@@ -549,7 +555,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({
-                    sheet_id: sheetsUrl,
+                    sheet_url: sheetsUrl,
                     sheet_name: sheetsTab
                 })
             });
@@ -583,6 +589,8 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                 setEnrollees(data.enrollments || []);
                 setEnrolleesTotal(data.pagination?.total || 0);
                 setEnrolleesPage(page);
+            } else {
+                toast.error("Failed to load enrollees");
             }
         } catch (err) {
             toast.error("Failed to load enrollees");
@@ -607,6 +615,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
             if (res.ok) {
                 toast.success(data.message);
                 loadEnrollees(viewEnrolleesCampaign.id, enrolleesPage);
+                loadCampaigns();
             } else {
                 toast.error(data.error || "Action failed");
             }
@@ -792,6 +801,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
 
 
     return (
+        <WhatsAppConnectionGuard feature="Drip Campaigns">
         <Card className="border shadow-sm bg-gradient-to-br from-green-50/50 via-white to-emerald-50/30">
             <div className="h-1 bg-gradient-to-r from-emerald-500 via-green-500 to-lime-500" />
             <CardHeader
@@ -898,7 +908,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                                     variant="outline"
                                                     size="sm"
                                                     className="text-amber-700 border-amber-300 hover:bg-amber-100"
-                                                    onClick={() => window.open('/crm/leads', '_blank')}
+                                                    onClick={() => window.open('/dashboard/crm/leads', '_blank')}
                                                 >
                                                     <Users className="w-4 h-4 mr-1" />
                                                     View Leads
@@ -923,7 +933,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                                                     variant="outline"
                                                     size="sm"
                                                     className="text-indigo-700 border-indigo-300 hover:bg-indigo-100"
-                                                    onClick={() => window.open('/crm/contacts', '_blank')}
+                                                    onClick={() => window.open('/dashboard/crm/contacts', '_blank')}
                                                 >
                                                     <Users className="w-4 h-4 mr-1" />
                                                     View Contacts
@@ -2299,6 +2309,7 @@ export function DripCampaignsSection({ accountId: propAccountId }: { accountId: 
                 </DialogContent>
             </Dialog>
         </Card >
+        </WhatsAppConnectionGuard>
     );
 }
 

@@ -68,7 +68,8 @@ export const getFieldIcon = (type: FieldType): string => {
     dropdown: '📋',
     radio: '🔘',
     checkbox: '☑️',
-    date: '📅'
+    date: '📅',
+    time: '⏰'
   };
   return icons[type] || '📝';
 };
@@ -83,7 +84,8 @@ export const getFieldLabel = (type: FieldType): string => {
     dropdown: 'Dropdown',
     radio: 'Single Choice',
     checkbox: 'Multiple Choice',
-    date: 'Date'
+    date: 'Date',
+    time: 'Time'
   };
   return labels[type] || 'Text';
 };
@@ -191,6 +193,13 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
     });
   });
 
+  // Fields collected on PRIOR screens. WhatsApp Flows only expose a field via
+  // ${form.X} on the screen that owns it, so to deliver every answer to the
+  // final `complete` we must thread data forward: each screen declares prior
+  // fields in its `data` schema and re-forwards them (plus its own) in the
+  // Footer action payload.
+  const carriedFields: string[] = [];
+
   const screens: MetaScreen[] = state.steps.map((step, index) => {
     const children: MetaComponent[] = [];
 
@@ -206,9 +215,18 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
       });
     }
 
+    const ownFields: string[] = [];
     step.fields.forEach(field => {
       children.push(fieldToMetaComponent(field, fieldNameMap));
+      const metaName = fieldNameMap.get(field.id);
+      if (metaName) ownFields.push(metaName);
     });
+
+    // Forward everything collected so far: prior-screen fields via ${data.X}
+    // (declared in this screen's `data`), this screen's fields via ${form.X}.
+    const payload: Record<string, string> = {};
+    carriedFields.forEach(name => { payload[name] = `\${data.${name}}`; });
+    ownFields.forEach(name => { payload[name] = `\${form.${name}}`; });
 
     if (!step.isFinal) {
       const nextStep = step.button.goesToStepId
@@ -225,7 +243,8 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
             name: (nextStep?.id && stepIdToScreenId[nextStep.id])
               || (state.steps[index + 1]?.id && stepIdToScreenId[state.steps[index + 1].id])
               || 'COMPLETE'
-          }
+          },
+          payload
         }
       });
     } else {
@@ -234,21 +253,32 @@ export const visualToMetaJSON = (state: FlowBuilderState): MetaFlowExport => {
         label: step.button.label || 'Done',
         'on-click-action': {
           name: 'complete',
-          payload: {}
+          payload
         }
       });
     }
 
-    return {
+    // Prior fields must be declared as this screen's input data so ${data.X}
+    // resolves. The entry screen has none.
+    const dataSchema: Record<string, { type: string; __example__?: string }> = {};
+    carriedFields.forEach(name => { dataSchema[name] = { type: 'string', __example__: 'example' }; });
+
+    const screen: MetaScreen = {
       id: stepIdToScreenId[step.id] || 'SCREEN',
       title: step.title,
       ...(step.isFinal && { terminal: true }),
       ...(step.isFinal && { success: true }),
+      ...(carriedFields.length > 0 && { data: dataSchema }),
       layout: {
         type: 'SingleColumnLayout',
         children
       }
     };
+
+    // This screen's fields become available to all subsequent screens.
+    carriedFields.push(...ownFields);
+
+    return screen;
   });
 
   const routing_model: Record<string, string[]> = {};
@@ -321,10 +351,48 @@ const fieldToMetaComponent = (field: Field, fieldNameMap: Map<string, string>): 
       };
     case 'date':
       return { type: 'DatePicker', ...baseProps };
+    case 'time':
+      // WhatsApp Flows has no time picker, so a time field becomes a Dropdown
+      // of real clock slots. The option id is "HH:MM" (24h) so the backend can
+      // schedule an exact-time reminder; the title is the friendly label.
+      return {
+        type: 'Dropdown',
+        ...baseProps,
+        'data-source': field.options && field.options.length
+          ? timeOptionsToDataSource(field.options)
+          : generateTimeSlots()
+      };
     default:
       return { type: 'TextInput', ...baseProps, 'input-type': 'text' };
   }
 };
+
+// Default selectable times: 09:00 → 17:00 every 30 minutes.
+const generateTimeSlots = (
+  startHour = 9,
+  endHour = 17,
+  stepMinutes = 30
+): Array<{ id: string; title: string }> => {
+  const slots: Array<{ id: string; title: string }> = [];
+  for (let mins = startHour * 60; mins <= endHour * 60; mins += stepMinutes) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    const id = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    const period = h < 12 ? 'AM' : 'PM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    slots.push({ id, title: `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}` });
+  }
+  return slots;
+};
+
+// Map user-provided time strings to a data-source, keeping a "HH:MM" id when
+// the option already looks like a 24h clock time; otherwise fall back to index.
+const timeOptionsToDataSource = (options: string[]): Array<{ id: string; title: string }> =>
+  options.map((opt, i) => {
+    const match = String(opt).match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    const id = match ? `${match[1].padStart(2, '0')}:${match[2]}` : `opt_${i}`;
+    return { id, title: opt };
+  });
 
 // =============================================================================
 // META JSON → VISUAL TRANSFORM
@@ -397,10 +465,14 @@ const metaComponentToField = (component: MetaComponent): Field => {
     case 'TextArea':
       baseField.type = 'textarea';
       break;
-    case 'Dropdown':
-      baseField.type = 'dropdown';
-      baseField.options = component['data-source']?.map(ds => ds.title) || [];
+    case 'Dropdown': {
+      const ds = component['data-source'] || [];
+      // A Dropdown whose option ids are all "HH:MM" is a time field.
+      const looksLikeTime = ds.length > 0 && ds.every(o => /^([01]\d|2[0-3]):[0-5]\d$/.test(o.id));
+      baseField.type = looksLikeTime ? 'time' : 'dropdown';
+      baseField.options = ds.map(o => o.title);
       break;
+    }
     case 'RadioButtonsGroup':
       baseField.type = 'radio';
       baseField.options = component['data-source']?.map(ds => ds.title) || [];

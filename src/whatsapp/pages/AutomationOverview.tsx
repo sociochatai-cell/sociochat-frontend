@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { API_BASE_URL } from '@/config';
 
 interface AutomationOverviewProps {
     unlockedLevel: number;
@@ -121,8 +122,7 @@ export function AutomationOverview({ unlockedLevel, onUnlockRequest, onNavigate,
         // Sync with backend API
         if (accountId) {
             try {
-                const API_BASE = import.meta.env.VITE_API_BASE || '';
-                await fetch(`${API_BASE}/api/whatsapp/accounts/${accountId}/automation-settings`, {
+                await fetch(`${API_BASE_URL}/api/whatsapp/accounts/${accountId}/automation-settings`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',

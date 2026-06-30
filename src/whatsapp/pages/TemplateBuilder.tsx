@@ -21,6 +21,7 @@ import {
     MessageCircle, Shield, Target
 } from 'lucide-react';
 import { API_BASE_URL } from "@/config";
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 
 const API_BASE = API_BASE_URL;
 
@@ -371,6 +372,7 @@ export default function TemplateBuilder() {
     };
 
     return (
+        <WhatsAppConnectionGuard feature="Templates">
         <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
             <SubmissionProgressUI progress={submissionProgress} />
 
@@ -657,5 +659,6 @@ export default function TemplateBuilder() {
                 </DialogContent>
             </Dialog>
         </div>
+        </WhatsAppConnectionGuard>
     );
 }

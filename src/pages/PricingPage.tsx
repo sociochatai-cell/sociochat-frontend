@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Zap, Crown, Building, ArrowRight, Check, Sparkles } from 'lucide-react';
 import { API_BASE_URL } from '@/config';
 import { usePlan } from '@/contexts/PlanContext';
+import { startPayuCheckout, payuErrorMessage } from '@/lib/payu';
 
 const PLAN_SLUGS: Record<string, string> = {
     Starter: 'starter',
@@ -33,7 +34,7 @@ const plans = [
         period: '/month',
         description: 'Scale your business with powerful features',
         icon: Crown,
-        color: 'from-[#0a6847] to-[#25D366]',
+        color: 'from-brand-800 to-brand-500',
         features: [
             '3 WhatsApp Numbers',
             '10,000 Messages / month',
@@ -79,16 +80,18 @@ export default function PricingPage() {
             return;
         }
         try {
+            const svToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
             const res = await fetch(`${API_BASE_URL}/api/subscription/select-plan`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-User-Id': userId,
+                    ...(userId ? { 'X-User-Id': userId } : {}),
+                    ...(svToken ? { Authorization: `Bearer ${svToken}` } : {}),
                 },
                 body: JSON.stringify({ plan: slug }),
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (data.success) {
                 const userStr = localStorage.getItem('sv_user');
                 if (userStr) {
@@ -98,9 +101,19 @@ export default function PricingPage() {
                 }
                 await refreshPlan();
                 navigate('/dashboard');
+                return;
             }
+            // Paid plan -> PayU checkout (success redirects the page to PayU).
+            if (res.status === 402 || data.requires_payment) {
+                // Signup/onboarding flow -> after payment, land on the dashboard.
+                const r = await startPayuCheckout('user_plan', slug, '/dashboard');
+                if (!r.ok) alert(payuErrorMessage(r.error, r.isTenantLicense));
+                return;
+            }
+            // Custom/enterprise or other -> show a message instead of silently leaving.
+            alert(payuErrorMessage(data.error));
         } catch {
-            navigate('/dashboard');
+            alert('Could not start checkout. Please try again.');
         }
     };
 
@@ -112,11 +125,11 @@ export default function PricingPage() {
             <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100">
                 <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-gradient-to-br from-[#25D366] to-[#128C7E] shadow-lg">
+                        <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-lg">
                             <MessageCircle className="w-5 h-5 text-white" />
                         </div>
-                        <span className="text-lg font-bold text-[#0a6847]">
-                            SocioChat<span className="text-[#25D366]">.ai</span>
+                        <span className="text-lg font-bold text-brand-800">
+                            SocioChat<span className="text-brand-500">.ai</span>
                         </span>
                     </div>
                 </div>
@@ -140,11 +153,11 @@ export default function PricingPage() {
                     {plans.map((plan) => (
                         <div key={plan.name}
                             className={`relative bg-white rounded-2xl border-2 p-7 transition-all hover:shadow-xl ${plan.popular
-                                ? 'border-[#25D366] shadow-lg shadow-[#25D366]/10 scale-[1.02]'
+                                ? 'border-brand-500 shadow-lg shadow-brand-500/10 scale-[1.02]'
                                 : 'border-slate-200 hover:border-slate-300'
                                 }`}>
                             {plan.popular && (
-                                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#0a6847] to-[#25D366] text-white text-xs font-bold px-4 py-1 rounded-full">
+                                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-brand-800 to-brand-500 text-white text-xs font-bold px-4 py-1 rounded-full">
                                     Most Popular
                                 </div>
                             )}
@@ -160,7 +173,7 @@ export default function PricingPage() {
                             <ul className="space-y-2.5 mb-6">
                                 {plan.features.map((f, i) => (
                                     <li key={i} className="flex items-start gap-2.5 text-sm text-slate-600">
-                                        <Check className="w-4 h-4 text-[#25D366] mt-0.5 flex-shrink-0" />
+                                        <Check className="w-4 h-4 text-brand-500 mt-0.5 flex-shrink-0" />
                                         {f}
                                     </li>
                                 ))}
@@ -172,7 +185,7 @@ export default function PricingPage() {
                                     else if (plan.name === 'Enterprise') selectPlan('enterprise');
                                 }}
                                 className={`w-full py-2.5 px-4 rounded-xl text-sm font-semibold transition-all ${plan.popular
-                                    ? 'bg-gradient-to-r from-[#0a6847] to-[#128C7E] text-white shadow-lg shadow-[#25D366]/20 hover:shadow-xl'
+                                    ? 'bg-gradient-to-r from-brand-800 to-brand-700 text-white shadow-lg shadow-brand-500/20 hover:shadow-xl'
                                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                     }`}>
                                 {plan.cta}
@@ -188,7 +201,7 @@ export default function PricingPage() {
                             Not ready to commit? Try our platform for free.
                         </p>
                         <button onClick={handleContinueAsBeta}
-                            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-sm font-semibold text-[#128C7E] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all">
+                            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-sm font-semibold text-brand-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all">
                             <Sparkles className="w-4 h-4" />
                             Continue as Beta (30 days free)
                             <ArrowRight className="w-4 h-4" />

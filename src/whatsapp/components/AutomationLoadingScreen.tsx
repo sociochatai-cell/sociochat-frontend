@@ -54,11 +54,11 @@ export const AutomationLoadingScreen: React.FC = () => {
                     </motion.div>
 
                     <motion.div
-                        className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-8 p-2 bg-white dark:bg-slate-800 rounded-full shadow-md border border-green-100"
+                        className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-8 p-2 bg-white dark:bg-slate-800 rounded-full shadow-md border border-emerald-100"
                         animate={{ rotate: -360 }}
                         transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
                     >
-                        <MessageCircle className="w-5 h-5 text-green-500" />
+                        <MessageCircle className="w-5 h-5 text-emerald-500" />
                     </motion.div>
 
                     <motion.div
@@ -84,7 +84,7 @@ export const AutomationLoadingScreen: React.FC = () => {
                     <defs>
                         <linearGradient id="spinner-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                             <stop offset="0%" stopColor="#4F46E5" />
-                            <stop offset="100%" stopColor="#22C55E" />
+                            <stop offset="100%" stopColor="#10B981" />
                         </linearGradient>
                     </defs>
                 </svg>
@@ -93,7 +93,7 @@ export const AutomationLoadingScreen: React.FC = () => {
 
             {/* Loading Stats / Text */}
             <div className="mt-8 text-center space-y-3">
-                <h3 className="text-xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-green-600">
+                <h3 className="text-xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-emerald-600">
                     Initializing Automation Hub
                 </h3>
 
@@ -119,7 +119,7 @@ export const AutomationLoadingScreen: React.FC = () => {
                 {/* Progress Bar */}
                 <div className="w-64 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full mt-4 overflow-hidden mx-auto">
                     <motion.div
-                        className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-green-500"
+                        className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500"
                         animate={{ x: ["-100%", "100%"] }}
                         transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                     />

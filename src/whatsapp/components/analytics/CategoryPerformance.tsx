@@ -19,6 +19,7 @@ interface CategoryData {
 
 interface CategoryPerformanceProps {
     categories: Record<string, CategoryData> | null;
+    loading?: boolean;
 }
 
 // Estimated costs per category in INR (WhatsApp Business API India pricing)

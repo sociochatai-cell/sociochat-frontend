@@ -5,6 +5,7 @@ import {
     MessageSquare, Zap, Bot, Layers, CheckCircle2,
     ArrowRight, ShieldCheck, Clock, TrendingUp, Users, Volume2, VolumeX
 } from 'lucide-react';
+import { useBranding } from '@/branding/BrandingContext';
 
 const FADE_UP: any = {
     hidden: { opacity: 0, y: 30 },
@@ -16,6 +17,7 @@ const STAGGER: any = {
 };
 
 export default function LandingPage() {
+    const { branding } = useBranding();
     const [isMuted, setIsMuted] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -74,9 +76,9 @@ export default function LandingPage() {
             <nav className="fixed w-full z-50 bg-white/80 backdrop-blur-md border-b border-black/5">
                 <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <img src="/sociochat_logo.png" alt="SocioChat.ai" className="w-9 h-9 rounded-xl shadow-sm" />
-                        <span className="text-xl font-bold text-[#0a6847]">
-                            SocioChat<span className="text-brand-500">.ai</span>
+                        <img src={branding.logo_url} alt={`${branding.company_name}${branding.name_suffix}`} className="w-9 h-9 rounded-xl shadow-sm" />
+                        <span className="text-xl font-bold" style={{ color: 'var(--brand-accent)' }}>
+                            {branding.short_name}<span style={{ color: 'var(--brand-primary)' }}>{branding.name_suffix}</span>
                         </span>
                     </div>
                     <div className="flex gap-4 items-center">
@@ -110,20 +112,26 @@ export default function LandingPage() {
                         </motion.div>
 
                         <motion.h1 variants={FADE_UP} className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 leading-[1.1] px-2">
-                            Solve your WhatsApp <br className="hidden md:block" />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-[#0a6847]">
-                                messaging chaos.
-                            </span>
+                            {branding.landing_headline ? (
+                                branding.landing_headline
+                            ) : (
+                                <>
+                                    Solve your WhatsApp <br className="hidden md:block" />
+                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-emerald-800">
+                                        messaging chaos.
+                                    </span>
+                                </>
+                            )}
                         </motion.h1>
 
                         <motion.p variants={FADE_UP} className="text-lg md:text-xl text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed">
-                            Stop drowning in manual replies. Automate conversations, send personalized bulk messages, and reclaim your time. Lower your workload, multiply your sales.
+                            {branding.landing_subheadline || "Stop drowning in manual replies. Automate conversations, send personalized bulk messages, and reclaim your time. Lower your workload, multiply your sales."}
                         </motion.p>
 
                         <motion.div variants={FADE_UP} className="flex flex-col sm:flex-row items-center justify-center gap-4">
                             <NavLink
                                 to="/signup"
-                                className="group flex items-center justify-center gap-2 px-8 py-4 w-full sm:w-auto text-base font-semibold rounded-full bg-[#0a6847] text-white hover:bg-[#074b33] hover:shadow-xl hover:shadow-[#0a6847]/20 transition-all"
+                                className="group flex items-center justify-center gap-2 px-8 py-4 w-full sm:w-auto text-base font-semibold rounded-full bg-brand-800 text-white hover:bg-brand-900 hover:shadow-xl hover:shadow-brand-800/20 transition-all"
                             >
                                 Start Free Trial
                                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -149,19 +157,24 @@ export default function LandingPage() {
                             <div className="rounded-xl md:rounded-[1.5rem] overflow-hidden border border-slate-100 bg-slate-900 aspect-video relative flex items-center justify-center group/video cursor-pointer" onClick={toggleMute}>
                                 <video
                                     ref={videoRef}
-                                    src="/explainer_video.mp4"
+                                    src={branding.landing_video_url || "/explainer_video.mp4"}
+                                    poster={branding.landing_image_url || undefined}
                                     className="w-full h-full object-cover relative z-0"
                                     loop
                                     muted={isMuted}
                                     playsInline
                                 >
-                                    <track
-                                        kind="captions"
-                                        src="/captions.vtt"
-                                        srcLang="en"
-                                        label="English"
-                                        default
-                                    />
+                                    {/* Only render the default captions track for the default self-hosted video.
+                                        Custom tenant videos won't have a matching /captions.vtt file. */}
+                                    {!branding.landing_video_url && (
+                                        <track
+                                            kind="captions"
+                                            src="/captions.vtt"
+                                            srcLang="en"
+                                            label="English"
+                                            default
+                                        />
+                                    )}
                                 </video>
 
                                 {/* Watermark fog overlay (bottom-right) */}
@@ -254,21 +267,21 @@ export default function LandingPage() {
                 {/* CTA Section */}
                 <section className="py-24">
                     <div className="max-w-5xl mx-auto px-6">
-                        <div className="relative rounded-[2.5rem] overflow-hidden bg-[#0a6847] p-10 md:p-16 text-center text-white">
+                        <div className="relative rounded-[2.5rem] overflow-hidden bg-brand-800 p-10 md:p-16 text-center text-white">
                             {/* Abstract background shapes */}
                             <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/3 w-96 h-96 bg-brand-400 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
                             <div className="absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/3 w-96 h-96 bg-emerald-500 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
 
                             <div className="relative z-10 max-w-3xl mx-auto">
                                 <h2 className="text-4xl md:text-5xl font-bold mb-6">
-                                    Ready to transform your communication?
+                                    {branding.landing_cta_text || "Ready to transform your communication?"}
                                 </h2>
                                 <p className="text-emerald-100 text-lg md:text-xl mb-10 max-w-2xl mx-auto">
-                                    Join forward-thinking businesses who use SocioChat to automate conversations and drive massive growth.
+                                    Join forward-thinking businesses who use {branding.company_name} to automate conversations and drive massive growth.
                                 </p>
                                 <NavLink
                                     to="/signup"
-                                    className="inline-flex items-center justify-center gap-2 px-10 py-5 text-lg font-bold rounded-full bg-white text-[#0a6847] hover:bg-slate-50 hover:scale-105 transition-all shadow-xl"
+                                    className="inline-flex items-center justify-center gap-2 px-10 py-5 text-lg font-bold rounded-full bg-white text-brand-800 hover:bg-slate-50 hover:scale-105 transition-all shadow-xl"
                                 >
                                     Get Started Free
                                 </NavLink>
@@ -288,11 +301,11 @@ export default function LandingPage() {
             <footer className="bg-white border-t border-slate-100 py-12">
                 <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-2">
-                        <img src="/sociochat_logo.png" alt="SocioChat.ai" className="w-8 h-8 rounded-lg grayscale" />
-                        <span className="text-lg font-bold text-slate-400">SocioChat.ai</span>
+                        <img src={branding.logo_url} alt={`${branding.company_name}${branding.name_suffix}`} className="w-8 h-8 rounded-lg grayscale" />
+                        <span className="text-lg font-bold text-slate-400">{branding.company_name}{branding.name_suffix}</span>
                     </div>
                     <p className="text-sm text-slate-500">
-                        © {new Date().getFullYear()} SocioChat.ai. All rights reserved. Built for WhatsApp Business.
+                        © {new Date().getFullYear()} {branding.company_name}{branding.name_suffix}. All rights reserved. Built for WhatsApp Business.
                     </p>
                     <a href="/admin/login" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">
                         Admin Portal

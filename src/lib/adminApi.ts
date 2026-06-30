@@ -1,10 +1,24 @@
 import { API_BASE_URL } from '@/config';
 
+export type BillingPeriod = 'monthly' | 'quarterly' | 'yearly';
+
+export interface PlanCatalogPayload {
+    slug?: string;
+    name?: string;
+    is_active?: boolean;
+    price_monthly_inr?: number | null;
+    billing_period?: string;
+    offer_text?: string;
+    [key: string]: unknown;
+}
+
 function adminHeaders(): HeadersInit {
     const adminId = localStorage.getItem('sv_admin_id') || sessionStorage.getItem('sv_admin_id');
+    const token = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
     return {
         'Content-Type': 'application/json',
         ...(adminId ? { 'X-Admin-Id': adminId } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 }
 
@@ -99,7 +113,7 @@ export const adminApi = {
         return res.json();
     },
 
-    updatePlanCatalog: async (slug: string, data: Record<string, unknown>) => {
+    updatePlanCatalog: async (slug: string, data: PlanCatalogPayload) => {
         const res = await fetch(`${API_BASE_URL}/api/subscription/admin/plans/${slug}`, {
             method: 'PUT',
             credentials: 'include',
@@ -118,7 +132,7 @@ export const adminApi = {
         return res.json();
     },
 
-    createPlan: async (data: Record<string, unknown>) => {
+    createPlan: async (data: PlanCatalogPayload) => {
         const res = await fetch(`${API_BASE_URL}/api/subscription/admin/plans`, {
             method: 'POST',
             credentials: 'include',
@@ -175,7 +189,7 @@ export const adminApi = {
         return res.json();
     },
 
-    createPrivatePlan: async (data: Record<string, unknown>) => {
+    createPrivatePlan: async (data: PlanCatalogPayload) => {
         const res = await fetch(`${API_BASE_URL}/api/subscription/admin/private-slot/plans`, {
             method: 'POST',
             credentials: 'include',
@@ -185,7 +199,7 @@ export const adminApi = {
         return res.json();
     },
 
-    updatePrivatePlan: async (slug: string, data: Record<string, unknown>) => {
+    updatePrivatePlan: async (slug: string, data: PlanCatalogPayload) => {
         const res = await fetch(`${API_BASE_URL}/api/subscription/admin/private-slot/plans/${slug}`, {
             method: 'PUT',
             credentials: 'include',
@@ -222,7 +236,11 @@ export const adminApi = {
         return res.json();
     },
 
-    setUserFeatures: async (userId: number, overrides: Record<string, boolean | null>) => {
+    // Per-user feature/limit overrides. Access features take boolean|null
+    // (null = inherit the plan default); LIMIT features (e.g. "workspaces")
+    // take number|null (an int caps the user, -1 = unlimited, null = inherit).
+    // Response includes `limit_overrides` so callers can reflect saved caps.
+    setUserFeatures: async (userId: number, overrides: Record<string, boolean | number | null>) => {
         const res = await fetch(`${API_BASE_URL}/api/subscription/admin/users/${userId}/features`, {
             method: 'PUT',
             credentials: 'include',

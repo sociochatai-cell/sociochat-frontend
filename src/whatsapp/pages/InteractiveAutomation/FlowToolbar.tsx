@@ -20,6 +20,7 @@ import {
     Flag,
     Keyboard,
     Plug,
+    Tag,
     Sparkles,
     KeyRound
 } from 'lucide-react';
@@ -48,9 +49,10 @@ interface FlowToolbarProps {
     onAddTemplateNode: () => void;
     onAddEndNode: () => void;
     onAutoLayout: () => void;
-    // Optional additive entries (Input / API nodes + AI / Flow Variables)
+    // Optional additive entries (Input / API / Set Status nodes + AI / Flow Variables)
     onAddInputNode?: () => void;
     onAddApiNode?: () => void;
+    onAddSetStatusNode?: () => void;
     onOpenAiGenerator?: () => void;
     onOpenFlowVariables?: () => void;
 }
@@ -71,6 +73,7 @@ export function FlowToolbar({
     onAutoLayout,
     onAddInputNode,
     onAddApiNode,
+    onAddSetStatusNode,
     onOpenAiGenerator,
     onOpenFlowVariables,
 }: FlowToolbarProps) {
@@ -112,7 +115,7 @@ export function FlowToolbar({
                         </Badge>
                     )}
                     {flowStatus === 'draft' && (
-                        <Badge variant="secondary">Draft</Badge>
+                        <Badge className="bg-gray-100 text-gray-600 border-gray-200">Draft</Badge>
                     )}
                     {isDirty && (
                         <Badge variant="outline" className="text-amber-600 border-amber-300">
@@ -169,6 +172,12 @@ export function FlowToolbar({
                             <DropdownMenuItem onClick={onAddApiNode}>
                                 <Plug className="w-4 h-4 mr-2 text-violet-600" />
                                 API Node
+                            </DropdownMenuItem>
+                        )}
+                        {onAddSetStatusNode && (
+                            <DropdownMenuItem onClick={onAddSetStatusNode}>
+                                <Tag className="w-4 h-4 mr-2 text-emerald-600" />
+                                Set Status
                             </DropdownMenuItem>
                         )}
                         <DropdownMenuItem onClick={onAddEndNode}>

@@ -314,6 +314,9 @@ export function StepCard({
                     <DropdownMenuItem onClick={() => addFieldOfType('date')}>
                       📅 Date
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => addFieldOfType('time')}>
+                      ⏰ Time
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>

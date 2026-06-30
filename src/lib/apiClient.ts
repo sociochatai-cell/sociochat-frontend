@@ -1,6 +1,7 @@
 // src/lib/apiClient.ts
 // Centralized HTTP helper that sends cookies (session-based auth).
 import { API_ENDPOINT } from "@/config";
+import { getWorkspaceId } from "@/whatsapp/utils/workspaceContext";
 
 const API_BASE = API_ENDPOINT;
 
@@ -55,6 +56,16 @@ async function request<T = any>(path: string, opts: RequestInit = {}): Promise<A
   const token = sessionStorage.getItem("sv_token") || localStorage.getItem("sv_token");
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  // Scope every request to the active workspace (multi-workspace support).
+  // Read once per call so a workspace switch is always reflected. Only set
+  // when present and not already explicitly overridden by the caller.
+  if (!headers["X-Workspace-Id"]) {
+    const workspaceId = getWorkspaceId();
+    if (workspaceId) {
+      headers["X-Workspace-Id"] = String(workspaceId);
+    }
   }
 
   // Destructure headers from opts to avoid overwriting our constructed headers object during spread

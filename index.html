@@ -2,10 +2,50 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/sociochat_logo.png" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SocioChat.ai — WhatsApp Business Platform</title>
     <meta name="description" content="SocioChat.ai — All-in-one WhatsApp Business Platform with messaging, automation, templates, drip campaigns, and analytics." />
+    <!-- Pre-paint tenant theming: apply the cached tenant's brand CSS vars BEFORE
+         React renders so the page never flashes the default SocioChat green.
+         Reads the precomputed map persisted by applyBranding() (branding.ts). -->
+    <script>
+      (function () {
+        try {
+          var host = (location.hostname || "").toLowerCase();
+          var platformDomains = ["sociochat.ai", "www.sociochat.ai"];
+          var isPlatform =
+            host === "localhost" || host === "127.0.0.1" ||
+            host.slice(-14) === ".devtunnels.ms" ||
+            host.slice(-10) === ".localhost" ||
+            platformDomains.indexOf(host) !== -1;
+          // On the shared platform host, only apply cached tenant branding when a
+          // real tenant user is logged in — never leak a leftover tenant brand
+          // onto the SocioChat landing. On a tenant custom domain, always apply.
+          if (isPlatform) {
+            var ok = false;
+            try {
+              var raw = localStorage.getItem("sv_user") || sessionStorage.getItem("sv_user");
+              if (raw) { var u = JSON.parse(raw); ok = !!(u && u.tenant_id && u.role !== "admin"); }
+            } catch (e) {}
+            if (!ok) return;
+          }
+          var stored = localStorage.getItem("sv_brand_vars");
+          if (!stored) return;
+          var parsed = JSON.parse(stored);
+          if (!parsed || !parsed.vars) return;
+          var root = document.documentElement;
+          for (var k in parsed.vars) {
+            if (Object.prototype.hasOwnProperty.call(parsed.vars, k)) {
+              root.style.setProperty(k, parsed.vars[k]);
+            }
+          }
+          if (parsed.dark) root.classList.add("dark");
+        } catch (e) { /* fall back to :root defaults */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="fb-root"></div>

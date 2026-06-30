@@ -28,6 +28,8 @@ import {
   sendInteractiveMessage,
 } from '../api';
 
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
+
 import type {
   WhatsAppConfig,
   MessageType,
@@ -220,6 +222,7 @@ export default function WhatsAppTestConsole() {
   };
 
   return (
+    <WhatsAppConnectionGuard feature="the Test Console">
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b bg-card">
@@ -412,5 +415,6 @@ export default function WhatsAppTestConsole() {
         </div>
       </div>
     </div>
+    </WhatsAppConnectionGuard>
   );
 }

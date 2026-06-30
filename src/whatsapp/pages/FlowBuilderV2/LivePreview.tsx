@@ -378,6 +378,15 @@ function PreviewField({ field, value, onChange }: PreviewFieldProps) {
           className={cn(baseInputClass, "h-8")}
         />
       )}
+
+      {field.type === 'time' && (
+        <Input
+          type="time"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn(baseInputClass, "h-8")}
+        />
+      )}
     </div>
   );
 }

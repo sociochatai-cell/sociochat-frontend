@@ -34,7 +34,7 @@ import { toast } from '@/hooks/use-toast';
 import { API_BASE_URL } from '@/config';
 
 // Local imports
-import { TriggerNode, MessageNode, TemplateNode, InputNode, ApiNode, EndNode } from './nodes';
+import { TriggerNode, MessageNode, TemplateNode, InputNode, ApiNode, SetStatusNode, EndNode } from './nodes';
 import { NodeEditor } from './panels';
 import { TemplateSelectPanel } from './panels/TemplateSelectPanel';
 import { FlowToolbar } from './FlowToolbar';
@@ -68,6 +68,7 @@ import {
     createDefaultTriggerNode,
     createDefaultInputNode,
     createDefaultApiNode,
+    createDefaultSetStatusNode,
     EDGE_COLORS,
 } from './constants';
 import type {
@@ -77,6 +78,7 @@ import type {
     ValidationIssue,
     MessageButton,
 } from './types';
+import WhatsAppConnectionGuard from '@/whatsapp/components/WhatsAppConnectionGuard';
 import './interactive-automation.css';
 
 // =============================================================================
@@ -89,6 +91,7 @@ const nodeTypes: NodeTypes = {
     template: TemplateNode,
     input: InputNode,
     api: ApiNode,
+    set_status: SetStatusNode,
     end: EndNode,
 };
 
@@ -472,6 +475,26 @@ export function InteractiveAutomation() {
         }, 50);
     }, [flow, getViewportCenterPosition, setNodes]);
 
+    const handleAddSetStatusNode = useCallback(() => {
+        const position = getViewportCenterPosition();
+        const newNode = createDefaultSetStatusNode(generateId('set_status'), position);
+        const updatedFlow = { ...flow, nodes: [...flow.nodes, newNode] };
+        setFlow(updatedFlow);
+        setNodes(toReactFlowNodes(updatedFlow.nodes));
+        setIsDirty(true);
+        setSelectedNodeId(newNode.id);
+
+        setTimeout(() => {
+            if (reactFlowInstance.current) {
+                reactFlowInstance.current.setCenter(
+                    newNode.position.x + 160,
+                    newNode.position.y + 110,
+                    { zoom: 1, duration: 500 }
+                );
+            }
+        }, 50);
+    }, [flow, getViewportCenterPosition, setNodes]);
+
     const handleAddTemplateNode = useCallback(() => {
         if (!accountId) {
             toast({
@@ -825,6 +848,7 @@ export function InteractiveAutomation() {
     }
 
     return (
+        <WhatsAppConnectionGuard feature="Interactive Automation">
         <div className="h-screen flex flex-col bg-gray-50">
             {/* Toolbar */}
             <FlowToolbar
@@ -842,6 +866,7 @@ export function InteractiveAutomation() {
                 onAddEndNode={handleAddEndNode}
                 onAddInputNode={handleAddInputNode}
                 onAddApiNode={handleAddApiNode}
+                onAddSetStatusNode={handleAddSetStatusNode}
                 onAutoLayout={handleAutoLayout}
                 onOpenAiGenerator={() => setIsAiDialogOpen(true)}
                 onOpenFlowVariables={() => setIsVariablesDialogOpen(true)}
@@ -951,6 +976,7 @@ export function InteractiveAutomation() {
                 onSave={handleFlowVariablesSave}
             />
         </div>
+        </WhatsAppConnectionGuard>
     );
 }
 
