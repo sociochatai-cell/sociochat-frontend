@@ -38,7 +38,12 @@ export default function DashboardHome() {
                 );
                 const data = await res.json();
 
-                setIsConnected(data.status === 'CONNECTED' && !!data.account_summary);
+                // An account "exists" whenever the backend reports a linked account
+                // summary — including PARTIAL / RELINK_REQUIRED states (token needs
+                // refresh, setup incomplete). Gating only on CONNECTED wrongly shows
+                // "not connected" for accounts that exist but need attention.
+                const linkedStatuses = ['CONNECTED', 'PARTIAL', 'RELINK_REQUIRED'];
+                setIsConnected(linkedStatuses.includes(data.status) && !!data.account_summary);
             } catch {
                 setIsConnected(false);
             }

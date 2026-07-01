@@ -165,7 +165,8 @@ export function ContactInfoPanel({
 
 
     // Format phone for display
-    const formatPhone = (phone: string) => {
+    const formatPhone = (phone: string | null | undefined) => {
+        if (!phone) return '';
         if (phone.length > 10) {
             if (phone.startsWith('91')) {
                 return `+91 ${phone.slice(2, 7)} ${phone.slice(7)}`;

@@ -29,8 +29,11 @@ export function ConversationItem({ conversation, isActive, onClick, onDelete, ne
 
   const hasUnread = conversation.unread_count > 0;
 
-  // Normalize phone number (strip leading 91 or 1 if > 10 chars)
-  let displayPhone = conversation.user_phone;
+  // Normalize phone number (strip leading 91 or 1 if > 10 chars).
+  // Guard against a missing user_phone — real conversation rows and locally
+  // added (SSE) conversations can omit it, and an unguarded `.length` here would
+  // throw and white-screen the whole inbox.
+  let displayPhone = conversation.user_phone || '';
   if (displayPhone.length > 10) {
     if (displayPhone.startsWith('91')) displayPhone = displayPhone.substring(2);
     else if (displayPhone.startsWith('1')) displayPhone = displayPhone.substring(1);

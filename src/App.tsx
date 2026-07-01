@@ -44,6 +44,8 @@ const TenantAdminPlan = lazy(() => import('./pages/tenant-admin/TenantAdminPlan'
 const TenantAdminSubscription = lazy(() => import('./pages/tenant-admin/TenantAdminSubscription'));
 const TenantAdminPrivateSlot = lazy(() => import('./pages/tenant-admin/TenantAdminPrivateSlot'));
 
+import { WhatsAppErrorBoundary } from './whatsapp/components/WhatsAppErrorBoundary';
+
 /* ── Lazy-loaded WhatsApp pages ── */
 const WhatsAppInbox = lazy(() => import('./whatsapp/pages/WhatsAppInbox').then(m => ({ default: m.WhatsAppInbox })));
 const WhatsAppSettings = lazy(() => import('./whatsapp/pages/WhatsAppSettings').then(m => ({ default: m.WhatsAppSettings })));
@@ -153,7 +155,7 @@ export default function App() {
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<DashboardHome />} />
         <Route path="hub" element={<G feature="unified_dashboard_analytics"><WhatsAppDashboard /></G>} />
-        <Route path="inbox" element={<G feature="whatsapp_inbox"><WhatsAppInbox /></G>} />
+        <Route path="inbox" element={<G feature="whatsapp_inbox"><WhatsAppErrorBoundary label="Inbox"><WhatsAppInbox /></WhatsAppErrorBoundary></G>} />
         <Route path="conversations" element={<G feature="whatsapp_inbox"><ConversationsInbox /></G>} />
         <Route path="send" element={<WhatsAppTestConsole />} />
         <Route path="bulk" element={<G feature="whatsapp_bulk_messaging"><BulkMessaging /></G>} />

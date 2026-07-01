@@ -404,9 +404,10 @@ export function WhatsAppInbox() {
       const wsParam = wsId ? `&workspace_id=${wsId}` : '';
       const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/conversations?limit=200${wsParam}`, { credentials: 'include' });
       const data = await res.json();
-      const existingConversation = data.conversations?.find((c: Conversation) =>
-        c.user_phone === phone || c.user_phone.endsWith(phone) || phone.endsWith(c.user_phone)
-      );
+      const existingConversation = data.conversations?.find((c: Conversation) => {
+        const cp = c.user_phone || '';
+        return cp === phone || cp.endsWith(phone) || (!!cp && phone.endsWith(cp));
+      });
       if (existingConversation) {
         setSelectedConversation(existingConversation);
         toast.success('Opened existing conversation');

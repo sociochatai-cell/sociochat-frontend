@@ -10,6 +10,7 @@ export { RestrictionBanner } from './RestrictionBanner';
 export { default as ApiResponseViewer } from './ApiResponseViewer';
 
 // Inbox components
+export { WhatsAppErrorBoundary } from './WhatsAppErrorBoundary';
 export { ConversationList } from './ConversationList';
 export { ConversationItem } from './ConversationItem';
 export { ConversationThread } from './ConversationThread';

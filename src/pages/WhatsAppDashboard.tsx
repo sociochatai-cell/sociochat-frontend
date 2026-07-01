@@ -52,7 +52,7 @@ import {
     ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useWhatsAppConnection } from '@/whatsapp/hooks/useWhatsAppData';
+import { useWhatsAppConnection, connectionPathHasLinkedAccount } from '@/whatsapp/hooks/useWhatsAppData';
 import { NavigationCommandCenter } from '@/whatsapp/components';
 import { getWorkspaceId, setWorkspaceId as persistWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 
@@ -188,19 +188,22 @@ export default function WhatsAppDashboard() {
         isLoading: checkingAccount,
     } = useWhatsAppConnection(selectedWorkspaceId || '');
 
+    // Treat CONNECTED / PARTIAL / RELINK_REQUIRED (all carry an account_summary)
+    // as "an account exists" so the dashboard doesn't show "not connected" for
+    // accounts that merely need a token refresh or setup completion.
     const hasLinkedAccount = useMemo(() => {
         if (!connectionData) return null;
-        return connectionData.status === 'CONNECTED';
+        return connectionPathHasLinkedAccount(connectionData);
     }, [connectionData]);
 
     const accountName = useMemo(() => {
-        if (!connectionData || connectionData.status !== 'CONNECTED') return null;
-        return connectionData.account_summary?.verified_name || null;
+        if (!connectionPathHasLinkedAccount(connectionData)) return null;
+        return connectionData?.account_summary?.verified_name || null;
     }, [connectionData]);
 
     const accountPhone = useMemo(() => {
-        if (!connectionData || connectionData.status !== 'CONNECTED') return null;
-        return connectionData.account_summary?.phone_number || null;
+        if (!connectionPathHasLinkedAccount(connectionData)) return null;
+        return connectionData?.account_summary?.phone_number || null;
     }, [connectionData]);
 
     // Analytics state
