@@ -768,6 +768,36 @@ export function NodeEditor({
         );
     };
 
+    const renderSetStatusEditor = () => {
+        const data = node.data as { status?: string; mode?: string };
+        const statuses = ['new', 'contacted', 'qualified', 'proposal', 'closed'];
+        return (
+            <div className="space-y-4">
+                <div>
+                    <Label>Lead Status</Label>
+                    <Select value={data.status || 'qualified'} onValueChange={(v) => onUpdate({ status: v as any })}>
+                        <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            {statuses.map((s) => (
+                                <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div>
+                    <Label>Mode</Label>
+                    <Select value={data.mode || 'advance'} onValueChange={(v) => onUpdate({ mode: v as any })}>
+                        <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="advance">Advance (only move forward)</SelectItem>
+                            <SelectItem value="set">Set (force this exact status)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+        );
+    };
+
     const renderEndEditor = () => {
         const data = node.data as EndNode['data'];
 
@@ -1353,6 +1383,7 @@ export function NodeEditor({
                     </>
                 )}
                 {node.type === 'lead' && renderLeadEditor()}
+                {node.type === 'set_status' && renderSetStatusEditor()}
                 {node.type === 'end' && renderEndEditor()}
             </div>
 
