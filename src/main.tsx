@@ -7,6 +7,7 @@ import { PlanProvider } from './contexts/PlanContext'
 import { BrandingProvider } from './branding/BrandingContext'
 import DomainGate from './domain/DomainGate'
 import { installFetchAuth } from './lib/installFetchAuth'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import './index.css'
 
 // Attach the Bearer token to raw /api fetches (fixes 401s on cookie-only calls
@@ -21,7 +22,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <DomainGate>
           <AuthProvider>
             <PlanProvider>
-              <App />
+              <TooltipProvider delayDuration={0}>
+                <App />
+              </TooltipProvider>
             </PlanProvider>
           </AuthProvider>
         </DomainGate>
