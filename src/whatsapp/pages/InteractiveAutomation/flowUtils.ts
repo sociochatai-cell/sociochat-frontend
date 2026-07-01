@@ -16,6 +16,7 @@ import type {
     InputNode,
     ApiNode,
     LeadNode,
+    SetStatusNode,
     MessageButton
 } from './types';
 import { LIMITS, NODE_DIMENSIONS } from './constants';
@@ -634,6 +635,33 @@ export const addLeadNode = (
         data: {
             label: 'Mark as Lead',
             condition: { source: 'response', operator: 'any' },
+        },
+    };
+
+    return {
+        ...flow,
+        nodes: [...flow.nodes, newNode],
+    };
+};
+
+/**
+ * Add a new "Set Status" node (explicit CRM lead status: new/contacted/qualified/...)
+ */
+export const addSetStatusNode = (
+    flow: AutomationFlow,
+    position?: { x: number; y: number }
+): AutomationFlow => {
+    const nodeId = generateId('set_status');
+    const newPosition = position || calculateNextPosition(flow.nodes);
+
+    const newNode: SetStatusNode = {
+        id: nodeId,
+        type: 'set_status',
+        position: newPosition,
+        data: {
+            status: 'qualified',
+            mode: 'advance',
+            targetNodeId: null,
         },
     };
 

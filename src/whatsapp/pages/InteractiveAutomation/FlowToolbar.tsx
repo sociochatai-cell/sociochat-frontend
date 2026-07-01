@@ -23,6 +23,7 @@ import {
     Sparkles,
     KeyRound,
     UserPlus,
+    BadgeCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +51,7 @@ interface FlowToolbarProps {
     onAddInputNode: () => void;
     onAddApiNode: () => void;
     onAddLeadNode: () => void;
+    onAddSetStatusNode?: () => void;
     onAddEndNode: () => void;
     onAutoLayout: () => void;
     onGenerateWithAi?: () => void;
@@ -72,6 +74,7 @@ export function FlowToolbar({
     onAddInputNode,
     onAddApiNode,
     onAddLeadNode,
+    onAddSetStatusNode,
     onAddEndNode,
     onAutoLayout,
     onGenerateWithAi,
@@ -236,6 +239,12 @@ export function FlowToolbar({
                             <UserPlus className="w-4 h-4 mr-2 text-emerald-600" />
                             Lead Node
                         </DropdownMenuItem>
+                        {onAddSetStatusNode && (
+                            <DropdownMenuItem onClick={onAddSetStatusNode}>
+                                <BadgeCheck className="w-4 h-4 mr-2 text-blue-600" />
+                                Set Status (New / Contacted / Qualified)
+                            </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={onAddEndNode}>
                             <Flag className="w-4 h-4 mr-2 text-amber-600" />
                             End Node

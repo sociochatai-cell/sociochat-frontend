@@ -50,6 +50,7 @@ import {
     addInputNode,
     addApiNode,
     addLeadNode,
+    addSetStatusNode,
     updateNode,
     deleteNode,
     addButton,
@@ -588,6 +589,38 @@ export function InteractiveAutomation() {
         }, 50);
     }, [flow]);
 
+    const handleAddSetStatusNode = useCallback(() => {
+        let position: { x: number; y: number } | undefined;
+        if (reactFlowInstance.current) {
+            const viewport = reactFlowInstance.current.getViewport();
+            const zoom = viewport.zoom || 1;
+            const containerWidth = 800;
+            const containerHeight = 600;
+            position = {
+                x: (-viewport.x + containerWidth / 2) / zoom,
+                y: (-viewport.y + containerHeight / 2) / zoom,
+            };
+        }
+
+        const updatedFlow = addSetStatusNode(flow, position);
+        setFlow(updatedFlow);
+        setNodes(toReactFlowNodes(updatedFlow.nodes));
+        setIsDirty(true);
+
+        const newNode = updatedFlow.nodes[updatedFlow.nodes.length - 1];
+        setSelectedNodeId(newNode.id);
+
+        setTimeout(() => {
+            if (reactFlowInstance.current && newNode) {
+                reactFlowInstance.current.setCenter(
+                    newNode.position.x + 100,
+                    newNode.position.y + 50,
+                    { zoom: 1, duration: 500 }
+                );
+            }
+        }, 50);
+    }, [flow]);
+
     const handleAutoLayout = useCallback(() => {
         const layoutedFlow = calculateAutoLayout(flow);
         setFlow(layoutedFlow);
@@ -1019,6 +1052,7 @@ export function InteractiveAutomation() {
                 onAddInputNode={handleAddInputNode}
                 onAddApiNode={handleAddApiNode}
                 onAddLeadNode={handleAddLeadNode}
+                onAddSetStatusNode={handleAddSetStatusNode}
                 onAddEndNode={handleAddEndNode}
                 onAutoLayout={handleAutoLayout}
                 onGenerateWithAi={handleOpenAiGenerator}
