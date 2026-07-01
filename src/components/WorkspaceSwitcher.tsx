@@ -10,8 +10,12 @@ import {
   getWorkspaceId,
   setWorkspaceId,
   getWorkspaces,
+  setWorkspaces,
   type Workspace,
 } from "@/whatsapp/utils/workspaceContext";
+import apiClient from "@/lib/apiClient";
+
+const CREATE_NEW = "__create_new__";
 
 /**
  * Header workspace selector. Reads the user's cached workspaces (populated at login by
@@ -28,13 +32,27 @@ export default function WorkspaceSwitcher() {
     setCurrent(getWorkspaceId() ?? undefined);
   }, []);
 
-  if (wsList.length <= 1) return null;
-
-  const handleChange = (value: string) => {
+  const handleChange = async (value: string) => {
+    if (value === CREATE_NEW) {
+      const name = window.prompt("New workspace name:");
+      if (!name || !name.trim()) return;
+      const res = await apiClient.post("/workspaces", { name: name.trim() });
+      if (!res.ok) {
+        alert(res.error?.error === "workspace_limit_exceeded" ? "Workspace limit reached for your plan." : "Could not create workspace.");
+        return;
+      }
+      const ws = res.data.workspace;
+      setWorkspaces([...wsList, ws]);
+      setWorkspaceId(String(ws.id));
+      window.location.reload();
+      return;
+    }
     setWorkspaceId(value);
     setCurrent(value);
     window.location.reload();
   };
+
+  if (wsList.length === 0) return null;
 
   return (
     <Select value={current} onValueChange={handleChange}>
@@ -47,6 +65,7 @@ export default function WorkspaceSwitcher() {
             {ws.business_name || ws.name || `Workspace ${ws.id}`}
           </SelectItem>
         ))}
+        <SelectItem value={CREATE_NEW}>+ New Workspace</SelectItem>
       </SelectContent>
     </Select>
   );
