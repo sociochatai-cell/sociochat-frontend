@@ -75,9 +75,7 @@ const ConversationsInbox = lazy(() => import('./whatsapp_automation/pages/Conver
 const AdCreatorWizard = lazy(() => import('./ctwa/pages/AdCreatorWizard'));
 const CampaignsListPage = lazy(() => import('./ctwa/pages/CampaignsListPage'));
 
-/* ── Lazy-loaded WhatsApp Flow OS / Bookings pages ── */
-const BookingDashboard = lazy(() => import('./whatsapp/pages/BookingDashboard'));
-const BookingSettings = lazy(() => import('./whatsapp/pages/BookingSettings'));
+/* ── Lazy-loaded WhatsApp Flow submissions page ── */
 const FlowSubmissions = lazy(() => import('./whatsapp/pages/FlowSubmissions'));
 
 /* ── Lazy-loaded CRM pages ── */
@@ -192,8 +190,6 @@ export default function App() {
         <Route path="whatsapp/guide" element={<WhatsAppGuide />} />
         <Route path="coexistence" element={<G feature="whatsapp_coexistence"><CoexistenceDashboard /></G>} />
         <Route path="catalog" element={<G feature="whatsapp_catalog"><WhatsAppCatalog /></G>} />
-        <Route path="bookings" element={<G feature="whatsapp_bookings"><BookingDashboard /></G>} />
-        <Route path="bookings/settings" element={<G feature="whatsapp_bookings"><BookingSettings /></G>} />
         <Route path="campaign/create" element={<G feature="whatsapp_ctwa"><CreateCTWA /></G>} />
         {/* CRM — gated by 'crm' feature key */}
         <Route path="crm" element={<G feature="crm"><CRMDashboard /></G>} />

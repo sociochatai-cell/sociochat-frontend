@@ -41,7 +41,6 @@ const NAV_ITEMS = [
     { label: 'Drip Campaigns', path: '/dashboard/drip', icon: Zap },
     { label: 'Interactive Flows', path: '/dashboard/interactive-automation', icon: Workflow },
     { label: 'WhatsApp Forms', path: '/dashboard/flows', icon: ClipboardList },
-    { label: 'Bookings', path: '/dashboard/bookings', icon: CalendarClock },
     { label: 'Catalog', path: '/dashboard/catalog', icon: Link2 },
     { label: 'Contacts', path: '/dashboard/contacts', icon: Users },
     { label: 'Datasets', path: '/dashboard/datasets', icon: Database },
