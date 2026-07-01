@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { GatedRoute } from '@/components/feature-gate/GatedRoute';
 import RequireAdmin from '@/components/auth/RequireAdmin';
@@ -103,6 +103,15 @@ function G({ feature, children }: { feature: Parameters<typeof GatedRoute>[0]['f
   return <GatedRoute feature={feature}>{children}</GatedRoute>;
 }
 
+// Source (Sociovia) pages navigate to /dashboard/whatsapp/<x>, but those routes are
+// registered at /dashboard/<x>. Redirect the stray /whatsapp/ variants so create/
+// builder buttons land on the right page instead of the catch-all -> /dashboard.
+function StripWhatsAppPrefix() {
+  const loc = useLocation();
+  const to = loc.pathname.replace('/dashboard/whatsapp/', '/dashboard/') + loc.search;
+  return <Navigate to={to} replace />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -197,6 +206,7 @@ export default function App() {
         <Route path="crm/deals" element={<G feature="crm"><CRMDeals /></G>} />
         <Route path="crm/contacts" element={<G feature="crm"><CRMContacts /></G>} />
         <Route path="crm/settings" element={<G feature="crm"><CRMSettings /></G>} />
+        <Route path="whatsapp/*" element={<StripWhatsAppPrefix />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
 
