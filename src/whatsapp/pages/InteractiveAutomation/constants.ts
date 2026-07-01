@@ -230,9 +230,9 @@ export const NODE_COLORS = {
         text: '#065F46', // emerald-800
     },
     set_status: {
-        bg: '#ECFDF5', // emerald-50
-        border: '#059669', // emerald-600
-        text: '#065F46', // emerald-800
+        bg: '#EFF6FF', // blue-50
+        border: '#2563EB', // blue-600
+        text: '#1E3A8A', // blue-900
     },
 } as const;
 
