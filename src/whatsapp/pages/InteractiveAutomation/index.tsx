@@ -36,7 +36,7 @@ import { getWorkspaceId } from '../../utils/workspaceContext';
 import { cachedFetch } from '../../utils/waPersistentCache';
 
 // Local imports
-import { TriggerNode, MessageNode, TemplateNode, InputNode, ApiNode, EndNode, LeadNode } from './nodes';
+import { TriggerNode, MessageNode, TemplateNode, InputNode, ApiNode, EndNode, LeadNode, SetStatusNode } from './nodes';
 import { NodeEditor } from './panels';
 import { FlowToolbar } from './FlowToolbar';
 import {
@@ -99,6 +99,7 @@ const nodeTypes: NodeTypes = {
     api: ApiNode,
     end: EndNode,
     lead: LeadNode,
+    set_status: SetStatusNode,
 };
 
 // =============================================================================
