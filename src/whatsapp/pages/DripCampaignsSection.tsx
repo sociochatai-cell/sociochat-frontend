@@ -12,6 +12,7 @@ import { GitMerge, Plus, Trash2, Clock, Play, UserPlus, ArrowRight, Loader2, Ref
 import { toast } from 'sonner';
 import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 import { cachedFetch } from '../utils/waPersistentCache';
+import { getWorkspaceId } from '../utils/workspaceContext';
 import { DripEnrollmentDialog } from '../components/DripEnrollmentDialog';
 import { RefreshButton } from '../components/RefreshButton';
 
@@ -53,8 +54,28 @@ interface Campaign {
     steps: Step[];
 }
 
-export function DripCampaignsSection({ accountId }: { accountId: number }) {
+export function DripCampaignsSection({ accountId: accountIdProp }: { accountId: number }) {
     const navigate = useNavigate();
+    // The standalone /drip route mounts this with accountId={0}; resolve the active
+    // account for the current workspace so template/campaign loads use a real id.
+    const [resolvedAccountId, setResolvedAccountId] = useState<number>(accountIdProp || 0);
+    const accountId = accountIdProp || resolvedAccountId;
+
+    useEffect(() => {
+        if (accountIdProp) return; // parent supplied a real account
+        const ws = getWorkspaceId();
+        if (!ws) return;
+        (async () => {
+            try {
+                const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts?workspace_id=${ws}`, { credentials: 'include' });
+                if (!res.ok) return;
+                const data = await res.json();
+                const list = data.accounts || [];
+                const active = list.find((a: any) => a.is_active) || list[list.length - 1];
+                if (active?.id) setResolvedAccountId(active.id);
+            } catch { /* leave unresolved; loads simply won't fire */ }
+        })();
+    }, [accountIdProp]);
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [loading, setLoading] = useState(true);
     const [isOpen, setIsOpen] = useState(false);
