@@ -136,7 +136,6 @@ function DockItem({
             ref={ref}
             to={path}
             end={exact}
-            title={label}
             className="relative group flex items-center justify-center outline-none"
             onMouseEnter={showTip}
             onMouseLeave={() => setIsHovered(false)}
@@ -190,15 +189,24 @@ function DockItem({
             <AnimatePresence>
                 {isHovered && (
                     <motion.div
-                        initial={{ opacity: 0, x: -4, scale: 0.92 }}
+                        initial={{ opacity: 0, x: -6, scale: 0.9 }}
                         animate={{ opacity: 1, x: 0, scale: 1 }}
-                        exit={{ opacity: 0, x: -4, scale: 0.92 }}
-                        transition={{ duration: 0.12 }}
-                        className="fixed px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap bg-slate-900 text-white shadow-2xl pointer-events-none -translate-y-1/2"
-                        style={{ top: tipPos.top, left: tipPos.left, zIndex: 9999, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}
+                        exit={{ opacity: 0, x: -6, scale: 0.9 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                        className="fixed px-3 py-1.5 rounded-lg text-[12.5px] font-semibold tracking-tight whitespace-nowrap text-white pointer-events-none -translate-y-1/2 ring-1 ring-white/10"
+                        style={{
+                            top: tipPos.top,
+                            left: tipPos.left,
+                            zIndex: 9999,
+                            background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+                            boxShadow: '0 10px 30px rgba(2,6,23,0.35), 0 2px 6px rgba(2,6,23,0.25)',
+                        }}
                     >
                         {label}
-                        <div className="absolute left-0 top-1/2 -translate-x-[5px] -translate-y-1/2 w-2.5 h-2.5 rotate-45 bg-slate-900" />
+                        <div
+                            className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rotate-45 ring-1 ring-white/10"
+                            style={{ background: '#1e293b' }}
+                        />
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -276,7 +284,6 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
                                 key={path}
                                 to={path}
                                 end={exact}
-                                title={label}
                                 className={`
                                     flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
                                     transition-all duration-150
