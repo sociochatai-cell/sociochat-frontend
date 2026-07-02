@@ -236,7 +236,8 @@ export function DripCampaignsSection({ accountId }: { accountId: number }) {
         try {
             setLoadingTemplates(true);
             const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/templates?account_id=${accountId}&status=APPROVED`, {
-                credentials: 'include'
+                credentials: 'include',
+                waBypass: true, // always fetch fresh — a stale empty cache (from before templates synced) must not hide the list
             });
             if (res.ok) {
                 const data = await res.json();
