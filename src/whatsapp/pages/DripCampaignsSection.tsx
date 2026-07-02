@@ -271,6 +271,35 @@ export function DripCampaignsSection({ accountId: accountIdProp }: { accountId: 
         }
     }
 
+    // Build a template Step object from the current step-form fields (pure, no state writes).
+    // Shared by the "Add Step" button and by handleCreate (to auto-commit an un-added step).
+    function buildTemplateStep(order: number): Step | null {
+        if (!stepTemplate) return null;
+        const selectedTpl = templates.find(t => t.name === stepTemplate);
+        const varCount = selectedTpl?.variable_count || 0;
+        const template_params: Record<string, { source: string; value: string; fallback: string }> = {};
+        for (let i = 1; i <= varCount; i++) {
+            const fieldValue = stepVariables[String(i)] || '';
+            const fallbackValue = stepFallbacks[String(i)] || '';
+            template_params[String(i)] = {
+                source: fieldValue ? 'field' : 'static',
+                value: fieldValue || fallbackValue || `var_${i}`,
+                fallback: fallbackValue || 'Customer'
+            };
+        }
+        return {
+            step_order: order,
+            template_name: stepTemplate,
+            delay_seconds: stepDelayType === 'relative' ? parseInt(stepDelay) * 60 : 0,
+            scheduled_at: stepDelayType === 'absolute' && stepScheduledAt ? new Date(stepScheduledAt).toISOString() : undefined,
+            language: selectedTpl?.language || 'en_US',
+            template_params: Object.keys(template_params).length > 0 ? template_params : undefined,
+            exit_on_reply: stepExitOnReply,
+            header_image_url: stepHeaderImage || undefined,
+            step_type: 'template'
+        } as Step & { header_image_url?: string };
+    }
+
     function addStep() {
         // Logic for Loop Step
         if (stepType === 'loop') {
@@ -290,37 +319,8 @@ export function DripCampaignsSection({ accountId: accountIdProp }: { accountId: 
         }
 
         // Logic for Template Step
-        if (!stepTemplate) return;
-
-        // Find selected template to get variable count
-        const selectedTpl = templates.find(t => t.name === stepTemplate);
-        const varCount = selectedTpl?.variable_count || 0;
-
-        // Build template_params from step-level variable mapping
-        // Uses the values from stepVariables and stepFallbacks state
-        const template_params: Record<string, { source: string; value: string; fallback: string }> = {};
-        for (let i = 1; i <= varCount; i++) {
-            const fieldValue = stepVariables[String(i)] || '';
-            const fallbackValue = stepFallbacks[String(i)] || '';
-
-            template_params[String(i)] = {
-                source: fieldValue ? 'field' : 'static',
-                value: fieldValue || fallbackValue || `var_${i}`, // Use field name or fallback
-                fallback: fallbackValue || 'Customer'
-            };
-        }
-
-        const newStep: Step = {
-            step_order: currentSteps.length + 1,
-            template_name: stepTemplate,
-            delay_seconds: stepDelayType === 'relative' ? parseInt(stepDelay) * 60 : 0,
-            scheduled_at: stepDelayType === 'absolute' && stepScheduledAt ? new Date(stepScheduledAt).toISOString() : undefined,
-            language: selectedTpl?.language || 'en_US',
-            template_params: Object.keys(template_params).length > 0 ? template_params : undefined,
-            exit_on_reply: stepExitOnReply,
-            header_image_url: stepHeaderImage || undefined,
-            step_type: 'template'
-        } as Step & { header_image_url?: string };
+        const newStep = buildTemplateStep(currentSteps.length + 1);
+        if (!newStep) return;
 
         setCurrentSteps([...currentSteps, newStep]);
 
@@ -392,12 +392,28 @@ export function DripCampaignsSection({ accountId: accountIdProp }: { accountId: 
             toast.error("Name is required");
             return;
         }
+        if (!accountId) {
+            toast.error("No WhatsApp account found for this workspace");
+            return;
+        }
+
+        // Auto-commit a template step the user selected but didn't click "Add Step" for,
+        // so the Create button isn't a dead-end when there's exactly one obvious step.
+        let steps = currentSteps;
+        if (steps.length === 0) {
+            const pending = buildTemplateStep(1);
+            if (pending) steps = [pending];
+        }
+        if (steps.length === 0) {
+            toast.error("Add at least one step (pick a template)");
+            return;
+        }
 
         try {
             const payload: any = {
                 ...newCampaign,
                 status: 'active',  // Set to active so scheduler picks it up
-                steps: currentSteps
+                steps
             };
 
             // For Google Sheet triggers, include sheet configuration
@@ -1507,10 +1523,10 @@ export function DripCampaignsSection({ accountId: accountIdProp }: { accountId: 
                                     </div>
                                 </div>
                                 <DialogFooter>
-                                    <Button 
-                                        onClick={handleCreate} 
-                                        disabled={currentSteps.length === 0}
-                                        title={currentSteps.length === 0 ? "Add at least one step with a template" : ""}
+                                    <Button
+                                        onClick={handleCreate}
+                                        disabled={currentSteps.length === 0 && !stepTemplate}
+                                        title={currentSteps.length === 0 && !stepTemplate ? "Add at least one step with a template" : ""}
                                     >
                                         Create Campaign
                                     </Button>
