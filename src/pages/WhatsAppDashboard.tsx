@@ -664,23 +664,14 @@ export default function WhatsAppDashboard() {
                             {/* Section 1: Executive Summary (CEO View) */}
                             <ExecutiveSummaryCards data={summaryData} loading={sectionLoading} />
 
-                            {/* Section 2: AI-Powered Insights */}
+                            {/* Section 2: Category Performance (swapped with AI Insights) */}
                             <motion.div
                                 initial={{ opacity: 0, y: 12 }}
                                 whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true, amount: 0.2 }}
-                                transition={{ type: 'tween', duration: 0.45, ease: 'easeOut' }}
+                                viewport={{ once: true, amount: 0.15 }}
+                                transition={{ type: 'tween', duration: 0.45, ease: 'easeOut', delay: 0.05 }}
                             >
-                                {sectionLoading ? (
-                                    <AIInsightsLoadingSkeleton />
-                                ) : (
-                                    <AIInsightsSection
-                                        insights={aiInsights}
-                                        loading={aiInsightsLoading}
-                                        onGenerateInsights={() => generateRealAIInsights(false)}
-                                        onRefreshInsights={() => generateRealAIInsights(true)}
-                                    />
-                                )}
+                                <CategoryPerformance categories={categoryData} loading={sectionLoading} />
                             </motion.div>
 
                             {/* Section 3: Delivery Funnel + Trend Chart */}
@@ -706,14 +697,23 @@ export default function WhatsAppDashboard() {
                                 />
                             </motion.div>
 
-                            {/* Section 4: Category Performance */}
+                            {/* Section 4: AI-Powered Insights (swapped with Category Performance) */}
                             <motion.div
                                 initial={{ opacity: 0, y: 12 }}
                                 whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true, amount: 0.15 }}
-                                transition={{ type: 'tween', duration: 0.45, ease: 'easeOut', delay: 0.05 }}
+                                viewport={{ once: true, amount: 0.2 }}
+                                transition={{ type: 'tween', duration: 0.45, ease: 'easeOut' }}
                             >
-                                <CategoryPerformance categories={categoryData} loading={sectionLoading} />
+                                {sectionLoading ? (
+                                    <AIInsightsLoadingSkeleton />
+                                ) : (
+                                    <AIInsightsSection
+                                        insights={aiInsights}
+                                        loading={aiInsightsLoading}
+                                        onGenerateInsights={() => generateRealAIInsights(false)}
+                                        onRefreshInsights={() => generateRealAIInsights(true)}
+                                    />
+                                )}
                             </motion.div>
 
                             {/* Section 5: Conversation Insights */}
