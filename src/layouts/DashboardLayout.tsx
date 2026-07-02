@@ -100,6 +100,15 @@ function DockItem({
 }) {
     const ref = useRef<HTMLAnchorElement>(null);
     const [isHovered, setIsHovered] = useState(false);
+    // Tooltip is positioned with `fixed` (computed from the icon's rect) so it isn't
+    // clipped by the dock's scroll container (overflow-y-auto forces overflow-x to clip).
+    const [tipPos, setTipPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+    const showTip = () => {
+        const rect = ref.current?.getBoundingClientRect();
+        if (rect) setTipPos({ top: rect.top + rect.height / 2, left: rect.right + 16 });
+        setIsHovered(true);
+    };
 
     // Create a fallback MotionValue if none is provided
     const fallbackY = useMotionValue(Infinity);
@@ -129,7 +138,7 @@ function DockItem({
             to={path}
             end={exact}
             className="relative group flex items-center justify-center outline-none"
-            onMouseEnter={() => setIsHovered(true)}
+            onMouseEnter={showTip}
             onMouseLeave={() => setIsHovered(false)}
         >
             <motion.div
@@ -177,7 +186,7 @@ function DockItem({
                 )}
             </motion.div>
 
-            {/* Tooltip — name label */}
+            {/* Tooltip — name label (fixed-positioned so the scroll container can't clip it) */}
             <AnimatePresence>
                 {isHovered && (
                     <motion.div
@@ -185,8 +194,8 @@ function DockItem({
                         animate={{ opacity: 1, x: 0, scale: 1 }}
                         exit={{ opacity: 0, x: -4, scale: 0.92 }}
                         transition={{ duration: 0.12 }}
-                        className="absolute left-full ml-4 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap bg-slate-900 text-white shadow-2xl pointer-events-none"
-                        style={{ zIndex: 9999, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}
+                        className="fixed px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap bg-slate-900 text-white shadow-2xl pointer-events-none -translate-y-1/2"
+                        style={{ top: tipPos.top, left: tipPos.left, zIndex: 9999, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}
                     >
                         {label}
                         <div className="absolute left-0 top-1/2 -translate-x-[5px] -translate-y-1/2 w-2.5 h-2.5 rotate-45 bg-slate-900" />
