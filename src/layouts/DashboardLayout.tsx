@@ -136,6 +136,7 @@ function DockItem({
             ref={ref}
             to={path}
             end={exact}
+            title={label}
             className="relative group flex items-center justify-center outline-none"
             onMouseEnter={showTip}
             onMouseLeave={() => setIsHovered(false)}
@@ -275,6 +276,7 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
                                 key={path}
                                 to={path}
                                 end={exact}
+                                title={label}
                                 className={`
                                     flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
                                     transition-all duration-150
