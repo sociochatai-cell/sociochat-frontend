@@ -11,6 +11,7 @@ import { Loader2, Upload, UserPlus, FileSpreadsheet, Eye, AlertCircle, CheckCirc
 import { toast } from 'sonner';
 import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
 import { invalidateHttpCache } from '../utils/waPersistentCache';
+import { getWorkspaceId } from '../utils/workspaceContext';
 
 interface VariableMapping {
   key: string;
@@ -762,7 +763,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
         body: JSON.stringify({
           phone_number: manualPhone,
           name: manualName,
-          workspace_id: accountId,
+          workspace_id: getWorkspaceId() || undefined,
           profile_data: profileData,
           per_step_variables: Object.keys(perStepVariables).length > 0 ? perStepVariables : undefined
         })
@@ -843,7 +844,7 @@ export function DripEnrollmentDialog({ open, onOpenChange, campaign, accountId, 
         credentials: 'include',
         body: JSON.stringify({
           dataset_id: selectedDatasetId,
-          workspace_id: accountId,
+          workspace_id: getWorkspaceId() || undefined,
           phone_column: datasetColumnMapping['phone'] || 'phone',
           name_column: datasetColumnMapping['name'] || 'name',
           column_mapping: datasetColumnMapping,

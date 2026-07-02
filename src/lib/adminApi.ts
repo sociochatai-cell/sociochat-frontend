@@ -69,6 +69,18 @@ export const adminApi = {
         return res.json();
     },
 
+    // Phase-2: per-user Sociovia link toggle. enable=true links the user to their
+    // Sociovia account (by email) + mirrors their workspaces; enable=false unlinks.
+    setUserSociovia: async (userId: number, enable: boolean) => {
+        const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/sociovia-link`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: adminHeaders(),
+            body: JSON.stringify({ enable }),
+        });
+        return res.json();
+    },
+
     getReviewUsers: async () => {
         const res = await fetch(`${API_BASE_URL}/api/admin/review`, {
             method: 'POST',

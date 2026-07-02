@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
     Dialog,
     DialogContent,
@@ -26,6 +27,7 @@ interface UserRow {
     plan?: string;
     status?: string;
     role?: string;
+    sociovia_linked?: boolean;
 }
 
 interface FeatureDef {
@@ -90,6 +92,27 @@ export default function AdminUsers() {
             toast({ title: 'Updated', description: `Plan set to ${plan}` });
             load();
         }
+    };
+
+    // Phase-2: per-user Sociovia link toggle. ON links the user to their Sociovia
+    // account (by email) + mirrors their workspaces; OFF unlinks.
+    const toggleSociovia = async (userId: number, enable: boolean) => {
+        const res = await adminApi.setUserSociovia(userId, enable);
+        if (res.success) {
+            toast({
+                title: enable ? 'Linked to Sociovia' : 'Unlinked',
+                description: enable ? `Mirrored ${res.workspaces_mirrored ?? 0} workspace(s).` : 'Cross-app link removed.',
+            });
+        } else {
+            toast({
+                title: 'Sociovia link failed',
+                description: res.error === 'no_sociovia_account_for_email'
+                    ? 'No Sociovia account exists with this user\'s email.'
+                    : (res.error || 'Could not update the link.'),
+                variant: 'destructive',
+            });
+        }
+        load();
     };
 
     const inspectLogin = async (userId: number) => {
@@ -203,6 +226,10 @@ export default function AdminUsers() {
                             <Button size="sm" variant="outline" onClick={() => inspectLogin(u.id)}>
                                 <LogIn className="h-4 w-4 mr-1" /> Inspect
                             </Button>
+                            <div className="flex items-center gap-2" title="Link this user's workspaces to their Sociovia account (two-way sync)">
+                                <span className="text-xs text-muted-foreground">Sociovia</span>
+                                <Switch checked={!!u.sociovia_linked} onCheckedChange={(v) => toggleSociovia(u.id, v)} />
+                            </div>
                         </div>
                     ))}
                 </CardContent>
