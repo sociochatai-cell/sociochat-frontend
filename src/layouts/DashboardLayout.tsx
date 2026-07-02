@@ -9,7 +9,7 @@ import {
     ChevronDown, Home, ClipboardList,
     ChevronsLeft, ChevronsRight, Smartphone,
     LayoutDashboard, UserPlus, Handshake, Contact2, SlidersHorizontal,
-    CreditCard, CalendarClock,
+    CreditCard, CalendarClock, Layers,
 } from 'lucide-react';
 import {
     motion,
@@ -32,6 +32,7 @@ import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
    ══════════════════════════════════════════════ */
 const NAV_ITEMS = [
     { label: 'Dashboard', path: '/dashboard', icon: Home, exact: true },
+    { label: 'Workspaces', path: '/dashboard/workspaces', icon: Layers, exact: true },
     { label: 'Hub', path: '/dashboard/hub', icon: LayoutTemplate },
     { label: 'Inbox', path: '/dashboard/inbox', icon: Inbox },
     { label: 'Bulk Send', path: '/dashboard/bulk', icon: Send },
@@ -136,6 +137,7 @@ function DockItem({
             ref={ref}
             to={path}
             end={exact}
+            title={label}
             className="relative group flex items-center justify-center outline-none"
             onMouseEnter={showTip}
             onMouseLeave={() => setIsHovered(false)}
