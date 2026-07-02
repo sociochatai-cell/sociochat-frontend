@@ -113,7 +113,11 @@ interface HealthData {
 
 function catalogApi(path: string, options?: RequestInit) {
   const workspaceId = getWorkspaceId();
-  const url = new URL(`${WHATSAPP_REST_API_PREFIX}${path}`);
+  // WHATSAPP_REST_API_PREFIX is relative ("/api/whatsapp") in the same-origin merged app,
+  // so `new URL()` needs an absolute base or it throws "Invalid URL" (which was silently
+  // swallowed, making every catalog fetch no-op). Passing window.location.origin as the base
+  // works for both the relative prefix and an absolute prod prefix.
+  const url = new URL(`${WHATSAPP_REST_API_PREFIX}${path}`, window.location.origin);
   if (workspaceId) url.searchParams.set('workspace_id', workspaceId);
 
   return cachedFetch(url.toString(), {
