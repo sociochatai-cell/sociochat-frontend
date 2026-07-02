@@ -7,7 +7,7 @@ import {
     Settings, Users, Database, Send, Workflow, Zap,
     Inbox, LogOut, Link2, User, ChevronRight,
     ChevronDown, Home, ClipboardList,
-    ChevronsLeft, ChevronsRight, Smartphone, Menu,
+    ChevronsLeft, ChevronsRight, Smartphone,
     LayoutDashboard, UserPlus, Handshake, Contact2, SlidersHorizontal,
     CreditCard, CalendarClock,
 } from 'lucide-react';
@@ -24,7 +24,6 @@ import { ROUTE_FEATURE_MAP } from '@/config/featureGating';
 import { AdminInspectBanner } from '@/components/admin/AdminInspectBanner';
 import { clearAllUserData } from '@/lib/userSession';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-import { MobileNavSheet } from '@/components/layout/MobileNavSheet';
 import { useBranding } from '@/branding/BrandingContext';
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
 
@@ -393,7 +392,7 @@ function Breadcrumb() {
 /* ══════════════════════════════════════════════
    HEADER BAR
    ══════════════════════════════════════════════ */
-function Header({ onMenuClick }: { onMenuClick?: () => void }) {
+function Header() {
     const navigate = useNavigate();
     const [userName, setUserName] = useState('User');
     const [userEmail, setUserEmail] = useState('');
@@ -452,14 +451,6 @@ function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             }}
         >
             <div className="flex items-center gap-2 min-w-0 flex-1">
-                <button
-                    type="button"
-                    onClick={onMenuClick}
-                    className="md:hidden flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                    aria-label="Open menu"
-                >
-                    <Menu className="h-5 w-5" />
-                </button>
                 <Breadcrumb />
             </div>
 
@@ -617,7 +608,6 @@ function AnimatedOutlet() {
    ══════════════════════════════════════════════ */
 export default function DashboardLayout() {
     const [expanded, setExpanded] = useState(false);
-    const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const isMobile = useIsMobile();
     const navigate = useNavigate();
     const setNavigate = useAgentStore((s) => s.setNavigate);
@@ -636,19 +626,13 @@ export default function DashboardLayout() {
     return (
         <div className="flex min-h-screen overflow-x-hidden" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, rgb(var(--brand-500) / 0.08) 100%)' }}>
             <Sidebar expanded={expanded} onToggle={() => setExpanded(!expanded)} />
-            <MobileNavSheet
-                open={mobileNavOpen}
-                onOpenChange={setMobileNavOpen}
-                title={branding.short_name}
-                items={NAV_ITEMS}
-            />
             <motion.div
                 className="flex-1 flex flex-col min-h-screen min-w-0 w-full"
                 animate={{ marginLeft: sidebarMargin }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             >
                 <AdminInspectBanner />
-                <Header onMenuClick={() => setMobileNavOpen(true)} />
+                <Header />
                 <div className="flex-1 min-w-0 overflow-x-hidden px-2 sm:px-0">
                     <AnimatedOutlet />
                 </div>
