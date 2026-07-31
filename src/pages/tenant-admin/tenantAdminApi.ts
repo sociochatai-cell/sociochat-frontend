@@ -360,14 +360,22 @@ export const tenantAdminApi = {
     resetPassword: async (id: string | number): Promise<ResetPasswordResponse> =>
         unwrap(await apiClient.post(`${BASE}/users/${id}/reset-password`)),
 
-    deleteUser: async (id: string | number): Promise<{ success: boolean }> =>
-        unwrap(await apiClient.delete(`${BASE}/users/${id}`)),
+    // Delete a user — requires the admin's own password (sent as a header so it
+    // isn't logged in the URL).
+    deleteUser: async (id: string | number, password: string): Promise<{ success: boolean }> =>
+        unwrap(await apiClient.delete(`${BASE}/users/${id}`, { 'X-Confirm-Password': password })),
 
     // "Login as / Impersonate" a user in THIS tenant. Returns the impersonated
     // user, the tenant (code + branding to re-theme the app), and the user's
     // workspaces so the dashboard can resume.
     impersonateUser: async (id: string | number): Promise<ImpersonateResponse> =>
         unwrap(await apiClient.post(`${BASE}/users/${id}/impersonate`)),
+
+    // Usage/exhaustion stats for one user in THIS tenant.
+    getUserUsage: async (
+        id: string | number,
+    ): Promise<{ success: boolean; plan: string; usage: any }> =>
+        unwrap(await apiClient.get(`${BASE}/users/${id}/usage`)),
 
     // Read-only plan, limits, and feature flags for the current tenant.
     getPlan: async (): Promise<PlanResponse> =>

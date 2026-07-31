@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
+import { API_BASE_URL, WHATSAPP_REST_API_PREFIX, API_ENDPOINT } from "@/config";
+import { isAgentMode } from '@/lib/authToken';
 import { getWorkspaceId, setWorkspaceId } from '../utils/workspaceContext';
 import crmApi from '@/crm/api';
 import {
@@ -56,6 +57,13 @@ interface WhatsAppAccount {
   verified_name: string;
   is_active: boolean;
   is_coexistence?: boolean;
+}
+
+interface CanClaimResponse {
+  success: boolean;
+  allowed: boolean;
+  reason: null | 'assigned_to_other' | 'workspace_not_granted';
+  message: string;
 }
 
 export function WhatsAppInbox() {
@@ -401,6 +409,37 @@ export function WhatsAppInbox() {
     setCreatingChat(true);
     try {
       const wsId = getWorkspaceId();
+
+      // Agents only: instant conflict feedback before opening the chat. The send
+      // path enforces this server-side too, so this is purely a pre-check — if it
+      // fails (network/parse), fall through and let the send-time guard handle it.
+      if (isAgentMode()) {
+        try {
+          const token = localStorage.getItem('sociovia_agent_token');
+          const claimRes = await fetch(`${API_ENDPOINT}/agent-auth/can-claim`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            credentials: 'omit',
+            body: JSON.stringify({ workspace_id: Number(wsId), phone }),
+          });
+          const claimData: CanClaimResponse = await claimRes.json();
+          if (!claimData.allowed) {
+            toast.error(
+              claimData.message ||
+                (claimData.reason === 'assigned_to_other'
+                  ? 'This number is already assigned to another agent.'
+                  : 'You cannot start a chat with this number.')
+            );
+            return;
+          }
+        } catch (claimErr) {
+          console.warn('can-claim pre-check failed, falling through to send-time guard:', claimErr);
+        }
+      }
+
       const wsParam = wsId ? `&workspace_id=${wsId}` : '';
       const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/conversations?limit=200${wsParam}`, { credentials: 'include' });
       const data = await res.json();

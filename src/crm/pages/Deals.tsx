@@ -90,14 +90,30 @@ export default function Deals() {
         if (!form.name.trim()) { toast.error('Deal name is required'); return; }
         setSubmitting(true);
         try {
-            const created = await crmApi.createDeal({
+            const created: any = await crmApi.createDeal({
                 name: form.name.trim(),
                 company: form.company.trim() || undefined,
                 value: Number(form.value) || 0,
                 stage: form.stage,
             });
-            if (created && created.id) setDeals((prev) => [created, ...prev]);
-            else fetchDeals();
+            // Backend returns only { id } (or { deal:{...} }); rebuild the row from
+            // the form so the new deal shows its name/value/stage instead of blank.
+            const newId = created?.id ?? created?.deal?.id;
+            if (newId) {
+                const newDeal: Deal = (created?.deal && created.deal.name)
+                    ? created.deal
+                    : {
+                        ...(created?.deal || {}),
+                        id: newId,
+                        name: form.name.trim(),
+                        company: form.company.trim() || undefined,
+                        value: Number(form.value) || 0,
+                        stage: form.stage,
+                    } as Deal;
+                setDeals((prev) => [newDeal, ...prev]);
+            } else {
+                fetchDeals();
+            }
             toast.success('Deal added');
             setAddOpen(false);
             setForm({ name: '', company: '', value: '', stage: 'prospect' });

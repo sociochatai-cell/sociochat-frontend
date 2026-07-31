@@ -7,6 +7,7 @@
 // only when a token exists and no Authorization is already set; any error falls
 // through to the original fetch (never breaks a working call).
 import { API_BASE_URL } from "@/config";
+import { getActiveAuth, isAgentMode } from "@/lib/authToken";
 
 let installed = false;
 
@@ -31,15 +32,29 @@ export function installFetchAuth(): void {
       if (typeof input === "string" || input instanceof URL) {
         const url = typeof input === "string" ? input : input.href;
         if (isOwnApi(url)) {
-          const token = sessionStorage.getItem("sv_token") || localStorage.getItem("sv_token");
+          // In AGENT mode (the /agent portal) the reused WhatsApp/CRM pages must
+          // authenticate as the AGENT — never as the owner. Use the agent token
+          // and deliberately do NOT fall back to sv_token, so a stale owner
+          // session can't leak owner identity into an agent's requests. Agent
+          // mode also forces credentials:'omit' so no owner cookie is sent.
+          const { token, isAgent } = getActiveAuth();
           if (token) {
             const headers = new Headers((init && init.headers) || undefined);
             if (!headers.has("Authorization")) {
               headers.set("Authorization", `Bearer ${token}`);
               const nextInit: RequestInit = { ...(init || {}), headers };
-              if (!nextInit.credentials) nextInit.credentials = "include";
+              if (isAgent) {
+                nextInit.credentials = "omit";
+              } else if (!nextInit.credentials) {
+                nextInit.credentials = "include";
+              }
               return orig(input, nextInit);
             }
+          } else if (isAgentMode()) {
+            // Agent mode but no agent token yet (e.g. /agent-login): never let a
+            // raw fetch carry the owner cookie into an agent-context request.
+            const nextInit: RequestInit = { ...(init || {}), credentials: "omit" };
+            return orig(input, nextInit);
           }
         }
       }

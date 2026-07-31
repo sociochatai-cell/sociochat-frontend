@@ -164,7 +164,12 @@ export const validateFlow = (flow: AutomationFlow): ValidationIssue[] => {
             });
         }
 
-        // Check buttons
+        // Check buttons — ONLY for button-type messages. A list message uses rows
+        // (validated below) and may carry leftover/"ghost" buttons in node.data.buttons
+        // from before it was switched to a list. Those buttons are invisible/uneditable
+        // in the list editor, so validating them would raise an unfixable
+        // "Button label is required" that blocks publish forever.
+        if (node.data.interactiveType !== 'list') {
         if (node.data.buttons.length === 0) {
             issues.push({
                 severity: 'warning',
@@ -231,6 +236,7 @@ export const validateFlow = (flow: AutomationFlow): ValidationIssue[] => {
                 });
             }
         });
+        } // end: button validation skipped for list-type messages
 
         // Check for unconnected list rows if interactive type is list
         if (node.data.interactiveType === 'list') {
@@ -408,6 +414,12 @@ export const validateFlow = (flow: AutomationFlow): ValidationIssue[] => {
 
     flow.nodes.forEach(node => {
         if ((node.data as { internalRouter?: boolean })?.internalRouter) {
+            return;
+        }
+        // Don't warn about terminal nodes (End / Lead) that aren't wired in — they
+        // just never run if nothing reaches them, so the "not connected" warning is
+        // noise, not a real error.
+        if (node.type === 'end' || node.type === 'lead') {
             return;
         }
         if (!connectedNodeIds.has(node.id) && node.type !== 'trigger') {
@@ -924,6 +936,14 @@ export const syncEdgesFromNodes = (flow: AutomationFlow): AutomationFlow => {
                     }
                 });
             });
+            // Preserve the message node's DEFAULT-OUTPUT edge (the "Default next
+            // step", sourceHandle 'output'). It lives only in flow.edges (no
+            // node-data field), so without this it's dropped on every re-sync —
+            // which orphans whatever it points to (typically an End node) and
+            // raises a false "This node is not connected to the flow" warning.
+            flow.edges
+                .filter(e => e.source === node.id && (e.sourceHandle === 'output' || e.sourceHandle === 'default' || !e.sourceHandle))
+                .forEach(e => newEdges.push(e));
         }
 
         // 2. Template Buttons
@@ -971,6 +991,15 @@ export const syncEdgesFromNodes = (flow: AutomationFlow): AutomationFlow => {
                 .filter(e => e.source === node.id)
                 .forEach(edge => newEdges.push(edge));
         }
+
+        // 6. Set-Status Node — preserve its output edge (there is no node-data
+        // write-back for set_status, so rebuild from the existing React Flow edge,
+        // else the connection is silently dropped on the next sync).
+        if ((node.type as string) === 'set_status') {
+            flow.edges
+                .filter(e => e.source === node.id)
+                .forEach(edge => newEdges.push(edge));
+        }
     });
     
     return { ...flow, edges: newEdges };
@@ -1000,43 +1029,83 @@ export const calculateNextPosition = (nodes: FlowNode[]): { x: number; y: number
 };
 
 /**
- * Auto-layout nodes in a tree structure
+ * Auto-layout nodes into clean top-down layers.
+ *
+ * Robust version:
+ *  - Works even with NO trigger node (uses every node with no incoming edge as a
+ *    root; falls back to the first node).
+ *  - Lays out EVERY node, including branches not reachable from the trigger
+ *    (disconnected nodes are placed on an extra row instead of being skipped).
+ *  - Packs each level left-to-right with real node widths, and advances rows by
+ *    the tallest node in the level, so nodes never overlap.
  */
 export const calculateAutoLayout = (flow: AutomationFlow): AutomationFlow => {
-    const nodes = [...flow.nodes];
-    const triggerNode = nodes.find(n => n.type === 'trigger');
+    const nodes = flow.nodes.map(n => ({ ...n })); // clone so we never mutate input
+    if (nodes.length === 0) return flow;
 
-    if (!triggerNode) return flow;
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    const dim = (t: string) => NODE_DIMENSIONS[t as keyof typeof NODE_DIMENSIONS] || { width: 220, height: 160 };
 
-    // Start from trigger node
-    const visited = new Set<string>();
-    const layoutNode = (
-        nodeId: string,
-        depth: number,
-        horizontalIndex: number
-    ): void => {
-        if (visited.has(nodeId)) return;
-        visited.add(nodeId);
+    // Adjacency + incoming counts
+    const children = new Map<string, string[]>();
+    const incoming = new Map<string, number>();
+    nodes.forEach(n => incoming.set(n.id, 0));
+    flow.edges.forEach(e => {
+        if (!byId.has(e.source) || !byId.has(e.target)) return;
+        if (!children.has(e.source)) children.set(e.source, []);
+        children.get(e.source)!.push(e.target);
+        incoming.set(e.target, (incoming.get(e.target) || 0) + 1);
+    });
 
-        const node = nodes.find(n => n.id === nodeId);
-        if (!node) return;
+    // Roots: the trigger if present, else every node with no incoming edge, else the first node.
+    const trigger = nodes.find(n => n.type === 'trigger');
+    let roots = trigger ? [trigger.id] : nodes.filter(n => (incoming.get(n.id) || 0) === 0).map(n => n.id);
+    if (roots.length === 0) roots = [nodes[0].id];
 
-        const nodeWidth = NODE_DIMENSIONS[node.type].width;
-        const nodeHeight = NODE_DIMENSIONS[node.type].height;
+    // BFS to assign a depth (row) to every reachable node.
+    const depth = new Map<string, number>();
+    const queue: string[] = [];
+    roots.forEach(id => { if (!depth.has(id)) { depth.set(id, 0); queue.push(id); } });
+    let qi = 0;
+    while (qi < queue.length) {
+        const id = queue[qi++];
+        const d = depth.get(id)!;
+        for (const t of children.get(id) || []) {
+            if (!depth.has(t)) { depth.set(t, d + 1); queue.push(t); }
+        }
+    }
 
-        node.position = {
-            x: 250 + (horizontalIndex - 0.5) * (nodeWidth + 60),
-            y: 50 + depth * (nodeHeight + 80),
-        };
+    // Any node never reached (disconnected) goes on an extra row below everything.
+    let maxDepth = 0;
+    depth.forEach(d => { if (d > maxDepth) maxDepth = d; });
+    nodes.forEach(n => { if (!depth.has(n.id)) depth.set(n.id, maxDepth + 1); });
 
-        // Find children (nodes connected from this node)
-        const childEdges = flow.edges.filter(e => e.source === nodeId);
-        childEdges.forEach((edge, idx) => {
-            layoutNode(edge.target, depth + 1, idx - (childEdges.length - 1) / 2);
+    // Group node ids by depth (preserving flow order for stable columns).
+    const levels = new Map<number, string[]>();
+    nodes.forEach(n => {
+        const d = depth.get(n.id)!;
+        if (!levels.has(d)) levels.set(d, []);
+        levels.get(d)!.push(n.id);
+    });
+
+    const H_GAP = 80;
+    const V_GAP = 90;
+    const startX = 80;
+    let y = 60;
+
+    Array.from(levels.keys()).sort((a, b) => a - b).forEach(d => {
+        const ids = levels.get(d)!;
+        let x = startX;
+        let rowMaxH = 0;
+        ids.forEach(id => {
+            const node = byId.get(id)!;
+            const { width, height } = dim(node.type);
+            node.position = { x, y };
+            x += width + H_GAP;
+            if (height > rowMaxH) rowMaxH = height;
         });
-    };
-
-    layoutNode(triggerNode.id, 0, 0);
+        y += rowMaxH + V_GAP;
+    });
 
     return { ...flow, nodes };
 };

@@ -24,6 +24,21 @@ export interface Workspace {
     id: number | string;
     name: string;
     business_name?: string;
+    /** Rich fields returned by GET /api/workspaces (used by the Manage page). */
+    business_type?: string | null;
+    industry?: string | null;
+    city?: string | null;
+    country?: string | null;
+    website?: string | null;
+    description?: string | null;
+    logo_path?: string | null;
+    created_at?: string | null;
+    whatsapp?: {
+        connected: boolean;
+        phone_number?: string | null;
+        verified_name?: string | null;
+        quality_score?: string | null;
+    };
 }
 
 /**

@@ -23,6 +23,12 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [logoFailed, setLogoFailed] = useState(false);
+    // The tenant is resolved internally from the custom domain (DomainGate stores
+    // its code), so the Tenant Code field is hidden — users sign in with just
+    // email + password. It is revealed ONLY as a fallback if the backend can't
+    // resolve the tenant from the email alone (same email in multiple tenants on
+    // the shared platform host, which replies 409 tenant_code_required).
+    const [showTenantField, setShowTenantField] = useState(false);
 
     // Reset the logo-failure flag whenever the tenant logo changes (e.g. after
     // live by-code theming) so a new tenant's logo gets a fresh chance to load.
@@ -81,13 +87,10 @@ export default function LoginPage() {
         setLoading(true);
         setError('');
 
+        // Resolved internally from the custom domain (DomainGate). Empty only on
+        // the shared platform host with a unique email — the backend then finds
+        // the tenant by email, or replies 409 if the email is ambiguous.
         const code = tenantCode.trim().toUpperCase();
-
-        if (!code) {
-            setError('Tenant Code is required. Please enter your organization’s tenant code (e.g. ABC001).');
-            setLoading(false);
-            return;
-        }
 
         try {
             const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
@@ -105,11 +108,13 @@ export default function LoginPage() {
             }
 
             if (res.status === 409 && data.error === 'tenant_code_required') {
+                setShowTenantField(true);
                 setError(data.message || 'This email exists in multiple workspaces. Please enter your Tenant Code to continue.');
                 return;
             }
 
             if (!res.ok || !data.success) {
+                if (data.error === 'tenant_code_required') setShowTenantField(true);
                 const msg = data.error === 'invalid_credentials' ? 'Invalid email or password'
                     : data.error === 'email_password_required' ? 'Email and password are required'
                         : data.error === 'tenant_code_required' ? (data.message || 'Please enter your Tenant Code to continue.')
@@ -135,6 +140,11 @@ export default function LoginPage() {
                 localStorage.setItem('sv_token', data.token);
                 sessionStorage.setItem('sv_token', data.token);
             }
+            // This is a NORMAL user session — clear any stale admin markers left in
+            // the browser from a prior admin login, so the user is never treated as
+            // admin (which crossed identities after payment/redirect).
+            localStorage.removeItem('sv_admin_id');
+            sessionStorage.removeItem('sv_admin_id');
 
             // ── Persist tenant code + apply tenant branding ──
             const resolvedCode = data.tenant?.tenant_code || code;
@@ -247,11 +257,12 @@ export default function LoginPage() {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
+                        {showTenantField && (
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">Tenant Code</label>
                             <div className="relative">
                                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                <input type="text" required value={tenantCode}
+                                <input type="text" value={tenantCode}
                                     onChange={e => {
                                         const v = e.target.value.toUpperCase();
                                         setTenantCode(v);
@@ -267,8 +278,9 @@ export default function LoginPage() {
                                     placeholder="ABC001"
                                     autoCapitalize="characters" autoComplete="off" />
                             </div>
-                            <p className="mt-1 text-xs text-slate-400">Your organization’s tenant code, e.g. ABC001.</p>
+                            <p className="mt-1 text-xs text-slate-400">Enter your organization’s tenant code to continue.</p>
                         </div>
+                        )}
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
                             <div className="relative">
@@ -314,6 +326,10 @@ export default function LoginPage() {
                     <p className="mt-6 text-center text-sm text-slate-500">
                         Don't have an account?{' '}
                         <NavLink to="/signup" className="font-semibold transition-colors" style={{ color: 'var(--brand-secondary)' }}>Sign up</NavLink>
+                    </p>
+                    <p className="mt-2 text-center text-sm text-slate-500">
+                        Are you an agent?{' '}
+                        <NavLink to="/agent-login" className="font-semibold transition-colors" style={{ color: 'var(--brand-secondary)' }}>Agent Login</NavLink>
                     </p>
                 </div>
             </div>

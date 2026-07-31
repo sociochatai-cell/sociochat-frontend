@@ -34,7 +34,8 @@ import {
   Copy,
   ChevronDown,
   ChevronUp,
-  CheckCircle2
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 import type { Step, Field, FieldType } from './types';
 import { getFieldIcon, getFieldLabel, createDefaultField, generateId } from './utils';
@@ -51,6 +52,7 @@ interface StepCardProps {
   onDuplicate: () => void;
   onAddField: (field: Field) => void;
   showConnector?: boolean;
+  accountId?: number | null;
 }
 
 export function StepCard({
@@ -63,7 +65,8 @@ export function StepCard({
   onDelete,
   onDuplicate,
   onAddField,
-  showConnector = true
+  showConnector = true,
+  accountId = null
 }: StepCardProps) {
   // First step starts expanded so its config is visible (and driveable) on entry.
   const [isExpanded, setIsExpanded] = useState(isSelected || isFirst);
@@ -269,6 +272,7 @@ export function StepCard({
                       onUpdateOption={(optIdx, value) => updateOption(field.id, optIdx, value)}
                       onAddOption={() => addOption(field.id)}
                       onRemoveOption={(optIdx) => removeOption(field.id, optIdx)}
+                      accountId={accountId}
                     />
                   ))}
                 </div>
@@ -396,20 +400,39 @@ interface FieldRowProps {
   onUpdateOption: (optIdx: number, value: string) => void;
   onAddOption: () => void;
   onRemoveOption: (optIdx: number) => void;
+  accountId?: number | null;
 }
 
-function FieldRow({ 
-  field, 
-  onUpdate, 
+function FieldRow({
+  field,
+  onUpdate,
   onDelete,
   onMoveUp,
   onMoveDown,
   onUpdateOption,
   onAddOption,
-  onRemoveOption
+  onRemoveOption,
+  accountId = null
 }: FieldRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const hasOptions = ['dropdown', 'radio', 'checkbox', 'time'].includes(field.type);
+
+  // For a TIME field, pull the option list from the configured Bookings availability
+  // (business hours) so the form only offers slots the operator actually opened.
+  const loadFromAvailability = async () => {
+    if (!accountId) return;
+    setLoadingSlots(true);
+    try {
+      const { WHATSAPP_REST_API_PREFIX } = await import('@/config');
+      const r = await fetch(`${WHATSAPP_REST_API_PREFIX}/bookings/slot-times?account_id=${accountId}`, { credentials: 'include' });
+      const j = await r.json();
+      if (j.success && Array.isArray(j.times) && j.times.length) {
+        onUpdate({ options: j.times });
+        setIsExpanded(true);
+      }
+    } catch { /* ignore */ } finally { setLoadingSlots(false); }
+  };
 
   return (
     <div 
@@ -461,6 +484,18 @@ function FieldRow({
       {/* Options (for dropdown/radio/checkbox/time) */}
       {hasOptions && isExpanded && (
         <div className="mt-2 pl-6 space-y-1">
+          {field.type === 'time' && accountId && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-7 mb-1 w-full justify-center gap-1"
+              onClick={loadFromAvailability}
+              disabled={loadingSlots}
+            >
+              <Clock className="w-3 h-3" />
+              {loadingSlots ? 'Loading…' : 'Load times from Bookings availability'}
+            </Button>
+          )}
           {field.options?.map((opt, idx) => (
             <div key={idx} className="flex items-center gap-1">
               <span className="text-xs text-gray-400 w-4">{idx + 1}.</span>

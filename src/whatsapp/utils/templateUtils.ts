@@ -17,7 +17,9 @@ export interface TemplateButton {
     url?: string;
     phone?: string;
     flow_id?: string;      // Meta Flow ID for flow buttons
-    flow_token?: string;   // Initial data token (optional)
+    flow_token?: string;   // Initial data token (optional, send-time only)
+    navigate_screen?: string; // Flow's first screen id — REQUIRED by Meta for FLOW buttons
+    flow_action?: string;  // 'navigate' (default) | 'data_exchange'
     copy_code?: string;    // Example code for COPY_CODE buttons
 }
 
@@ -466,6 +468,7 @@ export function validateTemplate(state: TemplateState): ValidationResult {
             }
 
             if (btn.type === 'flow' && !btn.flow_id) {
+                // navigate_screen is auto-derived from the selected flow's entry screen.
                 errors.buttons = `Button ${i + 1}: Please select a published flow.`;
                 break;
             }
@@ -617,7 +620,13 @@ export function buildMetaTemplateComponents(state: TemplateState): MetaComponent
                     ...(btn.type !== 'copy_code' ? { text: btn.text || (btn.type === 'catalog' ? 'View catalog' : '') } : {}),
                     ...(btn.type === 'url' && btn.url ? { url: btn.url } : {}),
                     ...(btn.type === 'phone' && btn.phone ? { phone_number: btn.phone } : {}),
-                    ...(btn.type === 'flow' && btn.flow_id ? { flow_id: btn.flow_id, flow_token: btn.flow_token || '' } : {}),
+                    ...(btn.type === 'flow' && btn.flow_id ? {
+                        flow_id: btn.flow_id,
+                        flow_action: btn.flow_action || 'navigate',
+                        // Meta requires the target screen id for a navigate flow button;
+                        // auto-derived from the flow's entry screen (fallback WELCOME).
+                        navigate_screen: btn.navigate_screen || 'WELCOME',
+                    } : {}),
                     ...(btn.type === 'copy_code' ? { example: btn.copy_code || '' } : {}),
                     ...(btn.type === 'voice_call' && !btn.text ? { text: 'Call' } : {}),
                 };

@@ -9,6 +9,7 @@
 
 import apiClient from '@/lib/apiClient';
 import { WHATSAPP_REST_API_PREFIX } from '@/config';
+import { getActiveAuth, credentialsMode } from '@/lib/authToken';
 
 // ============================================================
 // Base Configuration
@@ -20,14 +21,18 @@ const WHATSAPP_API_BASE = '/whatsapp';
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   try {
-    const userId =
-      localStorage.getItem('sv_user_id') ||
-      (() => {
-        const raw = localStorage.getItem('sv_user');
-        return raw ? String(JSON.parse(raw)?.id || '') : '';
-      })();
-    if (userId) headers['X-User-Id'] = userId;
-    const token = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
+    // Agent portal: send ONLY the agent token (no owner X-User-Id). Owner mode:
+    // send owner X-User-Id + sv_token as before. See lib/authToken.ts.
+    const { token, isAgent } = getActiveAuth();
+    if (!isAgent) {
+      const userId =
+        localStorage.getItem('sv_user_id') ||
+        (() => {
+          const raw = localStorage.getItem('sv_user');
+          return raw ? String(JSON.parse(raw)?.id || '') : '';
+        })();
+      if (userId) headers['X-User-Id'] = userId;
+    }
     if (token) headers['Authorization'] = `Bearer ${token}`;
   } catch {
     /* ignore storage errors */
@@ -46,7 +51,7 @@ async function whatsappLinkingRequest<T>(
   }
   const res = await fetch(url, {
     ...rest,
-    credentials: 'include',
+    credentials: credentialsMode(),
     headers: { ...getAuthHeaders(), ...(rest.headers as Record<string, string> | undefined) },
   });
   const body = await res.json().catch(() => ({}));

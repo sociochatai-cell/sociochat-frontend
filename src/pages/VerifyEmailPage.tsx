@@ -84,6 +84,10 @@ export default function VerifyEmailPage() {
                 localStorage.setItem('sv_token', data.token);
                 sessionStorage.setItem('sv_token', data.token);
             }
+            // Fresh user session — clear any stale admin markers from a prior admin
+            // login so this new user isn't treated as admin after signup/payment.
+            localStorage.removeItem('sv_admin_id');
+            sessionStorage.removeItem('sv_admin_id');
 
             setSuccess('Email verified successfully!');
             setTimeout(() => navigate('/subscription'), 800);

@@ -284,10 +284,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
 const ConversationsInbox: React.FC<ConversationsInboxProps> = ({ workspaceId: propWorkspaceId }) => {
   const { id: routeWorkspaceId } = useParams<{ id: string }>();
-  const workspaceId = propWorkspaceId || routeWorkspaceId || 'default';
+  // Use the real selected workspace (never a hardcoded 'default', which would
+  // read another/no tenant's conversations). Prop/route win if explicitly given.
+  const workspaceId = propWorkspaceId || routeWorkspaceId || getWorkspaceId() || '';
 
-  // Resolve the real workspace ID for SSE (same key WhatsAppInbox uses)
-  const sseWorkspaceId = getWorkspaceId() || workspaceId;
+  // SSE listens on the same workspace as the list (kept identical so realtime
+  // and the initial fetch can't diverge onto different workspaces).
+  const sseWorkspaceId = workspaceId;
 
   // State
   const [conversations, setConversations] = useState<Conversation[]>([]);

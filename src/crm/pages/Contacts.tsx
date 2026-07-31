@@ -72,14 +72,30 @@ export default function Contacts() {
         }
         setSubmitting(true);
         try {
-            const created = await crmApi.createContact({
+            const created: any = await crmApi.createContact({
                 name: form.name.trim() || form.phone.trim(),
                 phone: form.phone.trim() || undefined,
                 email: form.email.trim() || undefined,
                 company: form.company.trim() || undefined,
             });
-            if (created && created.id) setContacts((prev) => [created, ...prev]);
-            else fetchContacts();
+            // Normal create returns the full contact; the "already exists" (deduped)
+            // path returns only { id } with no name — rebuild from the form so the
+            // row never shows "Unknown".
+            if (created && created.id) {
+                const newContact = created.name
+                    ? created
+                    : {
+                        ...created,
+                        id: created.id,
+                        name: form.name.trim() || form.phone.trim(),
+                        phone: form.phone.trim() || undefined,
+                        email: form.email.trim() || undefined,
+                        company: form.company.trim() || undefined,
+                    };
+                setContacts((prev) => [newContact, ...prev]);
+            } else {
+                fetchContacts();
+            }
             toast.success('Contact added');
             setAddOpen(false);
             setForm({ name: '', phone: '', email: '', company: '' });

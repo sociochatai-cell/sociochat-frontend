@@ -6,7 +6,7 @@ import RequireTenantAdmin from '@/components/auth/RequireTenantAdmin';
 
 // New Layouts & Pages
 import DashboardLayout from './layouts/DashboardLayout';
-import DashboardHome from './pages/DashboardHome';
+import WorkspacesPage from './pages/WorkspacesPage';
 const SignupPage = lazy(() => import('./pages/SignupPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
@@ -29,6 +29,7 @@ const AdminReview = lazy(() => import('./pages/admin/AdminReview'));
 const AdminSubscriptions = lazy(() => import('./pages/admin/AdminSubscriptions'));
 const AdminPlans = lazy(() => import('./pages/admin/AdminPlans'));
 const AdminPrivateSlot = lazy(() => import('./pages/admin/AdminPrivateSlot'));
+const AdminAgents = lazy(() => import('./pages/admin/AdminAgents'));
 
 // Super Admin — Tenant Management (multi-tenant white-label)
 const TenantListPage = lazy(() => import('./pages/superadmin/TenantListPage'));
@@ -69,11 +70,14 @@ const InteractiveAutomationsList = lazy(() => import('./whatsapp/pages/Interacti
 const CoexistenceDashboard = lazy(() => import('./whatsapp/pages/CoexistenceDashboard').then(m => ({ default: m.CoexistenceDashboard ?? m.default })));
 const BulkMessaging = lazy(() => import('./pages/BulkMessaging'));
 const WhatsAppDashboard = lazy(() => import('./pages/WhatsAppDashboard'));
+const WhatsAppHub = lazy(() => import('./pages/WhatsAppHub'));
 const WhatsAppCatalog = lazy(() => import('./whatsapp/pages/WhatsAppCatalog').then(m => ({ default: m.WhatsAppCatalog ?? m.default })));
+const OrdersPage = lazy(() => import('./whatsapp/commerce/OrdersPage'));
 const CreateCTWA = lazy(() => import('./whatsapp_automation/pages/CreateCTWA').then(m => ({ default: m.CreateCTWA })));
 const ConversationsInbox = lazy(() => import('./whatsapp_automation/pages/ConversationsInbox'));
-const AdCreatorWizard = lazy(() => import('./ctwa/pages/AdCreatorWizard'));
+const StatusAdCreatorWizard = lazy(() => import('./ctwa/pages/StatusAdCreatorWizard'));
 const CampaignsListPage = lazy(() => import('./ctwa/pages/CampaignsListPage'));
+const CampaignInsightsPage = lazy(() => import('./ctwa/pages/CampaignInsightsPage'));
 
 /* ── Lazy-loaded WhatsApp Flow submissions page ── */
 const FlowSubmissions = lazy(() => import('./whatsapp/pages/FlowSubmissions'));
@@ -84,6 +88,13 @@ const CRMLeads = lazy(() => import('./crm/pages/Leads'));
 const CRMDeals = lazy(() => import('./crm/pages/Deals'));
 const CRMContacts = lazy(() => import('./crm/pages/Contacts'));
 const CRMSettings = lazy(() => import('./crm/pages/CRMSettings'));
+
+// Agent (sub-login) portal — distinct from the AI-chat agent_frontend
+import { AgentAuthProvider } from './agent_login/contexts/AgentAuthContext';
+const AgentLoginPage = lazy(() => import('./agent_login/pages/AgentLoginPage'));
+const AgentDashboard = lazy(() => import('./agent_login/pages/AgentDashboard'));
+const AgentLayout = lazy(() => import('./agent_login/components/AgentLayout'));
+const AgentProtectedRoute = lazy(() => import('./agent_login/components/AgentProtectedRoute'));
 
 function PageLoader() {
   return (
@@ -139,6 +150,7 @@ export default function App() {
         <Route path="subscriptions" element={<Suspense fallback={<PageLoader />}><AdminSubscriptions /></Suspense>} />
         <Route path="plans" element={<Suspense fallback={<PageLoader />}><AdminPlans /></Suspense>} />
         <Route path="private-slot" element={<Suspense fallback={<PageLoader />}><AdminPrivateSlot /></Suspense>} />
+        <Route path="agents" element={<Suspense fallback={<PageLoader />}><AdminAgents /></Suspense>} />
       </Route>
 
       {/* Super Admin — Tenant Management (platform-admin only; rendered inside the admin shell) */}
@@ -160,8 +172,9 @@ export default function App() {
       </Route>
 
       <Route path="/dashboard" element={<DashboardLayout />}>
-        <Route index element={<DashboardHome />} />
-        <Route path="hub" element={<G feature="unified_dashboard_analytics"><WhatsAppDashboard /></G>} />
+        <Route index element={<G feature="unified_dashboard_analytics"><WhatsAppDashboard /></G>} />
+        <Route path="workspaces" element={<WorkspacesPage />} />
+        <Route path="hub" element={<WhatsAppHub />} />
         <Route path="inbox" element={<G feature="whatsapp_inbox"><WhatsAppErrorBoundary label="Inbox"><WhatsAppInbox /></WhatsAppErrorBoundary></G>} />
         <Route path="conversations" element={<G feature="whatsapp_inbox"><ConversationsInbox /></G>} />
         <Route path="send" element={<WhatsAppTestConsole />} />
@@ -199,6 +212,7 @@ export default function App() {
         <Route path="whatsapp/guide" element={<WhatsAppGuide />} />
         <Route path="coexistence" element={<G feature="whatsapp_coexistence"><CoexistenceDashboard /></G>} />
         <Route path="catalog" element={<G feature="whatsapp_catalog"><WhatsAppCatalog /></G>} />
+        <Route path="orders" element={<OrdersPage />} />
         <Route path="campaign/create" element={<G feature="whatsapp_ctwa"><CreateCTWA /></G>} />
         {/* CRM — gated by 'crm' feature key */}
         <Route path="crm" element={<G feature="crm"><CRMDashboard /></G>} />
@@ -210,8 +224,43 @@ export default function App() {
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
 
-      <Route path="/ctwa/create" element={<Suspense fallback={<PageLoader />}><G feature="whatsapp_ctwa"><AdCreatorWizard /></G></Suspense>} />
+      {/* Old separate CTWA screen is retired — the unified wizard handles both
+          Status and Click-to-WhatsApp via its "Ad Type" first step. */}
+      <Route path="/ctwa/create" element={<Navigate to="/ctwa/status/create" replace />} />
+      <Route path="/ctwa/status/create" element={<Suspense fallback={<PageLoader />}><G feature="whatsapp_status_ads"><StatusAdCreatorWizard /></G></Suspense>} />
       <Route path="/ctwa/campaigns" element={<Suspense fallback={<PageLoader />}><G feature="whatsapp_ctwa"><CampaignsListPage /></G></Suspense>} />
+      <Route path="/ctwa/campaigns/:id/insights" element={<Suspense fallback={<PageLoader />}><G feature="whatsapp_ctwa"><CampaignInsightsPage /></G></Suspense>} />
+
+      {/* Agent (sub-login) portal. Permissions are enforced by AgentPageGuard
+          (frontend) + the agent gate (backend); reused pages authenticate with
+          the agent token via the fetch shim. */}
+      <Route path="/agent-login" element={<Suspense fallback={<PageLoader />}><AgentAuthProvider><AgentLoginPage /></AgentAuthProvider></Suspense>} />
+      <Route path="/agent" element={<Suspense fallback={<PageLoader />}><AgentAuthProvider><AgentProtectedRoute><AgentLayout /></AgentProtectedRoute></AgentAuthProvider></Suspense>}>
+        <Route index element={<AgentDashboard />} />
+        {/* WhatsApp — reuse existing product pages */}
+        <Route path="inbox" element={<WhatsAppErrorBoundary label="Inbox"><WhatsAppInbox /></WhatsAppErrorBoundary>} />
+        <Route path="templates" element={<TemplateManager />} />
+        <Route path="templates/new" element={<TemplateBuilderPage />} />
+        <Route path="templates/:id/edit" element={<TemplateBuilderPage />} />
+        <Route path="contacts" element={<WhatsAppContacts />} />
+        <Route path="datasets" element={<WhatsAppDatasets />} />
+        <Route path="bulk" element={<BulkMessaging />} />
+        <Route path="automation" element={<WhatsAppAutomation />} />
+        <Route path="interactive-automation" element={<InteractiveAutomationsList />} />
+        <Route path="interactive-automation/new" element={<InteractiveAutomation />} />
+        <Route path="interactive-automation/:id" element={<InteractiveAutomation />} />
+        <Route path="flows" element={<FlowsList />} />
+        <Route path="drip" element={<DripCampaignsSection accountId={0} />} />
+        <Route path="analytics" element={<WhatsAppDashboard />} />
+        <Route path="tracking" element={<TrackingAnalytics />} />
+        {/* CRM */}
+        <Route path="crm" element={<CRMDashboard />} />
+        <Route path="crm/leads" element={<CRMLeads />} />
+        <Route path="crm/contacts" element={<CRMContacts />} />
+        <Route path="crm/deals" element={<CRMDeals />} />
+        <Route path="*" element={<Navigate to="/agent" replace />} />
+      </Route>
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { adminApi } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
-import { beginAdminInspect, clearUserSessionKeepAdminInspect } from '@/lib/adminInspect';
+import { beginImpersonation } from '@/lib/impersonation';
 
 export default function AdminInspectLogin() {
     const [userId, setUserId] = useState('');
@@ -25,10 +25,20 @@ export default function AdminInspectLogin() {
     const inspect = async (id: number) => {
         const res = await adminApi.loginAsUser(id);
         if (res.success && res.user) {
-            beginAdminInspect('/admin/inspect-login');
-            clearUserSessionKeepAdminInspect();
+            // Save the admin session BEFORE switching identity so "Return to Admin"
+            // can restore it (login-as-user already popped the admin session
+            // server-side and returned a user token).
+            beginImpersonation('/admin/inspect-login');
+            // FULL switch to the target user: user token as Bearer, drop admin markers.
+            if (res.token) {
+                localStorage.setItem('sv_token', res.token);
+                sessionStorage.setItem('sv_token', res.token);
+            }
+            localStorage.removeItem('sv_admin_id');
+            sessionStorage.removeItem('sv_admin_id');
             loginLocal(res.user);
             localStorage.setItem('sv_user_id', String(res.user.id));
+            sessionStorage.setItem('sv_user', JSON.stringify(res.user));
             if (res.workspaces?.[0]) {
                 localStorage.setItem('sv_whatsapp_workspace_id', String(res.workspaces[0].id));
             }

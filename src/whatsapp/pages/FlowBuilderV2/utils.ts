@@ -408,6 +408,42 @@ const fieldToMetaComponent = (field: Field, fieldNameMap: Map<string, string>): 
       title: opt
     }));
 
+  // Time fields: WhatsApp Flows has no native time picker, so a time field becomes a
+  // Dropdown of clock slots. Crucially the option id is "HH:MM" (24h) — NOT "opt_a" —
+  // so the submission returns a real time the backend can turn into a booking + reminder.
+  const generateTimeSlots = (
+    startHour = 9,
+    endHour = 17,
+    stepMinutes = 30
+  ): Array<{ id: string; title: string }> => {
+    const slots: Array<{ id: string; title: string }> = [];
+    for (let mins = startHour * 60; mins <= endHour * 60; mins += stepMinutes) {
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      const id = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      const period = h < 12 ? 'AM' : 'PM';
+      const h12 = h % 12 === 0 ? 12 : h % 12;
+      slots.push({ id, title: `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}` });
+    }
+    return slots;
+  };
+
+  // Map user-provided time strings to a data-source, keeping a 24h "HH:MM" id when the
+  // option looks like a clock time (AM/PM aware, e.g. "1:00 PM" -> "13:00"); otherwise
+  // fall back to an index id.
+  const timeOptionsToDataSource = (options: string[]): Array<{ id: string; title: string }> =>
+    (options || []).map((opt, i) => {
+      const m = String(opt).match(/\b(\d{1,2}):([0-5]\d)\s*([AaPp][Mm])?\b/);
+      if (m) {
+        let h = parseInt(m[1], 10);
+        const ap = (m[3] || '').toLowerCase();
+        if (ap === 'pm' && h < 12) h += 12;
+        if (ap === 'am' && h === 12) h = 0;
+        return { id: `${String(h).padStart(2, '0')}:${m[2]}`, title: opt };
+      }
+      return { id: `opt_${i}`, title: opt };
+    });
+
   switch (field.type) {
     case 'text':
       return { type: 'TextInput', ...baseProps, 'input-type': 'text' };
@@ -440,11 +476,15 @@ const fieldToMetaComponent = (field: Field, fieldNameMap: Map<string, string>): 
     case 'date':
       return { type: 'DatePicker', ...baseProps };
     case 'time':
-      // Time slots rendered as Dropdown (Meta has no native TimePicker)
+      // Time slots rendered as Dropdown (Meta has no native TimePicker). Use HH:MM
+      // option ids so the submission carries a real time (→ booking + reminder),
+      // not a generic "opt_a".
       return {
         type: 'Dropdown',
         ...baseProps,
-        'data-source': safeDataSource(field.options)
+        'data-source': field.options && field.options.length
+          ? timeOptionsToDataSource(field.options)
+          : generateTimeSlots()
       };
     default:
       return { type: 'TextInput', ...baseProps, 'input-type': 'text' };

@@ -9,7 +9,7 @@ import {
     ChevronDown, Home, ClipboardList,
     ChevronsLeft, ChevronsRight, Smartphone,
     LayoutDashboard, UserPlus, Handshake, Contact2, SlidersHorizontal,
-    CreditCard, CalendarClock, Layers,
+    CreditCard, CalendarClock, Megaphone,
 } from 'lucide-react';
 import {
     motion,
@@ -22,6 +22,7 @@ import { API_BASE_URL } from '@/config';
 import { usePlan } from '@/contexts/PlanContext';
 import { ROUTE_FEATURE_MAP } from '@/config/featureGating';
 import { AdminInspectBanner } from '@/components/admin/AdminInspectBanner';
+import { ReturnToAdminBanner } from '@/components/admin/ReturnToAdminBanner';
 import { clearAllUserData } from '@/lib/userSession';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useBranding } from '@/branding/BrandingContext';
@@ -32,7 +33,6 @@ import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
    ══════════════════════════════════════════════ */
 const NAV_ITEMS = [
     { label: 'Dashboard', path: '/dashboard', icon: Home, exact: true },
-    { label: 'Workspaces', path: '/dashboard/workspaces', icon: Layers, exact: true },
     { label: 'Hub', path: '/dashboard/hub', icon: LayoutTemplate },
     { label: 'Inbox', path: '/dashboard/inbox', icon: Inbox },
     { label: 'Bulk Send', path: '/dashboard/bulk', icon: Send },
@@ -42,6 +42,8 @@ const NAV_ITEMS = [
     { label: 'Interactive Flows', path: '/dashboard/interactive-automation', icon: Workflow },
     { label: 'WhatsApp Forms', path: '/dashboard/flows', icon: ClipboardList },
     { label: 'Catalog', path: '/dashboard/catalog', icon: Link2 },
+    { label: 'Payments', path: '/dashboard/orders', icon: CreditCard },
+    { label: 'Status Ads', path: '/ctwa/campaigns', icon: Megaphone },
     { label: 'Contacts', path: '/dashboard/contacts', icon: Users },
     { label: 'Datasets', path: '/dashboard/datasets', icon: Database },
     { label: 'Tracking', path: '/dashboard/tracking', icon: BarChart3 },
@@ -643,6 +645,7 @@ export default function DashboardLayout() {
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             >
                 <AdminInspectBanner />
+                <ReturnToAdminBanner />
                 <Header />
                 <div className="flex-1 min-w-0 overflow-x-hidden px-2 sm:px-0">
                     <AnimatedOutlet />

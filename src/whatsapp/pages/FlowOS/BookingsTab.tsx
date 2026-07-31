@@ -19,6 +19,9 @@ export function BookingsTab({ accountId }: { accountId: string | null }) {
   const [analytics, setAnalytics] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  // Operator-corrected date/time for a pending booking (before confirming it).
+  const [editDate, setEditDate] = useState<Record<number, string>>({});
+  const [editTime, setEditTime] = useState<Record<number, string>>({});
 
   const fetch_ = useCallback(async () => {
     if (!accountId) return;
@@ -51,8 +54,24 @@ export function BookingsTab({ accountId }: { accountId: string | null }) {
     } catch { }
   };
 
+  // Confirm a PENDING booking, sending any operator date/time correction. Confirming
+  // is what schedules the 1-hour-before WhatsApp reminder.
+  const confirm = async (b: BookingItem) => {
+    try {
+      const h: Record<string, string> = { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' };
+      const body: Record<string, string> = {};
+      const d = editDate[b.id]; const t = editTime[b.id];
+      if (d && d !== b.booking_date) body.booking_date = d;
+      if (t && t !== b.booking_time) body.booking_time = t;
+      await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/bookings/${b.id}/confirm`, {
+        method: 'PUT', headers: h, credentials: 'include', body: JSON.stringify(body),
+      });
+      fetch_();
+    } catch { }
+  };
+
   const shift = (d: number) => { const dt = new Date(date); dt.setDate(dt.getDate() + d); setDate(dt.toISOString().slice(0, 10)); };
-  const sb = (s: string) => ({ confirmed: 'bg-green-500/10 text-green-600', cancelled: 'bg-red-500/10 text-red-600', completed: 'bg-blue-500/10 text-blue-600' }[s] || 'bg-muted text-muted-foreground');
+  const sb = (s: string) => ({ pending: 'bg-amber-500/10 text-amber-600', confirmed: 'bg-green-500/10 text-green-600', cancelled: 'bg-red-500/10 text-red-600', completed: 'bg-blue-500/10 text-blue-600' }[s] || 'bg-muted text-muted-foreground');
 
   return (
     <div className="space-y-4">
@@ -66,11 +85,12 @@ export function BookingsTab({ accountId }: { accountId: string | null }) {
         <Button variant="outline" size="icon" className="h-8 w-8" onClick={fetch_}><RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} /></Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { l: 'Today', v: analytics.today_bookings ?? 0, c: 'from-primary/15' },
-          { l: '30d Total', v: analytics.total_bookings ?? 0, c: 'from-blue-500/15' },
+          { l: 'Pending', v: analytics.pending ?? 0, c: 'from-amber-500/15' },
           { l: 'Confirmed', v: analytics.confirmed ?? 0, c: 'from-green-500/15' },
+          { l: '30d Total', v: analytics.total_bookings ?? 0, c: 'from-blue-500/15' },
           { l: 'Cancel Rate', v: `${analytics.cancellation_rate ?? 0}%`, c: 'from-red-500/15' },
         ].map(({ l, v, c }) => (
           <Card key={l} className={cn("bg-gradient-to-br", c, "to-transparent")}><CardContent className="p-3">
@@ -115,14 +135,27 @@ export function BookingsTab({ accountId }: { accountId: string | null }) {
                         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center"><User className="w-4 h-4 text-primary" /></div>
                         <div>
                           <p className="text-sm font-medium">{b.customer_name || b.wa_id}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />{b.booking_time}{b.service_type && ` · ${b.service_type}`}</p>
+                          {b.status === 'pending' ? (
+                            // Let the operator correct the slot before confirming.
+                            <div className="flex items-center gap-1 mt-1">
+                              <Input type="date" value={editDate[b.id] ?? b.booking_date} onChange={e => setEditDate(m => ({ ...m, [b.id]: e.target.value }))} className="h-6 w-32 text-[11px] px-1" />
+                              <Input type="time" value={editTime[b.id] ?? b.booking_time} onChange={e => setEditTime(m => ({ ...m, [b.id]: e.target.value }))} className="h-6 w-24 text-[11px] px-1" />
+                              {b.service_type && <span className="text-[11px] text-muted-foreground">· {b.service_type}</span>}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />{b.booking_date} {b.booking_time}{b.service_type && ` · ${b.service_type}`}</p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Badge variant="outline" className={cn("text-xs", sb(b.status))}>{b.status}</Badge>
+                        {b.status === 'pending' && <>
+                          <Button variant="ghost" size="sm" className="h-7 gap-1 text-green-600" title="Confirm booking & schedule reminder" onClick={() => confirm(b)}><CheckCircle className="w-3.5 h-3.5" />Confirm</Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" title="Reject" onClick={() => action(b.id, 'cancel')}><XCircle className="w-3.5 h-3.5" /></Button>
+                        </>}
                         {b.status === 'confirmed' && <>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" onClick={() => action(b.id, 'complete')}><CheckCircle className="w-3.5 h-3.5" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" onClick={() => action(b.id, 'cancel')}><XCircle className="w-3.5 h-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600" title="Mark completed" onClick={() => action(b.id, 'complete')}><CheckCircle className="w-3.5 h-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" title="Cancel" onClick={() => action(b.id, 'cancel')}><XCircle className="w-3.5 h-3.5" /></Button>
                         </>}
                       </div>
                     </div>

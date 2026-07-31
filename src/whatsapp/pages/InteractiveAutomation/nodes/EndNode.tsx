@@ -24,7 +24,7 @@ export const EndNode = memo(({ data, selected }: NodeProps<EndNodeData>) => {
                 relative px-5 py-4 rounded-xl shadow-lg border-2 min-w-[220px]
                 transition-all duration-200
                 ${selected ? 'ring-2 ring-amber-400 ring-offset-0' : ''}
-                ${(data as any).validationIssues?.some((i: any) => !i.handleId) ? 'node-error' : ''}
+                ${selected && (data as any).validationIssues?.length > 0 ? 'node-error' : ''}
             `}
             style={{
                 backgroundColor: colors.bg,

@@ -14,7 +14,7 @@ export const InputNode = memo(({ data, selected }: NodeProps<InputNodeType['data
                 relative px-5 py-4 rounded-xl shadow-lg border-2 min-w-[280px]
                 transition-all duration-200 bg-white
                 ${selected ? 'ring-2 ring-sky-400 ring-offset-0' : ''}
-                ${(data as any).validationIssues?.some((i: any) => !i.handleId) ? 'node-error' : ''}
+                ${selected && (data as any).validationIssues?.length > 0 ? 'node-error' : ''}
             `}
             style={{ borderColor: colors.border }}
         >

@@ -129,8 +129,11 @@ export const crmApi = {
     createDeal: async (body: Partial<Deal>): Promise<Deal> =>
         unwrap(await apiClient.post(`/deals${wsQuery()}`, body)),
 
-    updateDeal: async (id: string, body: Partial<Deal>): Promise<Deal> =>
-        unwrap(await apiClient.patch(`/deals/${id}${wsQuery()}`, body)),
+    updateDeal: async (id: string, body: Partial<Deal>): Promise<Deal> => {
+        // Backend echoes { ok, deal:{...} } — return the nested deal, not the envelope.
+        const r: any = unwrap(await apiClient.patch(`/deals/${id}${wsQuery()}`, body));
+        return (r && typeof r === 'object' && r.deal) ? r.deal : r;
+    },
 
     changeDealStage: async (id: string, stage: DealStage): Promise<Deal> =>
         unwrap(await apiClient.post(`/deals/${id}/stage${wsQuery()}`, { stage })),
@@ -181,11 +184,18 @@ export const crmApi = {
         return [];
     },
 
-    createContact: async (body: Partial<Contact>): Promise<Contact> =>
-        unwrap(await apiClient.post(`/contacts${wsQuery()}`, body)),
+    // Backend returns { ok, id, contact:{...} } — hand the page the nested contact
+    // object (not the envelope), else the row renders with no name ("Unknown").
+    createContact: async (body: Partial<Contact>): Promise<Contact> => {
+        const r: any = unwrap(await apiClient.post(`/contacts${wsQuery()}`, body));
+        return (r && typeof r === 'object' && r.contact) ? r.contact : r;
+    },
 
-    updateContact: async (id: string, body: Partial<Contact>): Promise<Contact> =>
-        unwrap(await apiClient.patch(`/contacts/${id}${wsQuery()}`, body)),
+    updateContact: async (id: string, body: Partial<Contact>): Promise<Contact> => {
+        // Backend echoes { ok, contact:{...} } — return the nested contact.
+        const r: any = unwrap(await apiClient.patch(`/contacts/${id}${wsQuery()}`, body));
+        return (r && typeof r === 'object' && r.contact) ? r.contact : r;
+    },
 
     deleteContact: async (id: string): Promise<{ success?: boolean } | null> =>
         unwrap(await apiClient.delete(`/contacts/${id}${wsQuery()}`)),

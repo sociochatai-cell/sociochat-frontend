@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { RefreshCw, Search, Plus, User, FileText, MessageCircle, Inbox, BarChart3, Clock, MessageSquare } from 'lucide-react';
+import { RefreshCw, Search, Plus, User, FileText, MessageCircle, Inbox, BarChart3, Clock, MessageSquare, Download } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { getWorkspaceId } from '../utils/workspaceContext';
 import { cachedFetch } from '../utils/waPersistentCache';
@@ -39,6 +39,7 @@ export default function WhatsAppContacts() {
     const [newPhone, setNewPhone] = useState("");
     const [newName, setNewName] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
     // Debounce search
     useEffect(() => {
@@ -82,6 +83,58 @@ export default function WhatsAppContacts() {
         }
         finally { setLoading(false); }
     }
+
+    // Download ALL contacts (across every page) as a CSV of Name + Contact number.
+    const handleDownloadCsv = async () => {
+        if (!workspaceId || exporting) return;
+        setExporting(true);
+        try {
+            const all: any[] = [];
+            let p = 1;
+            let pages = 1;
+            do {
+                const res = await cachedFetch(
+                    `${WHATSAPP_REST_API_PREFIX}/workspaces/${workspaceId}/contacts?page=${p}&q=`,
+                    { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+                );
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed to fetch contacts');
+                all.push(...(data.data || []));
+                pages = data.pages || (data.pagination && data.pagination.pages) || 1;
+                p++;
+            } while (p <= pages && p <= 1000); // hard cap so a bad `pages` can't loop forever
+
+            if (all.length === 0) {
+                toast({ title: 'No contacts to export' });
+                return;
+            }
+
+            const esc = (v: any) => {
+                const s = v == null ? '' : String(v);
+                return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+            };
+            const rows = all.map((c) =>
+                [esc(c.name || ''), esc(c.phone_display || c.phone_normalized || c.phone || '')].join(',')
+            );
+            const csv = ['Name,Contact', ...rows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `whatsapp-contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast({ title: `Exported ${all.length} contact${all.length === 1 ? '' : 's'}` });
+        } catch (e) {
+            toast({
+                title: 'Export failed',
+                description: e instanceof Error ? e.message : 'Unknown error',
+                variant: 'destructive',
+            });
+        } finally {
+            setExporting(false);
+        }
+    };
 
     const handleAddContact = async () => {
         if (!newPhone) {
@@ -178,6 +231,10 @@ export default function WhatsAppContacts() {
                 </div>
                 <Button variant="outline" onClick={() => fetchContacts()} disabled={loading}>
                     <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+                <Button variant="outline" onClick={handleDownloadCsv} disabled={exporting}>
+                    <Download className={`h-4 w-4 mr-2 ${exporting ? 'animate-pulse' : ''}`} />
+                    {exporting ? 'Exporting…' : 'Download CSV'}
                 </Button>
             </div>
 

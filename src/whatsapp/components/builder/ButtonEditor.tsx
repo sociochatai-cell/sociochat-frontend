@@ -17,6 +17,7 @@ interface Flow {
     meta_flow_id: string;
     name: string;
     status: string;
+    entry_screen_id?: string; // the flow's first screen — used as navigate_screen
 }
 
 interface VoiceCallCapability {
@@ -80,6 +81,26 @@ export function ButtonEditor({
             setLoadingFlows(false);
         }
     };
+
+    // Backfill navigate_screen for any flow button that already has a flow_id but
+    // no screen (e.g. editing a saved draft) once the flows (with entry_screen_id)
+    // load — so the user never has to supply the screen id manually.
+    useEffect(() => {
+        if (!flows.length) return;
+        let changed = false;
+        const next = buttons.map((b) => {
+            if (b.type === 'flow' && b.flow_id && !b.navigate_screen) {
+                const sel = flows.find((f) => (f.meta_flow_id || String(f.id)) === b.flow_id);
+                if (sel?.entry_screen_id) {
+                    changed = true;
+                    return { ...b, navigate_screen: sel.entry_screen_id, flow_action: b.flow_action || 'navigate' };
+                }
+            }
+            return b;
+        });
+        if (changed) onChange(next);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [flows]);
 
     const addButton = () => {
         if (buttons.length >= maxButtons || isDisabled) return;
@@ -323,7 +344,19 @@ export function ButtonEditor({
                                 <div className="space-y-2">
                                     <Select
                                         value={btn.flow_id || ''}
-                                        onValueChange={(v) => updateButton(idx, { flow_id: v })}
+                                        onValueChange={(v) => {
+                                            // Auto-derive navigate_screen from the flow's entry screen
+                                            // so the user never has to type a screen id.
+                                            const selected = flows.find(
+                                                (f) => (f.meta_flow_id || String(f.id)) === v
+                                            );
+                                            updateButton(idx, {
+                                                flow_id: v,
+                                                flow_action: btn.flow_action || 'navigate',
+                                                navigate_screen:
+                                                    selected?.entry_screen_id || btn.navigate_screen || 'WELCOME',
+                                            });
+                                        }}
                                     >
                                         <SelectTrigger className="h-9">
                                             <SelectValue placeholder={loadingFlows ? "Loading flows..." : "Select a published flow"} />
@@ -351,6 +384,13 @@ export function ButtonEditor({
                                     {flows.length === 0 && !loadingFlows && (
                                         <p className="text-xs text-amber-600">
                                             Create and publish a flow first at /dashboard/whatsapp/flows/new
+                                        </p>
+                                    )}
+                                    {/* navigate_screen is auto-derived from the selected flow's entry
+                                        screen (Meta requires it) — shown read-only, no manual entry. */}
+                                    {btn.flow_id && btn.navigate_screen && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Opens screen <span className="font-mono text-foreground">{btn.navigate_screen}</span> (auto-detected).
                                         </p>
                                     )}
                                 </div>

@@ -20,21 +20,36 @@
     border: 2px solid white !important;
 }
 
-/* Larger hit area for easier dragging */
+/* Larger hit area for easier dragging (bigger = easier to grab distant dots) */
 .react-flow__handle::after {
     content: "";
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
     background-color: transparent;
 }
 
 .react-flow__handle:hover {
     transform: scale(1.4);
     background-color: #10B981 !important;
+}
+
+/* Connection-drag hints: glow valid target nodes, dim invalid ones. */
+.react-flow__node.ia-connect-valid {
+    outline: 2px solid #10B981;
+    outline-offset: 3px;
+    border-radius: 14px;
+    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.18);
+    transition: box-shadow 0.15s ease, outline-color 0.15s ease;
+}
+
+.react-flow__node.ia-connect-dim {
+    opacity: 0.35;
+    filter: grayscale(0.35);
+    transition: opacity 0.15s ease, filter 0.15s ease;
 }
 
 /* Handle warning/error glowing */
@@ -159,20 +174,22 @@
     cursor: grabbing;
 }
 
-/* Validation error highlight */
+/* Validation error highlight — a persistent red ring (so the node is obvious
+   even between pulses) plus a pulsing halo to draw the eye when you jump to it. */
 .node-error {
-    animation: errorPulse 2s ease-in-out infinite;
+    border-color: #ef4444 !important;
+    animation: errorPulse 1.6s ease-in-out infinite;
 }
 
 @keyframes errorPulse {
 
     0%,
     100% {
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+        box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.9), 0 0 0 4px rgba(239, 68, 68, 0.25);
     }
 
     50% {
-        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
+        box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.9), 0 0 0 10px rgba(239, 68, 68, 0.15);
     }
 }
 

@@ -1,0 +1,146 @@
+/* Real people across page — alongside product screenshots */
+
+.character img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  object-position: bottom center;
+  mask-image: linear-gradient(to top, #000 82%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, #000 82%, transparent 100%);
+}
+
+/* Feature block: product + person composite */
+.feature-composite {
+  position: relative;
+  width: 100%;
+}
+
+.feature-composite__inner {
+  position: relative;
+  padding-bottom: 8px;
+}
+
+.feature-person {
+  position: absolute;
+  bottom: -8px;
+  width: min(42%, 220px);
+  z-index: 6;
+  pointer-events: none;
+  filter: drop-shadow(0 16px 32px rgba(16, 24, 40, 0.15));
+  animation: character-float 6s ease-in-out infinite;
+}
+
+.feature-person img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  object-position: center top;
+  border-radius: 12px;
+  mask-image: linear-gradient(to top, #000 88%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, #000 88%, transparent 100%);
+}
+
+/* Person on left or right depending on layout */
+.feature-split:not(.reverse) .feature-person {
+  left: -6%;
+}
+
+.feature-split.reverse .feature-person {
+  right: -6%;
+  left: auto;
+  animation-delay: 0.8s;
+}
+
+.feature-composite .morph-stack,
+.feature-composite .product-frame {
+  position: relative;
+  z-index: 2;
+}
+
+/* Testimonial real photos */
+.testimonial-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-bottom: 16px;
+  border: 3px solid var(--green-light);
+  box-shadow: 0 4px 12px rgba(60, 173, 74, 0.2);
+}
+
+.testimonial-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
+/* Get started person */
+.get-started-visual {
+  position: relative;
+}
+
+.get-started-person {
+  position: absolute;
+  bottom: -12px;
+  right: -4%;
+  width: min(45%, 240px);
+  z-index: 3;
+  animation: character-float 5.5s ease-in-out infinite;
+}
+
+.get-started-person img {
+  width: 100%;
+  border-radius: 12px;
+  mask-image: linear-gradient(to top, #000 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, #000 85%, transparent 100%);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+.get-started-product {
+  position: relative;
+  z-index: 2;
+}
+
+/* API triggers — person only if no screenshot */
+.feature-person.feature-person--solo {
+  position: relative;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  animation: character-float 6s ease-in-out infinite;
+}
+
+.feature-person--solo img {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  mask-image: linear-gradient(to top, #000 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, #000 90%, transparent 100%);
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 1024px) {
+  .feature-person {
+    width: min(36%, 160px);
+    opacity: 0.9;
+  }
+
+  .character--left,
+  .character--right {
+    width: min(150px, 28vw) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .feature-person {
+    display: none;
+  }
+
+  .get-started-person {
+    display: none;
+  }
+}

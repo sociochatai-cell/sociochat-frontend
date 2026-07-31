@@ -27,6 +27,7 @@ export const SetStatusNode = memo(({ data, selected }: NodeProps<SetStatusNodeTy
                 relative px-5 py-4 rounded-xl shadow-lg border-2 min-w-[280px]
                 transition-all duration-200 bg-white
                 ${selected ? 'ring-2 ring-emerald-400 ring-offset-0' : ''}
+                ${selected && (data as any).validationIssues?.length > 0 ? 'node-error' : ''}
             `}
             style={{ borderColor: colors.border }}
         >

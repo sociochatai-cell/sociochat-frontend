@@ -26,6 +26,7 @@ export interface CTWACampaign {
     ad_account_id: string;
     name: string;
     objective: string;
+    ad_type?: AdType;
     status: CampaignStatus;
     daily_budget: number | null;
     lifetime_budget: number | null;
@@ -35,6 +36,8 @@ export interface CTWACampaign {
     created_at: string;
     updated_at: string;
     sync_status: 'pending' | 'synced' | 'error';
+    /** Official wa.me click-to-chat link — same destination the ad button opens. */
+    wa_link?: string | null;
     adsets?: CTWAAdSet[];
 }
 
@@ -107,6 +110,7 @@ export interface TargetingSpec {
     age_max?: number;
     genders?: number[]; // 0=all, 1=male, 2=female
     interests?: { id: string; name: string }[];
+    behaviors?: { id: string; name: string }[];
     custom_audiences?: { id: string; name: string }[];
 }
 
@@ -161,12 +165,39 @@ export interface CTWAAttribution {
 }
 
 /**
+ * Ad placement specification (Meta ad set level).
+ *
+ * For standard Click-to-WhatsApp ads this is left undefined (Meta auto-places
+ * across Facebook/Instagram). For WhatsApp Status ads we pin the placement to
+ * WhatsApp → Status so the ad only renders inside the WhatsApp Updates tab.
+ */
+export interface PlacementSpec {
+    publisher_platforms: string[];   // e.g. ['whatsapp']
+    whatsapp_positions?: string[];   // e.g. ['status']
+    facebook_positions?: string[];
+    instagram_positions?: string[];
+}
+
+/**
+ * Which kind of ad this campaign represents. Drives placement + which creator
+ * built it. Defaults to 'ctwa' on the backend when omitted.
+ */
+export type AdType = 'ctwa' | 'status';
+
+/**
  * Create campaign form data
  */
 export interface CreateCampaignData {
     workspace_id: string;
     ad_account_id: string;
     name: string;
+    ad_type?: AdType;
+    placement?: PlacementSpec;
+    /** When true, people who message from this ad are auto-added as CRM leads. */
+    create_leads?: boolean;
+    /** CTA button label type, e.g. WHATSAPP_MESSAGE, GET_QUOTE, BOOK_NOW. */
+    cta_type?: string;
+    budget_type?: 'daily' | 'lifetime';
     daily_budget?: number;
     lifetime_budget?: number;
     budget_currency?: string;
@@ -183,6 +214,8 @@ export interface CreateCampaignData {
         media_url?: string;
         ice_breakers?: IceBreaker[];
         prefilled_message?: string;
+        /** Carousel cards — when 2+ present, the ad is published as a carousel. */
+        cards?: { image_url: string; headline?: string; description?: string }[];
     };
 }
 

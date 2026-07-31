@@ -60,7 +60,7 @@ export const TemplateNode = memo(({ data, selected }: NodeProps<TemplateNodeData
                 relative px-0 py-0 rounded-xl shadow-lg border-2 min-w-[300px] max-w-[320px]
                 transition-all duration-200 bg-white
                 ${selected ? 'ring-2 ring-purple-400 ring-offset-0' : ''}
-                ${(data as any).validationIssues?.some((i: any) => !i.handleId) ? 'node-error' : ''}
+                ${selected && (data as any).validationIssues?.length > 0 ? 'node-error' : ''}
             `}
             style={{
                 borderColor: colors.border,

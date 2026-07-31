@@ -18,6 +18,8 @@ import {
     FileDown
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { canMessageButtonRoute } from '../connection-rules';
 import type { MessageButton, ButtonActionType } from '../types';
 import { NODE_COLORS } from '../constants';
 
@@ -60,7 +62,7 @@ export const MessageNode = memo(({ data, selected }: NodeProps<MessageNodeData>)
                 relative px-0 py-0 rounded-xl shadow-lg border-2 min-w-[300px] max-w-[320px]
                 transition-all duration-200 bg-white
                 ${selected ? 'ring-2 ring-green-400 ring-offset-0' : ''}
-                ${(data as any).validationIssues?.some((i: any) => !i.handleId) ? 'node-error' : ''}
+                ${selected && (data as any).validationIssues?.length > 0 ? 'node-error' : ''}
             `}
             style={{
                 borderColor: colors.border,
@@ -128,14 +130,16 @@ export const MessageNode = memo(({ data, selected }: NodeProps<MessageNodeData>)
                         {data.buttons.map((button, index) => {
                             const Icon = ButtonIcons[button.action.type] || ArrowRight;
                             const buttonColor = ButtonColors[button.action.type] || '#10B981';
+                            const canRoute = canMessageButtonRoute(button.action.type);
+                            const actionLabel = button.action.type.replace('_', ' ');
 
-                            return (
+                            const row = (
                                 <div
-                                    key={button.id}
                                     className={`
                                         relative flex items-center justify-between px-4 py-2.5
                                         hover:bg-gray-50 transition-colors cursor-pointer
                                         ${index < data.buttons.length - 1 ? 'border-b border-gray-100' : ''}
+                                        ${!canRoute ? 'opacity-80' : ''}
                                     `}
                                 >
                                     <div className="flex items-center gap-2">
@@ -157,24 +161,61 @@ export const MessageNode = memo(({ data, selected }: NodeProps<MessageNodeData>)
                                             variant="secondary"
                                             className="text-[10px] px-1.5 py-0"
                                         >
-                                            {button.action.type.replace('_', ' ')}
+                                            {actionLabel}
                                         </Badge>
                                     )}
 
-                                    {/* Source Handle for this button */}
-                                    <Handle
-                                        type="source"
-                                        position={Position.Right}
-                                        id={button.id}
-                                        className={`w-3 h-3 border-2 border-white shadow-md ${
-                                            (data as any).validationIssues?.some((i: any) => i.handleId === button.id) ? 'react-flow__handle-glow-error' : ''
-                                        }`}
-                                        style={{
-                                            backgroundColor: buttonColor,
-                                            right: -6,
-                                        }}
-                                    />
+                                    {/* Source Handle for this button. Non-routing "special"
+                                        buttons (URL/Call/Location/Catalog/Product-list) get a
+                                        greyed, disabled dot with a styled tooltip explaining why. */}
+                                    {canRoute ? (
+                                        <Handle
+                                            type="source"
+                                            position={Position.Right}
+                                            id={button.id}
+                                            className={`w-3 h-3 border-2 border-white shadow-md ${
+                                                (data as any).validationIssues?.some((i: any) => i.handleId === button.id) ? 'react-flow__handle-glow-error' : ''
+                                            }`}
+                                            style={{
+                                                backgroundColor: buttonColor,
+                                                right: -6,
+                                            }}
+                                        />
+                                    ) : (
+                                        <Handle
+                                            type="source"
+                                            position={Position.Right}
+                                            id={button.id}
+                                            isConnectable={false}
+                                            className="w-3 h-3 border-2 border-white shadow-md !bg-gray-300 opacity-60 cursor-not-allowed"
+                                            style={{ right: -6 }}
+                                        />
+                                    )}
                                 </div>
+                            );
+
+                            // Routable buttons: plain row. Special buttons: wrap in a styled
+                            // tooltip that explains why the dot is disabled + the alternative.
+                            if (canRoute) {
+                                return <React.Fragment key={button.id}>{row}</React.Fragment>;
+                            }
+
+                            return (
+                                <TooltipProvider key={button.id} delayDuration={150}>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>{row}</TooltipTrigger>
+                                        <TooltipContent side="right" className="max-w-[240px]">
+                                            <p className="font-semibold capitalize mb-0.5">
+                                                {actionLabel} button — no routing
+                                            </p>
+                                            <p className="text-xs opacity-90 leading-snug">
+                                                It performs an action on the customer's phone and ends that
+                                                branch. Use a <span className="font-medium">Quick Reply</span>{' '}
+                                                button to continue the flow.
+                                            </p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
                             );
                         })}
 

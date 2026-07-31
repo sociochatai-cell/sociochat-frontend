@@ -18,7 +18,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { adminApi } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
-import { beginAdminInspect, clearUserSessionKeepAdminInspect } from '@/lib/adminInspect';
+import { beginImpersonation } from '@/lib/impersonation';
 
 interface UserRow {
     id: number;
@@ -66,6 +66,19 @@ export default function AdminUsers() {
     const [featuresSaving, setFeaturesSaving] = useState(false);
     // Per-user "Max workspaces" cap. '' = inherit plan/tenant; -1 = unlimited.
     const [maxWorkspaces, setMaxWorkspaces] = useState('');
+
+    // Assignable plans — loaded LIVE from the DB catalog so newly added plans
+    // (e.g. Premium) appear automatically, instead of a stale hardcoded list.
+    const [planOptions, setPlanOptions] = useState<{ slug: string; name: string }[]>([]);
+    useEffect(() => {
+        adminApi.getPlansMatrix()
+            .then((res: { success?: boolean; plans?: { slug: string; name?: string }[] }) => {
+                if (res?.success && Array.isArray(res.plans) && res.plans.length) {
+                    setPlanOptions(res.plans.map((p) => ({ slug: p.slug, name: p.name || p.slug })));
+                }
+            })
+            .catch(() => { /* fall back to the built-in list below */ });
+    }, []);
 
     const load = async () => {
         setLoading(true);
@@ -118,10 +131,20 @@ export default function AdminUsers() {
     const inspectLogin = async (userId: number) => {
         const res = await adminApi.loginAsUser(userId);
         if (res.success && res.user) {
-            beginAdminInspect('/admin/users');
-            clearUserSessionKeepAdminInspect();
+            // Save the admin session (admin JWT + id) BEFORE switching identity so
+            // "Return to Admin" can restore it. login-as-user already popped the
+            // admin session server-side and returned a user token.
+            beginImpersonation('/admin/users');
+            // FULL switch to the target user: user token as Bearer, drop admin markers.
+            if (res.token) {
+                localStorage.setItem('sv_token', res.token);
+                sessionStorage.setItem('sv_token', res.token);
+            }
+            localStorage.removeItem('sv_admin_id');
+            sessionStorage.removeItem('sv_admin_id');
             loginLocal(res.user);
             localStorage.setItem('sv_user_id', String(res.user.id));
+            sessionStorage.setItem('sv_user', JSON.stringify(res.user));
             if (res.workspaces?.[0]) {
                 localStorage.setItem('sv_whatsapp_workspace_id', String(res.workspaces[0].id));
             }
@@ -215,8 +238,14 @@ export default function AdminUsers() {
                             <Select value={u.plan || 'beta'} onValueChange={v => updatePlan(u.id, v)}>
                                 <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {['beta', 'starter', 'growth', 'enterprise'].map(p => (
-                                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                                    {(planOptions.length ? planOptions : [
+                                        { slug: 'beta', name: 'Free' },
+                                        { slug: 'starter', name: 'Basic' },
+                                        { slug: 'growth', name: 'Pro' },
+                                        { slug: 'premium', name: 'Premium' },
+                                        { slug: 'enterprise', name: 'Ultimate' },
+                                    ]).map(p => (
+                                        <SelectItem key={p.slug} value={p.slug}>{p.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

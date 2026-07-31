@@ -101,7 +101,7 @@ const DripOverallAnalyticsPage = () => {
                 </div>
                 <div className="flex items-center gap-2">
                     <RefreshButton onRefresh={fetchOverview} isRefreshing={loading} title="Refresh" />
-                    <Button variant="outline" onClick={() => navigate('/dashboard/whatsapp/automations')}>
+                    <Button variant="outline" onClick={() => navigate('/dashboard/drip')}>
                         Back to Drip Campaigns
                     </Button>
                 </div>

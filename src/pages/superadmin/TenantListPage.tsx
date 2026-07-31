@@ -39,6 +39,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { superAdminApi, type TenantListItem } from '@/components/superadmin/useSuperAdminApi';
+import { beginImpersonation } from '@/lib/impersonation';
 import { getExpiryStatus, EXPIRY_TONE_CLASS } from '@/components/superadmin/subscriptionDisplay';
 
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
@@ -123,7 +124,25 @@ export default function TenantListPage() {
         try {
             const res = await superAdminApi.impersonate(t.id);
             if (res.success) {
-                if (res.user?.id) localStorage.setItem('sv_user_id', String(res.user.id));
+                // Save the admin session BEFORE the identity switch so "Return to
+                // Admin" can restore it (the call above doesn't touch storage).
+                beginImpersonation('/superadmin/tenants');
+                // FULL switch to the impersonated user (user token as Bearer, drop
+                // admin markers) — otherwise admin-guarded calls still resolve as
+                // the admin via the stale Bearer (dual identity). Mirrors TenantEditPage.
+                try {
+                    if (res.user) {
+                        localStorage.setItem('sv_user', JSON.stringify(res.user));
+                        sessionStorage.setItem('sv_user', JSON.stringify(res.user));
+                        localStorage.setItem('sv_user_id', String(res.user.id));
+                    }
+                    if ((res as any).token) {
+                        localStorage.setItem('sv_token', (res as any).token);
+                        sessionStorage.setItem('sv_token', (res as any).token);
+                    }
+                    localStorage.removeItem('sv_admin_id');
+                    sessionStorage.removeItem('sv_admin_id');
+                } catch { /* ignore */ }
                 if (res.workspaces?.[0]?.id) {
                     localStorage.setItem('sv_whatsapp_workspace_id', String(res.workspaces[0].id));
                 }

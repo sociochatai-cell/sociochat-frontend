@@ -191,7 +191,7 @@ export default function TemplateBuilder() {
                 .then(res => res.json())
                 .then(data => {
                     if (data.accounts && data.accounts.length > 0) {
-                        setAccountId(data.accounts[0].id);
+                        setAccountId((data.accounts.find((a: any) => a.is_active) || data.accounts[0]).id);
                     }
                 })
                 .catch(console.error);

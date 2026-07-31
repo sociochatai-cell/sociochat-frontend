@@ -283,7 +283,7 @@ export default function AdminPrivateSlot() {
                     Private Slot
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                    One shared private pool. Users here use private-only plans plus global tiers (starter / growth / enterprise).
+                    One shared private pool. Users here use private-only plans plus the global plan tiers.
                     Switch back to Global anytime.
                 </p>
                 <div className="flex gap-3 mt-3 text-sm">

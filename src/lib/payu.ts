@@ -26,7 +26,7 @@ function resolveUserId(): string | null {
     return null;
 }
 
-function authHeaders(): Record<string, string> {
+export function authHeaders(): Record<string, string> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const userId = resolveUserId();
     if (userId) headers['X-User-Id'] = userId;
@@ -66,6 +66,7 @@ export async function startPayuCheckout(
     type: InitiateType,
     plan: string,
     returnTo?: string,
+    recurring?: boolean,
 ): Promise<InitiateResult> {
     try {
         // Persist across the full-page redirect to PayU and back (same origin).
@@ -75,7 +76,11 @@ export async function startPayuCheckout(
             method: 'POST',
             credentials: 'include',
             headers: authHeaders(),
-            body: JSON.stringify({ type, plan }),
+            // return_origin = the exact origin the checkout started from (the
+            // tenant's own domain for white-label users). The backend returns the
+            // browser here after PayU so branding + session survive the round-trip.
+            // recurring=true registers a PayU autopay mandate (auto-renew).
+            body: JSON.stringify({ type, plan, return_origin: window.location.origin, recurring: !!recurring }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data?.success) {

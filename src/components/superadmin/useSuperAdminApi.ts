@@ -38,6 +38,28 @@ export interface Branding {
     landing_headline: string;
     landing_subheadline: string;
     landing_cta_text: string;
+    // Landing feature sections (7): title / description / image each.
+    landing_feature1_title: string;
+    landing_feature1_desc: string;
+    landing_feature1_image: string;
+    landing_feature2_title: string;
+    landing_feature2_desc: string;
+    landing_feature2_image: string;
+    landing_feature3_title: string;
+    landing_feature3_desc: string;
+    landing_feature3_image: string;
+    landing_feature4_title: string;
+    landing_feature4_desc: string;
+    landing_feature4_image: string;
+    landing_feature5_title: string;
+    landing_feature5_desc: string;
+    landing_feature5_image: string;
+    landing_feature6_title: string;
+    landing_feature6_desc: string;
+    landing_feature6_image: string;
+    landing_feature7_title: string;
+    landing_feature7_desc: string;
+    landing_feature7_image: string;
 }
 
 export interface TenantListItem {
@@ -338,6 +360,28 @@ export const DEFAULT_BRANDING: Branding = {
     landing_headline: '',
     landing_subheadline: '',
     landing_cta_text: '',
+    // Blank = inherit the shared default (see branding.py merge_branding).
+    landing_feature1_title: '',
+    landing_feature1_desc: '',
+    landing_feature1_image: '',
+    landing_feature2_title: '',
+    landing_feature2_desc: '',
+    landing_feature2_image: '',
+    landing_feature3_title: '',
+    landing_feature3_desc: '',
+    landing_feature3_image: '',
+    landing_feature4_title: '',
+    landing_feature4_desc: '',
+    landing_feature4_image: '',
+    landing_feature5_title: '',
+    landing_feature5_desc: '',
+    landing_feature5_image: '',
+    landing_feature6_title: '',
+    landing_feature6_desc: '',
+    landing_feature6_image: '',
+    landing_feature7_title: '',
+    landing_feature7_desc: '',
+    landing_feature7_image: '',
 };
 
 export const FONT_OPTIONS = ['Inter', 'Roboto', 'Poppins', 'Montserrat', 'Lato', 'Open Sans'];
@@ -433,6 +477,22 @@ export const superAdminApi = {
         userId?: number | string,
     ): Promise<{ success: boolean; user: any; workspaces: any[] }> =>
         unwrap(await apiClient.post(`${BASE}/tenants/${id}/impersonate`, userId ? { user_id: userId } : {})),
+
+    // Usage/exhaustion stats for a specific user within a tenant.
+    getTenantUserUsage: async (
+        tenantId: string | number,
+        userId: number | string,
+    ): Promise<{ success: boolean; plan: string; usage: any }> =>
+        unwrap(await apiClient.get(`${BASE}/tenants/${tenantId}/users/${userId}/usage`)),
+
+    // Permanently delete a tenant user. Requires the super-admin's own password
+    // (sent as a header so it never lands in the URL/query logs).
+    deleteTenantUser: async (
+        tenantId: string | number,
+        userId: number | string,
+        password: string,
+    ): Promise<{ success: boolean }> =>
+        unwrap(await apiClient.delete(`${BASE}/tenants/${tenantId}/users/${userId}`, { 'X-Confirm-Password': password })),
 
     listFeatures: async (): Promise<{ success: boolean; features: FeatureCatalogItem[] }> =>
         unwrap(await apiClient.get(`${BASE}/features`)),

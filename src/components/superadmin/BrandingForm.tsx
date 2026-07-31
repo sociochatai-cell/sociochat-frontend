@@ -204,8 +204,45 @@ function ImageUploadField({ label, placeholder, value, kind, onValue, accept = '
     );
 }
 
+// String-valued landing keys, edited as plain text/URL/textarea inputs. Kept as
+// a dedicated union so a single string setter stays type-safe across all of them.
+type LandingStringKey =
+    | 'landing_headline'
+    | 'landing_subheadline'
+    | 'landing_cta_text'
+    | 'landing_image_url'
+    | 'landing_feature1_title' | 'landing_feature1_desc' | 'landing_feature1_image'
+    | 'landing_feature2_title' | 'landing_feature2_desc' | 'landing_feature2_image'
+    | 'landing_feature3_title' | 'landing_feature3_desc' | 'landing_feature3_image'
+    | 'landing_feature4_title' | 'landing_feature4_desc' | 'landing_feature4_image'
+    | 'landing_feature5_title' | 'landing_feature5_desc' | 'landing_feature5_image'
+    | 'landing_feature6_title' | 'landing_feature6_desc' | 'landing_feature6_image'
+    | 'landing_feature7_title' | 'landing_feature7_desc' | 'landing_feature7_image';
+
+interface LandingFeatureConfig {
+    index: number;
+    name: string;
+    titleKey: LandingStringKey;
+    descKey: LandingStringKey;
+    imageKey: LandingStringKey;
+}
+
+const LANDING_FEATURES: LandingFeatureConfig[] = [
+    { index: 1, name: 'Broadcast', titleKey: 'landing_feature1_title', descKey: 'landing_feature1_desc', imageKey: 'landing_feature1_image' },
+    { index: 2, name: 'Lead alerts', titleKey: 'landing_feature2_title', descKey: 'landing_feature2_desc', imageKey: 'landing_feature2_image' },
+    { index: 3, name: 'CRM Kanban', titleKey: 'landing_feature3_title', descKey: 'landing_feature3_desc', imageKey: 'landing_feature3_image' },
+    { index: 4, name: 'Drip messaging', titleKey: 'landing_feature4_title', descKey: 'landing_feature4_desc', imageKey: 'landing_feature4_image' },
+    { index: 5, name: 'API triggers', titleKey: 'landing_feature5_title', descKey: 'landing_feature5_desc', imageKey: 'landing_feature5_image' },
+    { index: 6, name: 'Interactive flows', titleKey: 'landing_feature6_title', descKey: 'landing_feature6_desc', imageKey: 'landing_feature6_image' },
+    { index: 7, name: 'AI chatbot', titleKey: 'landing_feature7_title', descKey: 'landing_feature7_desc', imageKey: 'landing_feature7_image' },
+];
+
 export function BrandingForm({ branding, onChange }: BrandingFormProps) {
     const set = <K extends keyof Branding>(key: K, value: Branding[K]) =>
+        onChange({ ...branding, [key]: value });
+
+    // Setter for the string-valued landing fields (keeps the map below type-safe).
+    const setLanding = (key: LandingStringKey, value: string) =>
         onChange({ ...branding, [key]: value });
 
     return (
@@ -363,63 +400,91 @@ export function BrandingForm({ branding, onChange }: BrandingFormProps) {
             {/* Landing page */}
             <section className="space-y-4 border-t pt-6">
                 <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-slate-700">Landing Page</h3>
+                    <h3 className="text-sm font-semibold text-slate-700">Landing page</h3>
                     <p className="text-xs text-muted-foreground">
-                        Customize the public landing page hero. Leave blank to use the default SocioChat content.
+                        Leave blank to use the default. Editing here is limited to super-admins.
                     </p>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                    <ImageUploadField
-                        label="Hero video URL"
-                        placeholder="https://… .mp4 or .webm"
-                        value={branding.landing_video_url}
-                        kind="hero_video"
-                        accept="video/*"
-                        help="MP4 or WebM, up to 50MB. Leave blank to use the default SocioChat content."
-                        onValue={(v) => set('landing_video_url', v)}
-                    />
-                    <ImageUploadField
-                        label="Hero image URL"
-                        placeholder="https://… .jpg or .png"
-                        value={branding.landing_image_url}
-                        kind="hero_image"
-                        accept="image/*"
-                        help="Used as the hero background / video poster. Leave blank to use the default SocioChat content."
-                        onValue={(v) => set('landing_image_url', v)}
-                    />
-                    <div className="space-y-1.5 sm:col-span-2">
-                        <Label>Headline</Label>
-                        <Input
-                            value={branding.landing_headline}
-                            onChange={(e) => set('landing_headline', e.target.value)}
-                            placeholder="All-in-one WhatsApp Business Platform"
+
+                {/* Hero */}
+                <div className="space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hero</h4>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-1.5 sm:col-span-2">
+                            <Label>Headline</Label>
+                            <Input
+                                value={branding.landing_headline}
+                                onChange={(e) => setLanding('landing_headline', e.target.value)}
+                                placeholder="All-in-one WhatsApp Business Platform"
+                            />
+                        </div>
+                        <div className="space-y-1.5 sm:col-span-2">
+                            <Label>Subheadline</Label>
+                            <Textarea
+                                value={branding.landing_subheadline}
+                                onChange={(e) => setLanding('landing_subheadline', e.target.value)}
+                                placeholder="Engage customers, automate conversations, and grow your business."
+                                className="min-h-[60px]"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>CTA text</Label>
+                            <Input
+                                value={branding.landing_cta_text}
+                                onChange={(e) => setLanding('landing_cta_text', e.target.value)}
+                                placeholder="Get started today"
+                            />
+                        </div>
+                        <ImageUploadField
+                            label="Hero image URL"
+                            placeholder="https://… .jpg or .png"
+                            value={branding.landing_image_url}
+                            kind="hero_image"
+                            accept="image/*"
+                            help="Main hero image. Leave blank to use the default."
+                            onValue={(v) => setLanding('landing_image_url', v)}
                         />
-                        <p className="text-xs text-muted-foreground">
-                            Leave blank to use the default SocioChat content.
-                        </p>
                     </div>
-                    <div className="space-y-1.5 sm:col-span-2">
-                        <Label>Subtitle</Label>
-                        <Textarea
-                            value={branding.landing_subheadline}
-                            onChange={(e) => set('landing_subheadline', e.target.value)}
-                            placeholder="Engage customers, automate conversations, and grow your business."
-                            className="min-h-[60px]"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                            Leave blank to use the default SocioChat content.
-                        </p>
-                    </div>
-                    <div className="space-y-1.5 sm:col-span-2">
-                        <Label>CTA text</Label>
-                        <Input
-                            value={branding.landing_cta_text}
-                            onChange={(e) => set('landing_cta_text', e.target.value)}
-                            placeholder="Get started today"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                            Leave blank to use the default SocioChat content.
-                        </p>
+                </div>
+
+                {/* Feature sections */}
+                <div className="space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Feature sections</h4>
+                    <div className="space-y-6">
+                        {LANDING_FEATURES.map((feature) => (
+                            <div key={feature.index} className="space-y-3 rounded-md border border-slate-200 p-4">
+                                <h5 className="text-sm font-medium text-slate-700">
+                                    Feature {feature.index} — {feature.name}
+                                </h5>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="space-y-1.5">
+                                        <Label>Title</Label>
+                                        <Input
+                                            value={branding[feature.titleKey]}
+                                            onChange={(e) => setLanding(feature.titleKey, e.target.value)}
+                                            placeholder={`${feature.name} title`}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Image URL</Label>
+                                        <Input
+                                            value={branding[feature.imageKey]}
+                                            onChange={(e) => setLanding(feature.imageKey, e.target.value)}
+                                            placeholder="https://… .jpg or .png"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5 sm:col-span-2">
+                                        <Label>Description</Label>
+                                        <Textarea
+                                            value={branding[feature.descKey]}
+                                            onChange={(e) => setLanding(feature.descKey, e.target.value)}
+                                            placeholder={`Describe the ${feature.name} feature.`}
+                                            className="min-h-[60px]"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </section>

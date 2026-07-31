@@ -3,7 +3,7 @@
 // Wizard-based UI for creating and managing bulk messaging campaigns
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -522,6 +522,7 @@ const WIZARD_STEPS = [
 export default function BulkMessaging() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const { id: routeCampaignId } = useParams<{ id: string }>();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const recipientsApplyTimeoutRef = useRef<number | null>(null);
@@ -812,13 +813,14 @@ export default function BulkMessaging() {
             setWorkspaceId(wsId);
         }
 
-        // Check URL for campaign ID
-        const campaignIdParam = searchParams.get('campaign');
+        // Open a campaign's detail from either the /bulk/:id route param or the
+        // ?campaign= query (route param takes precedence).
+        const campaignIdParam = routeCampaignId || searchParams.get('campaign');
         if (campaignIdParam) {
             setSelectedCampaignId(parseInt(campaignIdParam));
             setView('detail');
         }
-    }, [searchParams]);
+    }, [searchParams, routeCampaignId]);
 
     // Fetch WhatsApp accounts
     useEffect(() => {

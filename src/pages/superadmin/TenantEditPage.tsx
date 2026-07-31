@@ -3,17 +3,25 @@
 // lifecycle actions (suspend/activate/delete/impersonate). Every tab edits a
 // DRAFT in React state; nothing persists until that tab's Save button is
 // pressed. The Branding tab shares the same live preview as the creation wizard.
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft, Loader2, Maximize2, Monitor, Tablet, Smartphone,
     Pause, Play, Trash2, LogIn, Save, Plus, ChevronUp,
     Globe, ShieldCheck, ShieldOff, CheckCircle2, Ban,
-    KeyRound, Copy, Users, Plug,
+    KeyRound, Copy, Users, Plug, Gauge, ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -32,6 +40,8 @@ import { FeaturesEditor } from '@/components/superadmin/FeaturesEditor';
 import { BrandingPreview, type PreviewDevice } from '@/components/superadmin/BrandingPreview';
 import { FullPreviewModal } from '@/components/superadmin/FullPreviewModal';
 import { useBranding } from '@/branding/BrandingContext';
+import { beginImpersonation } from '@/lib/impersonation';
+import { UsagePanel, usageRowsFrom } from '@/components/usage/UsageMeter';
 
 const DEVICES: { id: PreviewDevice; icon: typeof Monitor; label: string }[] = [
     { id: 'desktop', icon: Monitor, label: 'Desktop' },
@@ -115,6 +125,14 @@ export default function TenantEditPage() {
     const [resetResult, setResetResult] = useState<{ email: string; password: string } | null>(null);
     // Per-row impersonation spinner (the user currently being logged in as).
     const [impersonatingUserId, setImpersonatingUserId] = useState<number | null>(null);
+    // Delete-user confirm (requires the super-admin's password).
+    const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+    const [deleteUserTarget, setDeleteUserTarget] = useState<TenantUser | null>(null);
+    const [deleteUserPassword, setDeleteUserPassword] = useState('');
+    // Per-user usage expander (super-admin view of a tenant user's exhaustion).
+    const [usageOpenId, setUsageOpenId] = useState<number | null>(null);
+    const [usageLoadingId, setUsageLoadingId] = useState<number | null>(null);
+    const [usageById, setUsageById] = useState<Record<number, Record<string, unknown>>>({});
 
     // Per-tenant Meta / WhatsApp app credentials. Plain fields are prefilled
     // from the API; secrets are write-only so we track only whether each is set
@@ -560,10 +578,24 @@ export default function TenantEditPage() {
     const impersonate = async () => {
         try {
             const res = await superAdminApi.impersonate(id);
-            // Persist the impersonated user so the dashboard can pick it up.
+            // Save the admin session BEFORE the full identity switch below (which
+            // clears the admin markers) so "Return to Admin" can restore it. The
+            // call above doesn't touch storage, so the admin token is still intact.
+            beginImpersonation(`/superadmin/tenants/${id}`);
+            // Persist the impersonated user so the dashboard can pick it up, and
+            // FULLY switch identity to that user: use the user token as the Bearer
+            // and drop the admin markers — otherwise /auth/me keeps resolving the
+            // admin and post-payment/redirects land on the admin dashboard.
             try {
                 localStorage.setItem('sv_user', JSON.stringify(res.user));
+                sessionStorage.setItem('sv_user', JSON.stringify(res.user));
                 localStorage.setItem('sv_user_id', String(res.user?.id));
+                if ((res as any).token) {
+                    localStorage.setItem('sv_token', (res as any).token);
+                    sessionStorage.setItem('sv_token', (res as any).token);
+                }
+                localStorage.removeItem('sv_admin_id');
+                sessionStorage.removeItem('sv_admin_id');
             } catch { /* ignore */ }
             // Apply the impersonated tenant's branding immediately so the app
             // shows its colors / font / logo (not the previous/old branding).
@@ -575,16 +607,48 @@ export default function TenantEditPage() {
         }
     };
 
+    // Permanently delete a tenant user — requires the super-admin's own password.
+    const confirmDeleteUser = async () => {
+        if (!deleteUserTarget) return;
+        if (!deleteUserPassword.trim()) {
+            toast({ title: 'Enter your admin password to confirm', variant: 'destructive' });
+            return;
+        }
+        const u = deleteUserTarget;
+        setDeletingUserId(u.id);
+        try {
+            await superAdminApi.deleteTenantUser(id, u.id, deleteUserPassword);
+            toast({ title: 'User deleted', description: u.email });
+            setUsers((prev) => prev.filter((x) => x.id !== u.id));
+            setDeleteUserTarget(null);
+            setDeleteUserPassword('');
+        } catch (e: any) {
+            toast({ title: 'Could not delete user', description: e?.message || 'Delete failed', variant: 'destructive' });
+        } finally {
+            setDeletingUserId(null);
+        }
+    };
+
     // "Login as" a SPECIFIC tenant user. Mirrors the top-of-page impersonate
     // handler but targets one user_id and shows a per-row spinner.
     const impersonateUser = async (user: TenantUser) => {
         setImpersonatingUserId(user.id);
         try {
             const res = await superAdminApi.impersonate(id, user.id);
-            // Persist the impersonated user so the dashboard can pick it up.
+            // Save the admin session BEFORE the identity switch (see impersonate()).
+            beginImpersonation(`/superadmin/tenants/${id}`);
+            // Persist the impersonated user and FULLY switch identity to them
+            // (user token as Bearer, drop admin markers) — see impersonate() above.
             try {
                 localStorage.setItem('sv_user', JSON.stringify(res.user));
+                sessionStorage.setItem('sv_user', JSON.stringify(res.user));
                 localStorage.setItem('sv_user_id', String(res.user?.id));
+                if ((res as any).token) {
+                    localStorage.setItem('sv_token', (res as any).token);
+                    sessionStorage.setItem('sv_token', (res as any).token);
+                }
+                localStorage.removeItem('sv_admin_id');
+                sessionStorage.removeItem('sv_admin_id');
                 const tenantCode = (res as any)?.tenant?.tenant_code;
                 if (tenantCode) localStorage.setItem('sv_tenant_code', String(tenantCode));
             } catch { /* ignore */ }
@@ -596,6 +660,27 @@ export default function TenantEditPage() {
             toast({ title: 'Login as user failed', description: e?.message, variant: 'destructive' });
         } finally {
             setImpersonatingUserId(null);
+        }
+    };
+
+    // Toggle a per-user usage expander; fetch (and cache) the user's usage the
+    // first time it's opened.
+    const toggleUsage = async (user: TenantUser) => {
+        if (usageOpenId === user.id) {
+            setUsageOpenId(null);
+            return;
+        }
+        setUsageOpenId(user.id);
+        if (usageById[user.id]) return;
+        setUsageLoadingId(user.id);
+        try {
+            const res = await superAdminApi.getTenantUserUsage(id, user.id);
+            setUsageById((prev) => ({ ...prev, [user.id]: res.usage }));
+        } catch (e: any) {
+            toast({ title: 'Could not load usage', description: e?.message, variant: 'destructive' });
+            setUsageOpenId((cur) => (cur === user.id ? null : cur));
+        } finally {
+            setUsageLoadingId(null);
         }
     };
 
@@ -1390,7 +1475,8 @@ export default function TenantEditPage() {
                                     </thead>
                                     <tbody>
                                         {users.map((u) => (
-                                            <tr key={u.id} className="border-b last:border-0">
+                                            <Fragment key={u.id}>
+                                            <tr className="border-b last:border-0">
                                                 <td className="py-2 pr-4 font-medium">{u.name || '—'}</td>
                                                 <td className="py-2 pr-4 break-all">{u.email}</td>
                                                 <td className="py-2 pr-4">
@@ -1407,6 +1493,19 @@ export default function TenantEditPage() {
                                                 </td>
                                                 <td className="py-2 pr-0 text-right">
                                                     <div className="flex flex-wrap items-center justify-end gap-2">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => toggleUsage(u)}
+                                                            disabled={usageLoadingId === u.id}
+                                                            title="View this user's usage"
+                                                        >
+                                                            {usageLoadingId === u.id
+                                                                ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                                                : <Gauge className="h-4 w-4 mr-1" />}
+                                                            Usage
+                                                            <ChevronDown className={cn('h-3 w-3 ml-1 transition-transform', usageOpenId === u.id && 'rotate-180')} />
+                                                        </Button>
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
@@ -1430,9 +1529,36 @@ export default function TenantEditPage() {
                                                                 : <KeyRound className="h-4 w-4 mr-1" />}
                                                             Reset Password
                                                         </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="text-destructive hover:bg-destructive/10"
+                                                            onClick={() => { setDeleteUserTarget(u); setDeleteUserPassword(''); }}
+                                                            disabled={deletingUserId === u.id}
+                                                            title="Delete this user"
+                                                        >
+                                                            {deletingUserId === u.id
+                                                                ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                                                : <Trash2 className="h-4 w-4 mr-1" />}
+                                                            Delete
+                                                        </Button>
                                                     </div>
                                                 </td>
                                             </tr>
+                                            {usageOpenId === u.id && (
+                                                <tr>
+                                                    <td colSpan={5} className="bg-slate-50 px-4 py-3">
+                                                        {usageById[u.id] ? (
+                                                            <UsagePanel dense rows={usageRowsFrom(usageById[u.id])} />
+                                                        ) : (
+                                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                                <Loader2 className="h-4 w-4 animate-spin" /> Loading usage…
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            </Fragment>
                                         ))}
                                     </tbody>
                                 </table>
@@ -1442,6 +1568,51 @@ export default function TenantEditPage() {
                 </TabsContent>
             </Tabs>
           </div>
+
+            {/* Delete tenant user — requires the super-admin's password */}
+            <Dialog
+                open={!!deleteUserTarget}
+                onOpenChange={(o) => {
+                    if (!o) {
+                        setDeleteUserTarget(null);
+                        setDeleteUserPassword('');
+                    }
+                }}
+            >
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-destructive">Delete user?</DialogTitle>
+                        <DialogDescription className="break-all">
+                            This permanently removes <strong>{deleteUserTarget?.name || deleteUserTarget?.email}</strong> and
+                            their workspaces. This cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="sa-delete-password">Enter your admin password to confirm</Label>
+                        <Input
+                            id="sa-delete-password"
+                            type="password"
+                            autoComplete="current-password"
+                            value={deleteUserPassword}
+                            onChange={(e) => setDeleteUserPassword(e.target.value)}
+                            placeholder="Your admin portal password"
+                            onKeyDown={(e) => { if (e.key === 'Enter' && deleteUserPassword.trim()) confirmDeleteUser(); }}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setDeleteUserTarget(null); setDeleteUserPassword(''); }}>
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={!deleteUserPassword.trim() || deletingUserId === deleteUserTarget?.id}
+                            onClick={confirmDeleteUser}
+                        >
+                            {deletingUserId === deleteUserTarget?.id ? 'Deleting…' : 'Delete user'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <FullPreviewModal open={fullPreview} onClose={() => setFullPreview(false)} branding={branding} />
         </div>

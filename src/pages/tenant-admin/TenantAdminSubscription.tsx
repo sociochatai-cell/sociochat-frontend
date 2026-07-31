@@ -279,10 +279,12 @@ export default function TenantAdminSubscription() {
     const subscription = data?.subscription ?? null;
     const tenantPlan = data?.tenant_plan ?? null;
     const availablePlans = data?.available_plans ?? [];
-    // Currently-selected license slug (prefer the live subscription's slug).
-    const currentSlug = subscription?.plan_slug || tenantPlan?.slug || null;
     // No active plan ⇒ subscription null, empty slug, or no matching license.
     const hasActivePlan = Boolean(subscription && subscription.plan_slug && tenantPlan);
+    // Currently-selected license slug — ONLY from an actual active subscription,
+    // never the tenant's default/baseline plan. Without this gate a brand-new
+    // tenant showed its baseline (e.g. enterprise) pre-highlighted as "Current".
+    const currentSlug = hasActivePlan ? (subscription?.plan_slug ?? null) : null;
 
     // After a successful placeholder payment: refresh state + confirm to the user.
     const handlePaid = async (plan: TenantPlan) => {

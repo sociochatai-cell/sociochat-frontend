@@ -116,7 +116,7 @@ export function FlowBuilderV2() {
         const res = await cachedFetch(`${API_BASE}/api/whatsapp/accounts?workspace_id=${workspaceId}`);
         const data = await res.json();
         if (data.success && data.accounts?.length > 0) {
-          setAccountId(data.accounts[0].id);
+          setAccountId((data.accounts.find((a: any) => a.is_active) || data.accounts[0]).id);
         }
       } catch (err) {
         console.error('Failed to fetch account:', err);
@@ -779,6 +779,7 @@ export function FlowBuilderV2() {
                   onDelete={() => deleteStep(step.id)}
                   onDuplicate={() => duplicateStep(step.id)}
                   onAddField={(field) => addFieldToStep(step.id, field)}
+                  accountId={accountId}
                 />
 
                 {/* Drop indicator - below */}

@@ -46,6 +46,99 @@
         } catch (e) { /* fall back to :root defaults */ }
       })();
     </script>
+
+    <!-- Sociovia Tracking: Meta Pixel + Conversions API (browser + server dedup) -->
+    <script>
+      // --- 1. Meta Pixel Base Code ---
+      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+      n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+      document,'script','https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '1853591498682960');
+
+      // --- 2. Sociovia CAPI Tracker ---
+      (function() {
+        var SOCIOVIA_CONFIG = {
+          apiEndpoint: 'https://sociovia-api-v2-a2cpr5sa3q-el.a.run.app/api/capi/track',
+          workspaceId: '50',
+          pixelId: '1853591498682960'
+        };
+
+        function getCookie(name) {
+          var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+          return match ? decodeURIComponent(match[2]) : null;
+        }
+
+        function getUrlParam(name) {
+          var params = new URLSearchParams(window.location.search);
+          return params.get(name);
+        }
+
+        function generateEventId() {
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+          });
+        }
+
+        function sendCapiEvent(eventName, customData, userData) {
+          var fbclid = getUrlParam('fbclid');
+          var fbc = getCookie('_fbc') || (fbclid ? 'fb.1.' + Date.now() + '.' + fbclid : null);
+          var fbp = getCookie('_fbp');
+          var eventId = generateEventId();
+          var mergedUser = Object.assign({}, window._socioviaUserData || {}, userData || {}, {
+            fbc: fbc,
+            fbp: fbp
+          });
+
+          // Fire browser pixel with event_id for dedup
+          if (typeof fbq === 'function') {
+            fbq('track', eventName, customData || {}, { eventID: eventId });
+          }
+
+          // Fire server-side CAPI
+          var payload = {
+            event_name: eventName,
+            workspace_id: SOCIOVIA_CONFIG.workspaceId,
+            event_source_url: window.location.href,
+            event_id: eventId,
+            user_data: mergedUser,
+            custom_data: customData || {}
+          };
+
+          var body = JSON.stringify(payload);
+          // text/plain avoids CORS preflight issues with sendBeacon on third-party sites
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(SOCIOVIA_CONFIG.apiEndpoint,
+              new Blob([body], { type: 'text/plain' }));
+          } else {
+            fetch(SOCIOVIA_CONFIG.apiEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: body,
+              keepalive: true
+            });
+          }
+        }
+
+        // Auto-fire PageView on load
+        sendCapiEvent('PageView');
+
+        // Expose global tracker for custom events
+        window.SocioviaTracker = {
+          track: function(eventName, customData, userData) {
+            sendCapiEvent(eventName, customData, userData);
+          },
+          identify: function(userData) {
+            window._socioviaUserData = userData;
+          }
+        };
+      })();
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=1853591498682960&ev=PageView&noscript=1" /></noscript>
+    <!-- End Sociovia Tracking -->
   </head>
   <body>
     <div id="fb-root"></div>

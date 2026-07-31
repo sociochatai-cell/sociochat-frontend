@@ -16,6 +16,7 @@ export type FeatureKey =
     | 'whatsapp_tracking'
     | 'whatsapp_catalog'
     | 'whatsapp_ctwa'
+    | 'whatsapp_status_ads'
     | 'whatsapp_smart_ai'
     | 'image_generation'
     | 'ai_chatbot_dashboard'
@@ -25,7 +26,7 @@ export type FeatureKey =
     | 'whatsapp_coexistence'
     | 'whatsapp_bookings';
 
-export type PlanName = 'beta' | 'starter' | 'growth' | 'enterprise';
+export type PlanName = 'beta' | 'starter' | 'growth' | 'premium' | 'enterprise';
 
 /** Route → feature key for GatedRoute */
 export const ROUTE_FEATURE_MAP: Record<string, FeatureKey> = {
@@ -54,13 +55,15 @@ export const ROUTE_FEATURE_MAP: Record<string, FeatureKey> = {
     '/dashboard/crm/settings': 'crm',
     '/ctwa/create': 'whatsapp_ctwa',
     '/ctwa/campaigns': 'whatsapp_ctwa',
+    '/ctwa/status/create': 'whatsapp_status_ads',
 };
 
 export const PLAN_LABELS: Record<string, string> = {
-    beta: 'Beta',
-    starter: 'Starter',
-    growth: 'Growth',
-    enterprise: 'Enterprise',
+    beta: 'Free',
+    starter: 'Basic',
+    growth: 'Pro',
+    premium: 'Premium',
+    enterprise: 'Ultimate',
 };
 
 export function hasFeatureAccess(
@@ -88,7 +91,7 @@ export function getUpgradeMessage(featureKey: string): string {
  */
 
 /** Plan hierarchy (higher index = higher tier). Beta is most permissive. */
-export const PLAN_HIERARCHY: PlanName[] = ['starter', 'growth', 'enterprise', 'beta'];
+export const PLAN_HIERARCHY: PlanName[] = ['starter', 'growth', 'premium', 'enterprise', 'beta'];
 
 /** Numeric tier level for a plan name. */
 export function getPlanLevel(plan: string | undefined): number {
@@ -99,8 +102,9 @@ export function getPlanLevel(plan: string | undefined): number {
 
 /** Whether `userPlan` meets the minimum `requiredPlan`. */
 export function hasAccess(userPlan: string | undefined, requiredPlan: PlanName): boolean {
-    // Beta & Enterprise have ALL features — always allow.
-    if (userPlan === 'beta' || userPlan === 'enterprise') return true;
+    // Beta, Premium & Enterprise have ALL features — always allow (backend grants
+    // premium every feature, same as growth-and-above).
+    if (userPlan === 'beta' || userPlan === 'premium' || userPlan === 'enterprise') return true;
     return getPlanLevel(userPlan) >= getPlanLevel(requiredPlan);
 }
 
@@ -109,20 +113,21 @@ export const FEATURE_PLAN_MAP: Record<FeatureKey, PlanName> = {
     whatsapp_inbox: 'starter',
     whatsapp_templates: 'starter',
     whatsapp_automation: 'starter',
-    whatsapp_drip: 'starter',
+    whatsapp_drip: 'growth',
     whatsapp_interactive_automation: 'starter',
-    whatsapp_flows: 'starter',
+    whatsapp_flows: 'growth',
     whatsapp_analytics: 'starter',
     whatsapp_contacts: 'starter',
-    whatsapp_datasets: 'starter',
+    whatsapp_datasets: 'growth',
     whatsapp_bulk_messaging: 'starter',
-    whatsapp_tracking: 'starter',
+    whatsapp_tracking: 'growth',
     whatsapp_catalog: 'growth',
     whatsapp_ctwa: 'growth',
-    whatsapp_smart_ai: 'growth',
+    whatsapp_status_ads: 'growth',
+    whatsapp_smart_ai: 'starter',
     image_generation: 'growth',
     ai_chatbot_dashboard: 'growth',
-    human_agent_whatsapp: 'growth',
+    human_agent_whatsapp: 'starter',
     unified_dashboard_analytics: 'starter',
     crm: 'starter',
     whatsapp_coexistence: 'starter',

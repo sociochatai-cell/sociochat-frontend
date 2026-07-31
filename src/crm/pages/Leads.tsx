@@ -125,15 +125,32 @@ export default function Leads() {
         }
         setSubmitting(true);
         try {
-            const created = await crmApi.createLead({
+            const created: any = await crmApi.createLead({
                 name: form.name.trim() || form.phone.trim(),
                 phone: form.phone.trim() || undefined,
                 email: form.email.trim() || undefined,
                 status: form.status,
                 source: 'whatsapp',
             });
-            if (created && created.id) setLeads((prev) => [created, ...prev]);
-            else fetchLeads();
+            // Backend returns only { id } (or { lead:{...} }); rebuild the row from
+            // the form so the new lead shows its name/phone instead of a blank card.
+            const newId = created?.id ?? created?.lead?.id;
+            if (newId) {
+                const newLead = (created?.lead && created.lead.name)
+                    ? created.lead
+                    : {
+                        ...(created?.lead || {}),
+                        id: newId,
+                        name: form.name.trim() || form.phone.trim(),
+                        phone: form.phone.trim() || undefined,
+                        email: form.email.trim() || undefined,
+                        status: form.status,
+                        source: 'whatsapp',
+                    };
+                setLeads((prev) => [newLead, ...prev]);
+            } else {
+                fetchLeads();
+            }
             toast.success('Lead added');
             setAddOpen(false);
             setForm({ name: '', phone: '', email: '', status: 'new' });

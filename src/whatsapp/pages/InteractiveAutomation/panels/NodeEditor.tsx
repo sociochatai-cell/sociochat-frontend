@@ -85,6 +85,9 @@ interface NodeEditorProps {
     }>;
     onSelectTemplate?: (templateId: number) => void;
     onUpdateButtonMapping?: (index: number, targetNodeId: string | null) => void;
+    // Message-node "default next step" (the default output handle edge)
+    defaultNextNodeId?: string | null;
+    onSetDefaultNext?: (targetNodeId: string | null) => void;
     // For file uploads
     workspaceId?: string;
     flowVariables?: Record<string, string>;
@@ -144,6 +147,8 @@ export function NodeEditor({
     templates,
     onSelectTemplate,
     onUpdateButtonMapping,
+    defaultNextNodeId,
+    onSetDefaultNext,
     workspaceId,
     flowVariables,
     automationId,
@@ -764,6 +769,47 @@ export function NodeEditor({
                     value={data.leadAction}
                     onChange={(leadAction: LeadAction) => onUpdate({ leadAction })}
                 />
+
+                {/* Default next step (the default output handle edge) */}
+                {onSetDefaultNext && (
+                    <div className="space-y-1.5 pt-3 border-t">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-xs">Default next step</Label>
+                            {defaultNextNodeId && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                                    onClick={() => onSetDefaultNext(null)}
+                                >
+                                    <X className="w-3 h-3 mr-1" />
+                                    Clear
+                                </Button>
+                            )}
+                        </div>
+                        <Select
+                            value={defaultNextNodeId ?? '__none__'}
+                            onValueChange={(v) => onSetDefaultNext(v === '__none__' ? null : v)}
+                        >
+                            <SelectTrigger className="h-9">
+                                <SelectValue placeholder="No default next step" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">— None —</SelectItem>
+                                {allNodes
+                                    .filter((n) => n.id !== node.id)
+                                    .map((n) => (
+                                        <SelectItem key={n.id} value={n.id}>
+                                            {getTargetNodeLabel(n)}
+                                        </SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-muted-foreground">
+                            Where the flow continues after this message when no button is matched.
+                        </p>
+                    </div>
+                )}
             </div>
         );
     };

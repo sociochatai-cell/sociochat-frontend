@@ -76,9 +76,10 @@ const TrackingAnalytics: React.FC = () => {
     const [phoneFilter, setPhoneFilter] = useState('');
     const [searchPhone, setSearchPhone] = useState('');
 
-    // Get workspace ID from storage
+    // Get workspace ID from storage. No hardcoded fallback — a literal tenant id
+    // would silently load ANOTHER tenant's tracking data when none is selected.
     const getWorkspaceId = () => {
-        return getStoredWorkspaceId() || '4'; // Default fallback
+        return getStoredWorkspaceId() || null;
     };
 
     const fetchData = useCallback(async () => {
@@ -87,6 +88,11 @@ const TrackingAnalytics: React.FC = () => {
 
         try {
             const workspaceId = getWorkspaceId();
+            if (!workspaceId) {
+                setError('No workspace selected. Please select a workspace first.');
+                setLoading(false);
+                return;
+            }
             const params = new URLSearchParams({
                 source: sourceFilter,
                 limit: '100',

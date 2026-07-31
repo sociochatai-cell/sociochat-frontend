@@ -44,13 +44,17 @@ export function FlowSubmissions() {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const fetchSubmissions = useCallback(async () => {
+    // This page is always entered via the /flows/:flowId/submissions route. Without
+    // a flowId there is nothing tenant-safe to fetch (no hardcoded account_id=1).
+    if (!flowId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const statusQ = statusFilter !== 'all' ? `&status=${statusFilter}` : '';
-      const url = flowId
-        ? `${API_BASE}/api/whatsapp/flows/${flowId}/submissions?page=${page}&per_page=25${statusQ}`
-        : `${API_BASE}/api/whatsapp/flows/submissions?account_id=1&page=${page}&per_page=25${statusQ}`;
+      const url = `${API_BASE}/api/whatsapp/flows/${flowId}/submissions?page=${page}&per_page=25${statusQ}`;
 
       const res = await cachedFetch(url, {
         headers: { Authorization: `Bearer ${token}` },

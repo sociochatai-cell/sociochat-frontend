@@ -77,13 +77,10 @@ export default function SignupPage() {
         setLoading(true);
         setErrors([]);
 
+        // Resolved internally from the custom domain (DomainGate). Empty on the
+        // shared platform host → the backend registers under the internal
+        // SocioChat tenant. Users only enter their details — never a code.
         const code = tenantCode.trim().toUpperCase();
-
-        if (!code) {
-            setErrors(['Tenant Code is required. Please enter your organization’s tenant code (e.g. ABC001).']);
-            setLoading(false);
-            return;
-        }
 
         try {
             const res = await fetch(`${API_BASE_URL}/api/auth/signup`, {
@@ -106,6 +103,17 @@ export default function SignupPage() {
             // Store email for verification page
             sessionStorage.setItem('sv_signup_email', form.email);
             sessionStorage.setItem('sv_signup_name', form.name);
+
+            // Meta CAPI: fire the signup conversion (browser Pixel + server CAPI,
+            // deduped by event_id). identify() first so the event carries user
+            // data for match quality. No-ops safely if the tracker isn't loaded.
+            try {
+                const tracker = (window as any).SocioviaTracker;
+                if (tracker) {
+                    tracker.identify({ em: form.email, ph: form.phone, fn: form.name });
+                    tracker.track('CompleteRegistration', { value: 0 });
+                }
+            } catch { /* tracking must never block signup */ }
 
             // Navigate to verification page
             navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
@@ -214,11 +222,12 @@ export default function SignupPage() {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-3.5">
+                        {tenantCodeError && (
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Tenant Code</label>
                             <div className="relative">
                                 <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                <input type="text" required value={tenantCode}
+                                <input type="text" value={tenantCode}
                                     onChange={e => {
                                         const v = e.target.value.toUpperCase();
                                         setTenantCode(v);
@@ -234,12 +243,9 @@ export default function SignupPage() {
                                     placeholder="ABC001"
                                     autoCapitalize="characters" autoComplete="off" />
                             </div>
-                            {tenantCodeError ? (
-                                <p className="mt-1 text-xs text-red-600">{tenantCodeError}</p>
-                            ) : (
-                                <p className="mt-1 text-xs text-slate-400">Your organization’s tenant code, e.g. ABC001.</p>
-                            )}
+                            <p className="mt-1 text-xs text-red-600">{tenantCodeError}</p>
                         </div>
+                        )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>

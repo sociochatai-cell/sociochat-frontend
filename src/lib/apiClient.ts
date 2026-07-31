@@ -2,6 +2,7 @@
 // Centralized HTTP helper that sends cookies (session-based auth).
 import { API_ENDPOINT } from "@/config";
 import { getWorkspaceId } from "@/whatsapp/utils/workspaceContext";
+import { getActiveAuth, credentialsMode } from "@/lib/authToken";
 
 const API_BASE = API_ENDPOINT;
 
@@ -38,24 +39,25 @@ function getAdminId(): string | null {
 async function request<T = any>(path: string, opts: RequestInit = {}): Promise<ApiResult<T>> {
   const url = path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 
-  // Build headers with fallback X-User-Id for incognito/mobile browsers
-  const fallbackUserId = getFallbackUserId();
-  const adminId = getAdminId();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(opts.headers as Record<string, string> || {}),
   };
-  if (fallbackUserId) {
-    headers["X-User-Id"] = fallbackUserId;
-  }
-  if (adminId) {
-    headers["X-Admin-Id"] = adminId;
-  }
 
-  // Add Bearer token for cross-origin auth (when cookies fail)
-  const token = sessionStorage.getItem("sv_token") || localStorage.getItem("sv_token");
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  // Identity is context-aware. In the /agent portal we send ONLY the agent
+  // token — never the owner's X-User-Id/X-Admin-Id/sv_token/cookie — so an
+  // agent can never be resolved as the owner. See lib/authToken.ts.
+  const { token, isAgent } = getActiveAuth();
+  if (isAgent) {
+    if (token && !headers["Authorization"]) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  } else {
+    const fallbackUserId = getFallbackUserId();
+    const adminId = getAdminId();
+    if (fallbackUserId) headers["X-User-Id"] = fallbackUserId;
+    if (adminId) headers["X-Admin-Id"] = adminId;
+    if (token && !headers["Authorization"]) headers["Authorization"] = `Bearer ${token}`;
   }
 
   // Scope every request to the active workspace (multi-workspace support).
@@ -73,7 +75,9 @@ async function request<T = any>(path: string, opts: RequestInit = {}): Promise<A
   const { headers: _optsHeaders, ...restOpts } = opts;
 
   const init: RequestInit = {
-    credentials: "include", // IMPORTANT: send cookies for session auth
+    // Owner mode: send cookies for session auth. Agent mode: omit cookies so a
+    // stale owner session can't override the agent Bearer token server-side.
+    credentials: credentialsMode(),
     headers,
     ...restOpts,
   };

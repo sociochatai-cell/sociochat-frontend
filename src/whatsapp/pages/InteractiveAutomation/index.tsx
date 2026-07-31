@@ -27,6 +27,7 @@ import ReactFlow, {
     Panel,
     useReactFlow,
     ReactFlowProvider,
+    PanOnScrollMode,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -39,6 +40,7 @@ import { cachedFetch } from '../../utils/waPersistentCache';
 import { TriggerNode, MessageNode, TemplateNode, InputNode, ApiNode, EndNode, LeadNode, SetStatusNode } from './nodes';
 import { NodeEditor } from './panels';
 import { FlowToolbar } from './FlowToolbar';
+import { getConnectionRule } from './connection-rules';
 import {
     generateId,
     generateButtonId,
@@ -187,6 +189,9 @@ export function InteractiveAutomation() {
 
     // UI state
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+    // While a connection is being dragged: the source handle, used to glow valid
+    // target nodes green and dim invalid ones.
+    const [connectFrom, setConnectFrom] = useState<{ nodeId: string; handleId: string } | null>(null);
     const [isDirty, setIsDirty] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
@@ -207,6 +212,9 @@ export function InteractiveAutomation() {
 
     // ReactFlow instance ref for viewport access
     const reactFlowInstance = React.useRef<any>(null);
+    // Canvas container ref — used to place new nodes at the true viewport centre
+    // (instead of guessing an 800×600 container).
+    const canvasRef = React.useRef<HTMLDivElement>(null);
 
     // ==========================================================================
     // INITIALIZATION
@@ -222,8 +230,9 @@ export function InteractiveAutomation() {
                 );
                 const data = await res.json();
                 if (data.success && data.accounts?.length > 0) {
-                    setAccountId(data.accounts[0].id);
-                    setFlow((prev) => ({ ...prev, accountId: data.accounts[0].id }));
+                    const acct = data.accounts.find((a: any) => a.is_active) || data.accounts[0];
+                    setAccountId(acct.id);
+                    setFlow((prev) => ({ ...prev, accountId: acct.id }));
                 }
             } catch (err) {
                 console.error('Failed to fetch account:', err);
@@ -341,10 +350,45 @@ export function InteractiveAutomation() {
     // HANDLERS
     // ==========================================================================
 
+    // Live "no-drop" cursor while dragging a connection: reject invalid links
+    // before they're drawn (uses the same rule module as onConnect).
+    const isValidConnection = useCallback(
+        (connection: Connection) =>
+            getConnectionRule(
+                connection.source,
+                connection.sourceHandle,
+                connection.target,
+                connection.targetHandle,
+                flow.nodes,
+                flow.edges
+            ).valid,
+        [flow.nodes, flow.edges]
+    );
+
     const onConnect = useCallback(
         (connection: Connection) => {
             if (!connection.source || !connection.target) return;
-            if (connection.source === connection.target) return;
+
+            // Validate against the connection rules; on an invalid drop, explain
+            // WHY and show the valid alternative instead of silently dropping it.
+            const rule = getConnectionRule(
+                connection.source,
+                connection.sourceHandle,
+                connection.target,
+                connection.targetHandle,
+                flow.nodes,
+                flow.edges
+            );
+            if (!rule.valid) {
+                if (rule.reason) {
+                    toast({
+                        title: rule.reason,
+                        description: rule.fix,
+                        variant: 'destructive',
+                    });
+                }
+                return;
+            }
 
             const updatedFlow = addFlowEdge(
                 flow,
@@ -361,6 +405,42 @@ export function InteractiveAutomation() {
         [flow, setNodes, setEdges]
     );
 
+    // Track the handle a connection drag started from so we can highlight valid targets.
+    const onConnectStart = useCallback(
+        (
+            _e: React.MouseEvent | React.TouchEvent,
+            params: { nodeId?: string | null; handleId?: string | null; handleType?: string | null }
+        ) => {
+            if (params?.handleType === 'source' && params.nodeId) {
+                setConnectFrom({ nodeId: params.nodeId, handleId: params.handleId || 'output' });
+            }
+        },
+        []
+    );
+
+    const onConnectEnd = useCallback(() => setConnectFrom(null), []);
+
+    // While dragging a connection, tag each node valid/invalid vs the source handle
+    // so the canvas can glow valid targets green and dim the rest.
+    const styledNodes = useMemo(() => {
+        if (!connectFrom) return nodes;
+        return nodes.map((n) => {
+            if (n.id === connectFrom.nodeId) return n;
+            const ok = getConnectionRule(
+                connectFrom.nodeId,
+                connectFrom.handleId,
+                n.id,
+                'input',
+                flow.nodes,
+                flow.edges
+            ).valid;
+            return {
+                ...n,
+                className: `${n.className || ''} ${ok ? 'ia-connect-valid' : 'ia-connect-dim'}`.trim(),
+            };
+        });
+    }, [nodes, connectFrom, flow.nodes, flow.edges]);
+
     const onEdgesDelete = useCallback(
         (edgesToDelete: Edge[]) => {
             let updatedFlow = flow;
@@ -376,6 +456,35 @@ export function InteractiveAutomation() {
         [flow, setNodes, setEdges]
     );
 
+    // The message node's "default next step" is the edge from its default output handle
+    // (sourceHandle 'output'). Let the editor panel set/clear it (previously you could
+    // only remove it by deleting the edge on the canvas).
+    const defaultNextNodeId = useMemo(() => {
+        if (!selectedNodeId) return null;
+        const e = flow.edges.find(
+            (x) => x.source === selectedNodeId && (x.sourceHandle === 'output' || !x.sourceHandle)
+        );
+        return e ? e.target : null;
+    }, [flow.edges, selectedNodeId]);
+
+    const onSetDefaultNext = useCallback(
+        (targetNodeId: string | null) => {
+            if (!selectedNodeId) return;
+            let updatedFlow = flow;
+            flow.edges
+                .filter((e) => e.source === selectedNodeId && (e.sourceHandle === 'output' || !e.sourceHandle))
+                .forEach((e) => { updatedFlow = removeFlowEdge(updatedFlow, e.id); });
+            if (targetNodeId) {
+                updatedFlow = addFlowEdge(updatedFlow, selectedNodeId, 'output', targetNodeId);
+            }
+            setFlow(updatedFlow);
+            setNodes(toReactFlowNodes(updatedFlow.nodes));
+            setEdges(toReactFlowEdges(updatedFlow.edges));
+            setIsDirty(true);
+        },
+        [flow, selectedNodeId, setNodes, setEdges]
+    );
+
     const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
         setSelectedNodeId(node.id);
     }, []);
@@ -383,6 +492,38 @@ export function InteractiveAutomation() {
     const onPaneClick = useCallback(() => {
         setSelectedNodeId(null);
     }, []);
+
+    // Click a validation issue → select that node (opens its editor) and pan the
+    // canvas to it, so an error like "Button label is required" is findable instead
+    // of you hunting the canvas for the node id.
+    const onIssueClick = useCallback((issue: ValidationIssue) => {
+        if (!issue.nodeId) return;
+        setSelectedNodeId(issue.nodeId);
+        // Tell the user the EXACT problem for the node they clicked.
+        toast({
+            title: issue.severity === 'error' ? 'Fix this error' : 'Warning',
+            description: issue.message,
+            variant: issue.severity === 'error' ? 'destructive' : 'default',
+        });
+        // Distinctly SELECT the clicked node so it stands out from the other
+        // error-glowing nodes (react-flow adds its selection ring on top of the
+        // red error halo), and open its editor.
+        setNodes((nds) => nds.map((n) => ({ ...n, selected: n.id === issue.nodeId })));
+        // Zoom in and center precisely on THAT node's current position.
+        setTimeout(() => {
+            const inst = reactFlowInstance.current;
+            if (!inst) return;
+            const rfNode = inst.getNode?.(issue.nodeId) || flow.nodes.find((n) => n.id === issue.nodeId);
+            if (!rfNode) return;
+            const w = (rfNode as any).width || 220;
+            const h = (rfNode as any).height || 120;
+            inst.setCenter(
+                rfNode.position.x + w / 2,
+                rfNode.position.y + h / 2,
+                { zoom: 1.2, duration: 500 }
+            );
+        }, 50);
+    }, [flow.nodes, setNodes]);
 
     const handleNameChange = useCallback((name: string) => {
         setFlow((prev) => ({ ...prev, name }));
@@ -396,8 +537,8 @@ export function InteractiveAutomation() {
         if (reactFlowInstance.current) {
             const viewport = reactFlowInstance.current.getViewport();
             const zoom = viewport.zoom || 1;
-            const containerWidth = 800;
-            const containerHeight = 600;
+            const containerWidth = canvasRef.current?.clientWidth || 800;
+            const containerHeight = canvasRef.current?.clientHeight || 600;
             position = {
                 x: (-viewport.x + containerWidth / 2) / zoom,
                 y: (-viewport.y + containerHeight / 2) / zoom,
@@ -430,8 +571,8 @@ export function InteractiveAutomation() {
         if (reactFlowInstance.current) {
             const viewport = reactFlowInstance.current.getViewport();
             const zoom = viewport.zoom || 1;
-            const containerWidth = 800;
-            const containerHeight = 600;
+            const containerWidth = canvasRef.current?.clientWidth || 800;
+            const containerHeight = canvasRef.current?.clientHeight || 600;
             position = {
                 x: (-viewport.x + containerWidth / 2) / zoom,
                 y: (-viewport.y + containerHeight / 2) / zoom,
@@ -464,8 +605,8 @@ export function InteractiveAutomation() {
         if (reactFlowInstance.current) {
             const viewport = reactFlowInstance.current.getViewport();
             const zoom = viewport.zoom || 1;
-            const containerWidth = 800;
-            const containerHeight = 600;
+            const containerWidth = canvasRef.current?.clientWidth || 800;
+            const containerHeight = canvasRef.current?.clientHeight || 600;
             position = {
                 x: (-viewport.x + containerWidth / 2) / zoom,
                 y: (-viewport.y + containerHeight / 2) / zoom,
@@ -498,8 +639,8 @@ export function InteractiveAutomation() {
         if (reactFlowInstance.current) {
             const viewport = reactFlowInstance.current.getViewport();
             const zoom = viewport.zoom || 1;
-            const containerWidth = 800;
-            const containerHeight = 600;
+            const containerWidth = canvasRef.current?.clientWidth || 800;
+            const containerHeight = canvasRef.current?.clientHeight || 600;
             position = {
                 x: (-viewport.x + containerWidth / 2) / zoom,
                 y: (-viewport.y + containerHeight / 2) / zoom,
@@ -562,8 +703,8 @@ export function InteractiveAutomation() {
         if (reactFlowInstance.current) {
             const viewport = reactFlowInstance.current.getViewport();
             const zoom = viewport.zoom || 1;
-            const containerWidth = 800;
-            const containerHeight = 600;
+            const containerWidth = canvasRef.current?.clientWidth || 800;
+            const containerHeight = canvasRef.current?.clientHeight || 600;
             position = {
                 x: (-viewport.x + containerWidth / 2) / zoom,
                 y: (-viewport.y + containerHeight / 2) / zoom,
@@ -595,8 +736,8 @@ export function InteractiveAutomation() {
         if (reactFlowInstance.current) {
             const viewport = reactFlowInstance.current.getViewport();
             const zoom = viewport.zoom || 1;
-            const containerWidth = 800;
-            const containerHeight = 600;
+            const containerWidth = canvasRef.current?.clientWidth || 800;
+            const containerHeight = canvasRef.current?.clientHeight || 600;
             position = {
                 x: (-viewport.x + containerWidth / 2) / zoom,
                 y: (-viewport.y + containerHeight / 2) / zoom,
@@ -627,6 +768,8 @@ export function InteractiveAutomation() {
         setFlow(layoutedFlow);
         setNodes(toReactFlowNodes(layoutedFlow.nodes));
         setIsDirty(true);
+        // Reframe the whole (re-laid-out) flow so everything is visible.
+        setTimeout(() => reactFlowInstance.current?.fitView({ padding: 0.2, maxZoom: 1 }), 50);
         toast({ title: 'Layout applied', description: 'Nodes have been rearranged' });
     }, [flow]);
 
@@ -1045,6 +1188,7 @@ export function InteractiveAutomation() {
                 isSaving={isSaving}
                 isPublishing={isPublishing}
                 validationIssues={validationIssues}
+                onIssueClick={onIssueClick}
                 onNameChange={handleNameChange}
                 onSave={handleSave}
                 onPublish={handlePublish}
@@ -1078,20 +1222,29 @@ export function InteractiveAutomation() {
             {/* Main Content */}
             <div className="flex-1 flex min-w-0 overflow-hidden">
                 {/* Canvas */}
-                <div className="flex-1 min-w-0 relative">
+                <div ref={canvasRef} className="flex-1 min-w-0 relative">
                     <ReactFlow
-                        nodes={nodes}
+                        nodes={styledNodes}
                         edges={edges}
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onInit={(instance) => { reactFlowInstance.current = instance; }}
                         onConnect={onConnect}
+                        onConnectStart={onConnectStart}
+                        onConnectEnd={onConnectEnd}
+                        isValidConnection={isValidConnection}
                         onEdgesDelete={onEdgesDelete}
                         onNodeClick={onNodeClick}
                         onPaneClick={onPaneClick}
                         nodeTypes={nodeTypes}
                         fitView
-                        fitViewOptions={{ padding: 0.2 }}
+                        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+                        minZoom={0.1}
+                        maxZoom={2}
+                        connectionRadius={40}
+                        zoomOnDoubleClick={false}
+                        panOnScroll
+                        panOnScrollMode={PanOnScrollMode.Free}
                         className="flow-canvas"
                         deleteKeyCode={['Backspace', 'Delete']}
                         snapToGrid
@@ -1198,6 +1351,10 @@ export function InteractiveAutomation() {
                             }
                             onUpdateButtonMapping={
                                 selectedNode.type === 'template' ? handleUpdateButtonMapping : undefined
+                            }
+                            defaultNextNodeId={selectedNode.type === 'message' ? defaultNextNodeId : null}
+                            onSetDefaultNext={
+                                selectedNode.type === 'message' ? onSetDefaultNext : undefined
                             }
                             workspaceId={workspaceId}
                             flowVariables={flow.variables}

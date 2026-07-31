@@ -16,6 +16,7 @@ import { ChatAutomationsPanel } from './ChatAutomationsPanel';
 import { toast } from 'sonner';
 import { WHATSAPP_REST_API_PREFIX } from "@/config";
 import { maskPhoneNumber } from '@/lib/phoneMask';
+import RequestPaymentButton from '@/whatsapp/commerce/RequestPaymentButton';
 import { getConversationFlowState } from '../api';
 import {
   subscribeToMessages,
@@ -570,6 +571,15 @@ export function ConversationThread({
               <BarChart3 className="w-4 h-4" />
               Stats
             </Button>
+          )}
+
+          {/* Request Payment (SocioChat-only; self-hides if PayU not connected). Removable. */}
+          {conversation?.id && conversation.id > 0 && (
+            <RequestPaymentButton
+              phone={conversation.user_phone}
+              conversationId={conversation.id}
+              customerName={conversation.user_name}
+            />
           )}
 
           {conversation?.closed_by_agent ? (

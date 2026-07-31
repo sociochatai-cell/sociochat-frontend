@@ -17,6 +17,7 @@ import {
     Play,
     Pause,
     Pencil,
+    Copy,
     Trash2,
     MoreHorizontal,
     Search,
@@ -118,6 +119,7 @@ const InteractiveAutomationsList: React.FC = () => {
     const [automationToDelete, setAutomationToDelete] = useState<InteractiveAutomation | null>(null);
     const [aiDialogOpen, setAiDialogOpen] = useState(false);
     const [aiCreating, setAiCreating] = useState(false);
+    const [cloningId, setCloningId] = useState<number | null>(null);
 
     // Resolve the workspace's connected WhatsApp account when the URL/localStorage didn't
     // supply one, so "Do with AI", Create Flow and edit links always carry a valid
@@ -133,7 +135,7 @@ const InteractiveAutomationsList: React.FC = () => {
                     { credentials: 'include' }
                 );
                 const data = await res.json();
-                const first = data?.success && data.accounts?.length ? data.accounts[0].id : null;
+                const first = data?.success && data.accounts?.length ? (data.accounts.find((a: any) => a.is_active) || data.accounts[0]).id : null;
                 if (!cancelled && first) {
                     setAccountId(String(first));
                     localStorage.setItem('current_whatsapp_account_id', String(first));
@@ -251,6 +253,57 @@ const InteractiveAutomationsList: React.FC = () => {
         } catch (error) {
             console.error('Error deleting automation:', error);
             toast.error('Failed to delete automation');
+        }
+    };
+
+    // Clone a flow: copy it exactly (nodes/edges/trigger/variables), rename to
+    // "… (Copy)", and create it as a DRAFT so the user can open → save → publish.
+    const handleClone = async (automation: InteractiveAutomation) => {
+        if (cloningId) return;
+        setCloningId(automation.id);
+        try {
+            // 1. Load the source flow's full definition.
+            const srcRes = await cachedFetch(
+                `${WHATSAPP_REST_API_PREFIX}/interactive-automations/${automation.id}`,
+                { headers: { 'Content-Type': 'application/json' }, credentials: 'include' }
+            );
+            const srcData = await srcRes.json();
+            if (!srcRes.ok || !srcData.success || !srcData.automation) {
+                throw new Error(srcData.error || 'Failed to load the flow to clone');
+            }
+            const src = srcData.automation;
+
+            // 2. Create an exact copy as a draft.
+            const payload = {
+                account_id: src.account_id ?? (accountId ? parseInt(accountId, 10) : undefined),
+                workspace_id: src.workspace_id || workspaceId,
+                name: `${src.name} (Copy)`,
+                description: src.description || '',
+                nodes: src.nodes || [],
+                edges: src.edges || [],
+                trigger: src.trigger || { type: 'any_reply', enabled: true },
+                variables: src.variables || {},
+                flow_config: src.flowConfig || src.flow_config || {},
+                status: 'draft',
+            };
+            const createRes = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/interactive-automations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(payload),
+            });
+            const created = await createRes.json();
+            if (!createRes.ok || !created.success) {
+                throw new Error(created.error || 'Failed to clone the flow');
+            }
+
+            toast.success(`Cloned as "${payload.name}" (draft)`);
+            fetchAutomations();
+        } catch (err) {
+            console.error('Clone flow failed:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to clone flow');
+        } finally {
+            setCloningId(null);
         }
     };
 
@@ -519,6 +572,17 @@ const InteractiveAutomationsList: React.FC = () => {
                                                 >
                                                     <Pencil className="w-4 h-4 mr-2" />
                                                     Edit
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleClone(automation);
+                                                    }}
+                                                    disabled={cloningId === automation.id}
+                                                    className="text-gray-700 hover:bg-gray-100"
+                                                >
+                                                    <Copy className="w-4 h-4 mr-2" />
+                                                    {cloningId === automation.id ? 'Duplicating…' : 'Duplicate'}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem
                                                     onClick={(e) => {

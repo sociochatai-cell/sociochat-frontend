@@ -23,11 +23,33 @@ export interface TenantBranding {
     theme: string;           // "light" | "dark"
     support_email: string;
     login_background: string; // CSS background value (gradient or color)
-    landing_video_url: string;   // hero video URL (mp4/webm) or ""
-    landing_image_url: string;   // hero image/background/poster URL or ""
-    landing_headline: string;    // hero headline or ""
-    landing_subheadline: string; // hero subtitle/description or ""
-    landing_cta_text: string;    // CTA heading text or ""
+    landing_video_url: string;   // DEPRECATED — landing page is image-based, not rendered
+    landing_image_url: string;   // hero image URL
+    landing_headline: string;    // hero headline
+    landing_subheadline: string; // hero subtitle/description
+    landing_cta_text: string;    // CTA heading text
+    // Landing feature sections (7): title / description / image each. Blank = default.
+    landing_feature1_title: string;
+    landing_feature1_desc: string;
+    landing_feature1_image: string;
+    landing_feature2_title: string;
+    landing_feature2_desc: string;
+    landing_feature2_image: string;
+    landing_feature3_title: string;
+    landing_feature3_desc: string;
+    landing_feature3_image: string;
+    landing_feature4_title: string;
+    landing_feature4_desc: string;
+    landing_feature4_image: string;
+    landing_feature5_title: string;
+    landing_feature5_desc: string;
+    landing_feature5_image: string;
+    landing_feature6_title: string;
+    landing_feature6_desc: string;
+    landing_feature6_image: string;
+    landing_feature7_title: string;
+    landing_feature7_desc: string;
+    landing_feature7_image: string;
     background_color: string;    // hex page background, ""=design-system default
     surface_color: string;       // hex card/popover/muted surface, ""=default
     text_color: string;          // hex foreground text, ""=default
@@ -53,10 +75,31 @@ export const DEFAULT_BRANDING: TenantBranding = {
     support_email: "support@sociochat.ai",
     login_background: "linear-gradient(135deg, #0a6847 0%, #128C7E 50%, #25D366 100%)",
     landing_video_url: "",
-    landing_image_url: "",
-    landing_headline: "",
-    landing_subheadline: "",
-    landing_cta_text: "",
+    landing_image_url: "/landing/hero.png",
+    landing_headline: "Automate your WhatsApp. Multiply your sales.",
+    landing_subheadline: "Stop drowning in manual replies. Automate conversations, send personalized broadcasts, and turn every chat into revenue — all on the official WhatsApp Business API.",
+    landing_cta_text: "Ready to grow on WhatsApp?",
+    landing_feature1_title: "WhatsApp Broadcast Messaging",
+    landing_feature1_desc: "Send one personalized message to thousands at once — no group chats, delivered privately to every recipient at 90%+ open rates.",
+    landing_feature1_image: "/landing/feature-1-broadcast.png",
+    landing_feature2_title: "WhatsApp Lead Alerts",
+    landing_feature2_desc: "Get an instant WhatsApp alert the moment a new lead arrives — name, phone, source and interest included — so your team replies within minutes.",
+    landing_feature2_image: "/landing/feature-2-lead-alerts.png",
+    landing_feature3_title: "CRM with Kanban View",
+    landing_feature3_desc: "See your whole sales pipeline on a drag-and-drop board. Move deals from New Lead to Closed Won and spot bottlenecks in seconds.",
+    landing_feature3_image: "/landing/feature-3-crm-kanban.png",
+    landing_feature4_title: "WhatsApp Drip Messaging",
+    landing_feature4_desc: "Automated message sequences that nurture leads, recover carts and close sales 24/7 — running on autopilot at a 98% open rate.",
+    landing_feature4_image: "/landing/feature-4-drip.png",
+    landing_feature5_title: "WhatsApp API Triggers",
+    landing_feature5_desc: "Fire the right message on every event — order placed, payment failed, appointment due — automatically, in under three seconds.",
+    landing_feature5_image: "/landing/feature-5-api-triggers.png",
+    landing_feature6_title: "Interactive Flows",
+    landing_feature6_desc: "Guided, multi-step conversations with buttons and menus right inside the chat — instant replies that qualify leads and resolve queries 24/7.",
+    landing_feature6_image: "/landing/feature-6-interactive-flows.png",
+    landing_feature7_title: "WhatsApp AI Chatbot",
+    landing_feature7_desc: "An AI chatbot trained on your products and brand voice — handles hundreds of conversations at once and escalates to a human only when needed.",
+    landing_feature7_image: "/landing/feature-7-ai-chatbot.png",
     background_color: "",
     surface_color: "",
     text_color: "",
@@ -306,18 +349,24 @@ function ensureFontLoaded(fontFamily: string): void {
     document.head.appendChild(link);
 }
 
-/** Ensure a <link rel="icon"> exists and points it at the given href. */
+/** Point the browser tab icon at the tenant favicon.
+ *
+ * index.html ships SEVERAL icon links (favicon.ico, a 32x32 favicon-32.png, and an
+ * apple-touch-icon). Updating only the first left the others pointing at the default
+ * SocioChat icon — and browsers often prefer the explicit 32x32 PNG, so the tenant's
+ * favicon never showed. Remove every existing icon link and install a single fresh one
+ * for the tenant (with a cache-bust so the tab actually refreshes). */
 function ensureFavicon(href: string): void {
     if (typeof document === "undefined") return;
     const url = href || DEFAULT_BRANDING.favicon_url;
     if (!url) return;
-    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-    if (!link) {
-        link = document.createElement("link");
-        link.rel = "icon";
-        document.head.appendChild(link);
-    }
-    link.href = url;
+    document
+        .querySelectorAll('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
+        .forEach((el) => el.parentNode?.removeChild(el));
+    const link = document.createElement("link");
+    link.rel = "icon";
+    link.href = url + (url.includes("?") ? "" : `?v=${Date.now()}`);
+    document.head.appendChild(link);
 }
 
 /**

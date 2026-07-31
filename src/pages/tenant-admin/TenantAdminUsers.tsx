@@ -61,6 +61,8 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useBranding } from '@/branding/BrandingContext';
 import type { TenantBranding } from '@/branding/branding';
+import { beginImpersonation } from '@/lib/impersonation';
+import { UsagePanel, usageRowsFrom } from '@/components/usage/UsageMeter';
 import {
     tenantAdminApi,
     type TenantUser,
@@ -147,6 +149,7 @@ export default function TenantAdminUsers() {
 
     // Delete confirm state
     const [deleteTarget, setDeleteTarget] = useState<TenantUser | null>(null);
+    const [deletePassword, setDeletePassword] = useState('');
 
     // Generated-password callout (create or reset)
     const [generated, setGenerated] = useState<{ title: string; user: string; password: string } | null>(null);
@@ -162,6 +165,7 @@ export default function TenantAdminUsers() {
     const [manageLoading, setManageLoading] = useState(false);
     // Subscription
     const [managePlan, setManagePlan] = useState<string>('');
+    const [manageUsage, setManageUsage] = useState<Record<string, unknown> | null>(null);
     const [savingPlan, setSavingPlan] = useState(false);
     // Features: only access-type feature keys + their effective on/off state.
     const [featureState, setFeatureState] = useState<Record<string, boolean>>({});
@@ -342,6 +346,11 @@ export default function TenantAdminUsers() {
         setImpersonatingId(u.id);
         try {
             const res = await tenantAdminApi.impersonateUser(u.id);
+            // Save the tenant-admin's OWN session BEFORE overwriting sv_user below,
+            // so "Return to Admin" can restore it. The tenant-admin's user token
+            // stays in sv_token (impersonation is session-based here); the universal
+            // exit endpoint reads it to re-establish the tenant-admin session.
+            beginImpersonation('/tenant-admin/users');
             try {
                 localStorage.setItem('sv_user', JSON.stringify(res.user));
                 sessionStorage.setItem('sv_user', JSON.stringify(res.user));
@@ -383,6 +392,12 @@ export default function TenantAdminUsers() {
         setManageLoading(true);
         setManagePlan('');
         setFeatureState({});
+        setManageUsage(null);
+        // Load usage/exhaustion stats in parallel (best-effort — never blocks features).
+        tenantAdminApi
+            .getUserUsage(u.id)
+            .then((r) => setManageUsage(r?.usage ?? null))
+            .catch(() => setManageUsage(null));
         try {
             const res = await tenantAdminApi.getUserFeatures(u.id);
             setManagePlan(res.plan || '');
@@ -447,14 +462,20 @@ export default function TenantAdminUsers() {
 
     const confirmDelete = async () => {
         if (!deleteTarget) return;
+        if (!deletePassword.trim()) {
+            toast({ title: 'Enter your password to confirm', variant: 'destructive' });
+            return;
+        }
         const u = deleteTarget;
         setBusyId(u.id);
         try {
-            await tenantAdminApi.deleteUser(u.id);
+            await tenantAdminApi.deleteUser(u.id, deletePassword);
             toast({ title: 'User deleted', description: u.email });
             setUsers((prev) => prev.filter((x) => x.id !== u.id));
+            setDeleteTarget(null);
+            setDeletePassword('');
         } catch (err) {
-            // Backend blocks deleting self / the last admin — surface its message.
+            // Backend blocks wrong password / deleting self / the last admin.
             toast({
                 title: 'Could not delete user',
                 description: err instanceof Error ? err.message : 'Delete failed',
@@ -462,7 +483,6 @@ export default function TenantAdminUsers() {
             });
         } finally {
             setBusyId(null);
-            setDeleteTarget(null);
         }
     };
 
@@ -745,6 +765,7 @@ export default function TenantAdminUsers() {
                         setManageTarget(null);
                         setManagePlan('');
                         setFeatureState({});
+                        setManageUsage(null);
                     }
                 }}
             >
@@ -807,6 +828,16 @@ export default function TenantAdminUsers() {
                                         )}
                                     </Button>
                                 </div>
+                            </div>
+
+                            {/* Usage */}
+                            <div className="space-y-3 rounded-md border p-4">
+                                <Label className="text-sm font-semibold">Usage</Label>
+                                {manageUsage ? (
+                                    <UsagePanel dense rows={usageRowsFrom(manageUsage)} />
+                                ) : (
+                                    <p className="py-2 text-sm text-muted-foreground">No usage data.</p>
+                                )}
                             </div>
 
                             {/* Features */}
@@ -881,8 +912,16 @@ export default function TenantAdminUsers() {
                 </DialogContent>
             </Dialog>
 
-            {/* Delete confirm */}
-            <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+            {/* Delete confirm — requires the admin's password */}
+            <AlertDialog
+                open={!!deleteTarget}
+                onOpenChange={(o) => {
+                    if (!o) {
+                        setDeleteTarget(null);
+                        setDeletePassword('');
+                    }
+                }}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete user?</AlertDialogTitle>
@@ -891,11 +930,24 @@ export default function TenantAdminUsers() {
                             This action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <div className="space-y-2 py-1">
+                        <Label htmlFor="delete-confirm-password">Enter your password to confirm</Label>
+                        <Input
+                            id="delete-confirm-password"
+                            type="password"
+                            autoComplete="current-password"
+                            value={deletePassword}
+                            onChange={(e) => setDeletePassword(e.target.value)}
+                            placeholder="Your account password"
+                            onKeyDown={(e) => { if (e.key === 'Enter' && deletePassword.trim()) confirmDelete(); }}
+                        />
+                    </div>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={confirmDelete}
+                            disabled={!deletePassword.trim()}
+                            onClick={(e) => { e.preventDefault(); confirmDelete(); }}
                         >
                             Delete
                         </AlertDialogAction>

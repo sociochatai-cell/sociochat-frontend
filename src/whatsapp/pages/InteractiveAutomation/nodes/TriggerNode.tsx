@@ -37,7 +37,7 @@ export const TriggerNode = memo(({ data, selected }: NodeProps<TriggerNodeData>)
                 relative px-5 py-4 rounded-xl shadow-lg border-2 min-w-[260px]
                 transition-all duration-200
                 ${selected ? 'ring-2 ring-indigo-400 ring-offset-0' : ''}
-                ${(data as any).validationIssues?.some((i: any) => !i.handleId) ? 'node-error' : ''}
+                ${selected && (data as any).validationIssues?.length > 0 ? 'node-error' : ''}
             `}
             style={{
                 backgroundColor: colors.bg,

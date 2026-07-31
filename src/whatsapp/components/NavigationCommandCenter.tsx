@@ -23,6 +23,8 @@ import {
     ShoppingBag,
     Bot,
     ClipboardList,
+    Megaphone,
+    Receipt,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePlan } from '@/contexts/PlanContext';
@@ -101,6 +103,25 @@ const navigationItems: NavigationItem[] = [
         color: 'text-emerald-500',
         gradient: 'from-emerald-500/20 to-teal-500/20',
         featureKey: 'whatsapp_catalog' as FeatureKey,
+    },
+    {
+        id: 'orders',
+        label: 'Payments',
+        description: 'Orders & payment statement',
+        icon: <Receipt className="w-6 h-6" />,
+        route: '/dashboard/whatsapp/orders',
+        color: 'text-emerald-500',
+        gradient: 'from-emerald-500/20 to-green-500/20',
+    },
+    {
+        id: 'status_ads',
+        label: 'Status Ads',
+        description: 'Manage & run WhatsApp Status ads',
+        icon: <Megaphone className="w-6 h-6" />,
+        route: '/ctwa/campaigns',
+        color: 'text-fuchsia-500',
+        gradient: 'from-fuchsia-500/20 to-pink-500/20',
+        featureKey: 'whatsapp_status_ads' as FeatureKey,
     },
     {
         id: 'templates',
@@ -307,7 +328,7 @@ export function NavigationCommandCenter({ isOpen, onClose }: NavigationCommandCe
                                                 {locked && requiredPlan && (
                                                     <div className="absolute -top-2 -right-2 px-2 py-0.5 bg-amber-500 text-white text-[10px] font-medium rounded-full shadow-lg flex items-center gap-1">
                                                         <Crown className="w-2.5 h-2.5" />
-                                                        {PLAN_LABELS[requiredPlan]}
+                                                        {PLAN_LABELS[requiredPlan] || requiredPlan}
                                                     </div>
                                                 )}
 

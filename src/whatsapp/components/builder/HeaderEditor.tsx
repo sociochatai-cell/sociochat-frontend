@@ -365,7 +365,7 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                                     type="file"
                                     ref={fileInputRef}
                                     onChange={handleFileChange}
-                                    accept="image/jpeg,image/jpg,image/png"
+                                    accept={getMediaRules().accept}
                                     className="hidden"
                                 />
                                 <div

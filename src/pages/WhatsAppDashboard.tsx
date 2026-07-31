@@ -45,7 +45,6 @@ import {
     Activity,
     Banknote as DollarSign,
     Database,
-    LayoutGrid,
     Shield,
     Lock,
     Unlock,
@@ -53,7 +52,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWhatsAppConnection, connectionPathHasLinkedAccount } from '@/whatsapp/hooks/useWhatsAppData';
-import { NavigationCommandCenter } from '@/whatsapp/components';
 import { getWorkspaceId, setWorkspaceId as persistWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 
 // Import analytics components
@@ -68,6 +66,12 @@ import {
 
 // API Base URL from environment
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').toString().replace(/\/$/, '');
+
+// Optional personal-workspace lock. Kept configurable via env so the id/password
+// aren't hardcoded literals in shared source (falls back to the original values
+// to preserve existing behaviour). Note: a client-side gate is convenience only.
+const PROTECTED_WORKSPACE_ID = (import.meta.env.VITE_PROTECTED_WORKSPACE_ID || '1').toString();
+const PROTECTED_WORKSPACE_PASSWORD = (import.meta.env.VITE_PROTECTED_WORKSPACE_PASSWORD || 'prabhu@1charan').toString();
 
 // Types
 interface SummaryData {
@@ -179,7 +183,7 @@ export default function WhatsAppDashboard() {
     const [workspacesLoading, setWorkspacesLoading] = useState(true);
 
     // --- Password Protection State ---
-    const [isLocked, setIsLocked] = useState(getWorkspaceId() === '1');
+    const [isLocked, setIsLocked] = useState(getWorkspaceId() === PROTECTED_WORKSPACE_ID);
     const [passwordInput, setPasswordInput] = useState('');
 
     // Connection status from cached hook
@@ -401,7 +405,7 @@ export default function WhatsAppDashboard() {
         persistWorkspaceId(wsId);
 
         // Handle lock logic when switching
-        if (wsId === '1') {
+        if (wsId === PROTECTED_WORKSPACE_ID) {
             setIsLocked(true);
         } else {
             setIsLocked(false);
@@ -412,7 +416,7 @@ export default function WhatsAppDashboard() {
     };
 
     const handleUnlock = () => {
-        if (passwordInput === 'prabhu@1charan') {
+        if (passwordInput === PROTECTED_WORKSPACE_PASSWORD) {
             setIsLocked(false);
             toast.success('Workspace unlocked');
         } else {
@@ -762,7 +766,7 @@ export default function WhatsAppDashboard() {
                                             autoFocus
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                            {passwordInput === 'prabhu@1charan' ? (
+                                            {passwordInput === PROTECTED_WORKSPACE_PASSWORD ? (
                                                 <Unlock className="w-4 h-4 text-green-500" />
                                             ) : (
                                                 <Lock className="w-4 h-4 text-muted-foreground" />
@@ -903,8 +907,6 @@ function DashboardHeader({
     onWorkspaceChange: (wsId: string) => void;
     navigate: (path: string) => void;
 }) {
-    const [isNavOpen, setIsNavOpen] = useState(false);
-
     return (
         <>
             <header className="border-b bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm sticky top-0 z-10">
@@ -947,17 +949,6 @@ function DashboardHeader({
                                 </SelectContent>
                             </Select>
 
-                            {/* Navigation Menu Button */}
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setIsNavOpen(true)}
-                                className="gap-2 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 hover:from-slate-100 hover:to-slate-200 dark:hover:from-slate-700 dark:hover:to-slate-800 border-slate-200 dark:border-slate-700"
-                            >
-                                <LayoutGrid className="h-4 w-4" />
-                                <span className="hidden sm:inline">Menu</span>
-                            </Button>
-
                             {!hasLinkedAccount && (
                                 <Button
                                     variant="default"
@@ -983,12 +974,6 @@ function DashboardHeader({
                     </div>
                 </div>
             </header>
-
-            {/* Navigation Command Center Modal */}
-            <NavigationCommandCenter
-                isOpen={isNavOpen}
-                onClose={() => setIsNavOpen(false)}
-            />
         </>
     );
 }

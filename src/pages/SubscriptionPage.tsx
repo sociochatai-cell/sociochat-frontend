@@ -8,10 +8,14 @@ import { API_BASE_URL } from '@/config';
 import { usePlan } from '@/contexts/PlanContext';
 import { PLAN_LABELS } from '@/config/featureGating';
 import { startPayuCheckout, payuErrorMessage } from '@/lib/payu';
+import { UsagePanel, usageRowsFrom } from '@/components/usage/UsageMeter';
+import AutoRenewManager from '@/components/AutoRenewManager';
 
 type CurrentInfo = {
     plan_slug: string;
     effective_plan: string;
+    /** True only when the user has actively selected/paid a plan (not the default baseline). */
+    has_selected_plan?: boolean;
     billing_scope: string;
     is_private_slot: boolean;
     subscription_expires_at: string | null;
@@ -165,6 +169,8 @@ export default function SubscriptionPage() {
     const [current, setCurrent] = useState<CurrentInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [selecting, setSelecting] = useState<string | null>(null);
+    const [usage, setUsage] = useState<Record<string, unknown> | null>(null);
+    const [autoRenew, setAutoRenew] = useState(true);  // auto-renew opt-in at checkout
 
     useEffect(() => {
         const loadPlans = async () => {
@@ -187,6 +193,17 @@ export default function SubscriptionPage() {
                         setPlans(data.plans || {});
                         // my-plans is tenant/private-slot aware and includes `current`.
                         if (data.current) setCurrent(data.current as CurrentInfo);
+                        // Also load usage/exhaustion stats for the meters (best-effort).
+                        fetch(`${API_BASE_URL}/api/subscription/usage`, {
+                            credentials: 'include',
+                            headers: {
+                                ...(userId ? { 'X-User-Id': userId } : {}),
+                                ...(svToken ? { Authorization: `Bearer ${svToken}` } : {}),
+                            },
+                        })
+                            .then((r) => (r.ok ? r.json() : null))
+                            .then((d) => { if (d?.success) setUsage(d.usage); })
+                            .catch(() => {});
                         return;
                     }
                 }
@@ -205,14 +222,24 @@ export default function SubscriptionPage() {
     }, []);
 
     const selectPlan = async (slug: string) => {
-        const userId = localStorage.getItem('sv_user_id');
+        const svToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
+        // Derive the user id from sv_user_id, or fall back to the stored user object
+        // (some login/verify responses set sv_user but not sv_user_id).
+        let userId = localStorage.getItem('sv_user_id') || '';
         if (!userId) {
+            try {
+                userId = String(JSON.parse(localStorage.getItem('sv_user') || 'null')?.id || '');
+            } catch { /* ignore */ }
+        }
+        // Only bounce to login if genuinely unauthenticated. If a valid token is
+        // present (the plans page already loaded with it), proceed — otherwise a
+        // missing sv_user_id was wrongly sending logged-in users back to /login.
+        if (!svToken && !userId) {
             navigate('/login');
             return;
         }
         setSelecting(slug);
         try {
-            const svToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
             const res = await fetch(`${API_BASE_URL}/api/subscription/select-plan`, {
                 method: 'POST',
                 credentials: 'include',
@@ -231,8 +258,9 @@ export default function SubscriptionPage() {
             }
             // Paid plan -> route through PayU (success redirects the page away).
             if (res.status === 402 || data.requires_payment) {
-                // End-user upgrade -> after payment, land on the dashboard.
-                const r = await startPayuCheckout('user_plan', slug, '/dashboard');
+                // After payment, return to THIS subscription page (where they
+                // started) so they see their now-active plan — not a generic dashboard.
+                const r = await startPayuCheckout('user_plan', slug, '/subscription', autoRenew);
                 if (!r.ok) alert(payuErrorMessage(r.error, r.isTenantLicense));
                 return;
             }
@@ -267,7 +295,16 @@ export default function SubscriptionPage() {
                     )}
                 </div>
 
-                {current && (() => {
+                {/* Auto-renew: current status + cancel */}
+                <AutoRenewManager />
+
+                {/* Auto-renew opt-in applied to the next checkout */}
+                <label className="flex items-center gap-2 justify-center text-sm text-muted-foreground cursor-pointer">
+                    <input type="checkbox" checked={autoRenew} onChange={(e) => setAutoRenew(e.target.checked)} className="h-4 w-4" />
+                    Auto-renew my plan each period (recurring payment via PayU) — you can turn this off anytime.
+                </label>
+
+                {current?.has_selected_plan && (() => {
                     const planName =
                         PLAN_LABELS[current.effective_plan] ||
                         current.effective_plan ||
@@ -315,6 +352,14 @@ export default function SubscriptionPage() {
                     );
                 })()}
 
+                {usage && (
+                    <Card>
+                        <CardContent className="p-6">
+                            <UsagePanel title="Current usage" rows={usageRowsFrom(usage)} />
+                        </CardContent>
+                    </Card>
+                )}
+
                 <div>
                     <h2 className="text-xl font-semibold">
                         {current?.is_private_slot ? 'Your private plans' : 'Available plans'}
@@ -332,7 +377,12 @@ export default function SubscriptionPage() {
                         // The active plan is the effective plan when /my-plans gave us
                         // `current`; otherwise fall back to the context plan (used by the
                         // logged-out public catalog path).
-                        const isActive = current ? slug === current.effective_plan : slug === currentPlan;
+                        // Highlight a plan as "Current" ONLY when the user has actively
+                        // selected/paid one — a brand-new user (default/baseline plan)
+                        // shows nothing pre-selected and must pick a plan.
+                        const isActive = current
+                            ? (current.has_selected_plan === true && slug === current.effective_plan)
+                            : slug === currentPlan;
                         const isPrivate = info.plan_scope === 'private';
                         const { items, extra } = buildHighlights(info);
                         const isPaid = info.price_monthly_inr != null && info.price_monthly_inr > 0;

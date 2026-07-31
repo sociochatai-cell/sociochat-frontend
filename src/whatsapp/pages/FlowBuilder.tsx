@@ -1007,7 +1007,7 @@ export function FlowBuilder() {
                 const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts?workspace_id=${workspaceId}`);
                 const data = await res.json();
                 if (data.success && data.accounts?.length > 0) {
-                    setAccountId(data.accounts[0].id);
+                    setAccountId((data.accounts.find((a: any) => a.is_active) || data.accounts[0]).id);
                 }
             } catch (err) {
                 console.error('Failed to fetch account:', err);

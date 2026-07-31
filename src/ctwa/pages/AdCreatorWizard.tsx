@@ -26,6 +26,7 @@ import {
     Save,
 } from 'lucide-react';
 import { createCampaign, publishCampaign, getCTWAAccounts, CreateCampaignData, IceBreaker, AdAccount, FacebookPage, WhatsAppAccountForAds } from '@/ctwa';
+import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 
 // Step definitions
 const STEPS = [
@@ -92,7 +93,7 @@ const initialFormData: FormData = {
 export function AdCreatorWizard() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const workspaceId = searchParams.get('workspace_id') || '4';
+    const workspaceId = searchParams.get('workspace_id') || getWorkspaceId() || '';
 
     const [currentStep, setCurrentStep] = useState<StepId>('accounts');
     const [formData, setFormData] = useState<FormData>(initialFormData);

@@ -3,7 +3,7 @@
 // Redesigned: User-friendly settings page for non-technical users
 // Follows multi-tenant SaaS patterns (Slack, HubSpot, Intercom style)
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,12 @@ import { fetchWithTimeout, FetchTimeoutError } from '@/lib/fetchWithTimeout';
 import { WhatsAppAccountCard } from '../components/WhatsAppAccountCard';
 import { SettingsLoadingScreen } from '../components/SettingsLoadingScreen';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import AgentsManager from '@/agent_frontend/components/AgentsManager';
+import { ConnectFacebookAdsCard } from '@/ctwa/components/ConnectFacebookAdsCard';
+import { AdAccountSettingsCard } from '@/ctwa/components/AdAccountSettingsCard';
+import OwnerAgentsManager from '@/agent_login/components/AgentsManager';
+import PaymentsSettings from '@/whatsapp/commerce/PaymentsSettings';
+import apiClient from '@/lib/apiClient';
+import { makeOwnerAgentApi } from '@/agent_login/lib/agentAdminApi';
 import {
   ChevronDown,
   MessageCircle,
@@ -61,7 +66,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { isWaOpsQaNavVisible } from '../utils/waOpsNavVisible';
 import { cachedFetch } from '../utils/waPersistentCache';
 
-const WA_SETTINGS_TABS = ['general', 'verification', 'trust', 'operator'] as const;
+const WA_SETTINGS_TABS = ['general', 'verification', 'trust', 'operator', 'agents', 'payments'] as const;
 type WaSettingsTab = (typeof WA_SETTINGS_TABS)[number];
 
 function normalizeWaTab(raw: string | null): WaSettingsTab {
@@ -616,6 +621,21 @@ export function WhatsAppSettings() {
   const [fixActionLoading, setFixActionLoading] = useState<string | null>(null);
   const [fixActionMessage, setFixActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const account = accounts[0]; // Primary account
+
+  // Owner-authenticated adapter for the shared AgentsManager UI. Created once so
+  // its stable identity doesn't retrigger the manager's data-loading effect.
+  const ownerAgentApi = useMemo(() => makeOwnerAgentApi(), []);
+
+  // Payments tab (PayU) is gated to the internal SocioChat tenant — the backend
+  // reports availability so white-label tenants never see the tab.
+  const [paymentsAvailable, setPaymentsAvailable] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    apiClient.get('/whatsapp/commerce/payment-config')
+      .then((res) => { if (alive && res.ok && res.data?.success) setPaymentsAvailable(!!res.data.available); })
+      .catch(() => { /* leave hidden on error */ });
+    return () => { alive = false; };
+  }, []);
 
   const sendPermissionCheck = healthReport?.checks?.find((c) => c.name === 'messaging_send_permission');
   const webhookSubscriptionCheck = healthReport?.checks?.find((c) => c.name === 'webhook_subscription');
@@ -1268,6 +1288,8 @@ export function WhatsAppSettings() {
                   <TabsTrigger value="verification">Verification Center</TabsTrigger>
                   <TabsTrigger value="trust">Trust Timeline</TabsTrigger>
                   <TabsTrigger value="operator">Operator Tools</TabsTrigger>
+                  <TabsTrigger value="agents">Agents</TabsTrigger>
+                  {paymentsAvailable && <TabsTrigger value="payments">Payments</TabsTrigger>}
                 </TabsList>
                 {isWaOpsQaNavVisible(location.search) && (
                   <Alert className="mb-4 border-dashed border-amber-300 bg-amber-50/80">
@@ -1316,6 +1338,12 @@ export function WhatsAppSettings() {
                 account={account}
                 onSaved={() => fetchAccounts(true)}
               />
+
+              {/* Facebook Ads connection (Ad Account + Page) — required for Status/CTWA ads */}
+              <ConnectFacebookAdsCard />
+
+              {/* One-time ad account setup — pick Ad Account + Page + Number per workspace */}
+              <AdAccountSettingsCard />
 
               {/* Notification Settings */}
               <NotificationSettingsSection accountId={account.id} workspaceId={workspaceId} />
@@ -1749,44 +1777,28 @@ export function WhatsAppSettings() {
                 <TabsContent value="operator" className="mt-0">
                   <OperationalHealth accountId={account.id} />
                 </TabsContent>
+
+                <TabsContent value="agents" className="mt-0">
+                  <div className="mb-4">
+                    <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-primary" />
+                      Agents
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Create and manage agent logins for your account.
+                    </p>
+                  </div>
+                  <OwnerAgentsManager api={ownerAgentApi} />
+                </TabsContent>
+
+                {paymentsAvailable && (
+                  <TabsContent value="payments" className="mt-0">
+                    <PaymentsSettings />
+                  </TabsContent>
+                )}
               </Tabs>
             </div>
           </div>
-        )}
-
-        {/* Agents Management Section */}
-        {!loading && !loadingWorkspaces && workspaces.length > 0 && (
-          <Card className="mt-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-primary" />
-                Agents Management
-              </CardTitle>
-              <CardDescription>
-                Create and manage agent accounts who can access specific features
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue={String(workspaces[0]?.id || '')} className="w-full">
-                {workspaces.length > 1 && (
-                  <div className="overflow-x-auto pb-2 mb-4">
-                    <TabsList className="inline-flex w-max">
-                      {workspaces.map((ws) => (
-                        <TabsTrigger key={ws.id} value={String(ws.id)} className="whitespace-nowrap">
-                          {ws.name}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                  </div>
-                )}
-                {workspaces.map((ws) => (
-                  <TabsContent key={ws.id} value={String(ws.id)}>
-                    <AgentsManager workspaceId={Number(ws.id)} />
-                  </TabsContent>
-                ))}
-              </Tabs>
-            </CardContent>
-          </Card>
         )}
 
         {/* Footer */}

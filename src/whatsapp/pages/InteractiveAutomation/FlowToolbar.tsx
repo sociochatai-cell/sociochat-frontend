@@ -43,6 +43,7 @@ interface FlowToolbarProps {
     isSaving: boolean;
     isPublishing: boolean;
     validationIssues: ValidationIssue[];
+    onIssueClick?: (issue: ValidationIssue) => void;
     onNameChange: (name: string) => void;
     onSave: () => void;
     onPublish: () => void;
@@ -66,6 +67,7 @@ export function FlowToolbar({
     isSaving,
     isPublishing,
     validationIssues,
+    onIssueClick,
     onNameChange,
     onSave,
     onPublish,
@@ -177,12 +179,19 @@ export function FlowToolbar({
                         <DropdownMenuContent align="end" className="w-[360px]">
                             <div className="px-2 py-1.5 text-xs font-semibold text-gray-600">
                                 Flow Validation Issues
+                                <span className="ml-1 font-normal text-gray-400">— click an issue to locate it</span>
                             </div>
                             <div className="max-h-72 overflow-y-auto">
                                 {validationIssues.map((issue, index) => (
                                     <DropdownMenuItem
                                         key={`${issue.nodeId || 'flow'}-${issue.message}-${index}`}
-                                        className="items-start gap-2 py-2"
+                                        className={`items-start gap-2 py-2 ${issue.nodeId ? 'cursor-pointer' : ''}`}
+                                        onSelect={(e) => {
+                                            if (issue.nodeId && onIssueClick) {
+                                                e.preventDefault();
+                                                onIssueClick(issue);
+                                            }
+                                        }}
                                     >
                                         <AlertTriangle
                                             className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
