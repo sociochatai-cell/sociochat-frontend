@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Gift, Zap, Crown, Gem, Building, Check, Sparkles, MessageCircle, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '@/config';
-import { usePlan } from '@/contexts/PlanContext';
 import { useBranding } from '@/branding/BrandingContext';
-import { startPayuCheckout, payuErrorMessage } from '@/lib/payu';
 
 // A plan row from GET /api/subscription/plans (or /my-plans): the SubscriptionPlan
 // catalog fields + the per-plan feature/limit matrix, all merged into one object.
@@ -101,7 +99,6 @@ const DEFAULT_PLANS: PlanRow[] = [
 
 export default function PricingPage() {
     const navigate = useNavigate();
-    const { refreshPlan } = usePlan();
     const { branding } = useBranding();
     const [plans, setPlans] = useState<PlanRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -147,45 +144,20 @@ export default function PricingPage() {
 
     const popularSlug = useMemo(() => (plans.some((p) => p.slug === 'growth') ? 'growth' : ''), [plans]);
 
-    const selectPlan = async (slug: string) => {
+    const selectPlan = (slug: string) => {
         const userId = localStorage.getItem('sv_user_id');
         if (!userId) {
-            navigate('/login');
+            // Not logged in → send to SIGN-UP first; remember the plan + come back
+            // to the subscription page after they authenticate.
+            try {
+                localStorage.setItem('sv_intended_plan', slug);
+                localStorage.setItem('sv_post_auth_redirect', '/subscription');
+            } catch { /* ignore */ }
+            navigate('/signup');
             return;
         }
-        try {
-            const svToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
-            const res = await fetch(`${API_BASE_URL}/api/subscription/select-plan`, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(userId ? { 'X-User-Id': userId } : {}),
-                    ...(svToken ? { Authorization: `Bearer ${svToken}` } : {}),
-                },
-                body: JSON.stringify({ plan: slug }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (data.success) {
-                const userStr = localStorage.getItem('sv_user');
-                if (userStr) {
-                    const user = JSON.parse(userStr);
-                    user.plan = slug;
-                    localStorage.setItem('sv_user', JSON.stringify(user));
-                }
-                await refreshPlan();
-                navigate('/dashboard');
-                return;
-            }
-            if (res.status === 402 || data.requires_payment) {
-                const r = await startPayuCheckout('user_plan', slug, '/dashboard');
-                if (!r.ok) alert(payuErrorMessage(r.error, r.isTenantLicense));
-                return;
-            }
-            alert(payuErrorMessage(data.error));
-        } catch {
-            alert('Could not start checkout. Please try again.');
-        }
+        // Already logged in → go straight to the subscription page to complete it.
+        navigate(`/subscription?plan=${encodeURIComponent(slug)}`);
     };
 
     return (

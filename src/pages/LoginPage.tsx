@@ -36,6 +36,23 @@ export default function LoginPage() {
         setLogoFailed(false);
     }, [branding.logo_url]);
 
+    // Auto-resume a persisted session on boot: if a stored token+user exist AND
+    // they belong to THIS domain's tenant, skip the login form and go straight to
+    // the dashboard. The domain guard prevents resuming a T0000 session on a
+    // different tenant's domain ("not for the wrong one"). Runs once on mount.
+    useEffect(() => {
+        try {
+            const token = localStorage.getItem('sv_token');
+            const userStr = localStorage.getItem('sv_user');
+            if (!token || !userStr) return;
+            const authTenant = (localStorage.getItem('sv_auth_tenant') || '').toUpperCase();
+            const domainTenant = (localStorage.getItem(TENANT_CODE_STORAGE_KEY) || '').toUpperCase();
+            if (authTenant && domainTenant && authTenant !== domainTenant) return; // wrong domain
+            navigate('/dashboard', { replace: true });
+        } catch { /* ignore — show the login form */ }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastResolvedCode = useRef<string>('');
 
@@ -150,6 +167,9 @@ export default function LoginPage() {
             const resolvedCode = data.tenant?.tenant_code || code;
             if (resolvedCode) {
                 localStorage.setItem(TENANT_CODE_STORAGE_KEY, resolvedCode);
+                // The tenant this session belongs to — used to auto-resume only on
+                // the matching domain (never resume a T0000 session on a tenant domain).
+                localStorage.setItem('sv_auth_tenant', resolvedCode);
             }
             if (data.tenant?.branding) {
                 setBranding(
@@ -167,7 +187,13 @@ export default function LoginPage() {
                 }
             }
 
-            navigate('/dashboard');
+            // Honor a post-auth redirect (e.g. Pricing → Sign up → back to Subscription).
+            let dest = '/dashboard';
+            try {
+                const r = localStorage.getItem('sv_post_auth_redirect');
+                if (r) { dest = r; localStorage.removeItem('sv_post_auth_redirect'); }
+            } catch { /* ignore */ }
+            navigate(dest);
         } catch (err) {
             setError('Network error. Please try again.');
         } finally {

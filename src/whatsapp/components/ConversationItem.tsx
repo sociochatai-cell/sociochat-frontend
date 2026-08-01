@@ -7,7 +7,16 @@ import { Conversation } from '../types';
 import { cn } from '@/lib/utils';
 import { maskPhoneNumber } from '@/lib/phoneMask';
 import { AttributionBadge } from '@/ctwa/components/AttributionBadge';
-import { User, MessageCircle, CheckCheck, Flame } from 'lucide-react';
+import { User, MessageCircle, CheckCheck, Flame, MoreVertical, Check } from 'lucide-react';
+import type { AgentRecord } from '@/agent_login/lib/agentAdminApi';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 interface ConversationItemProps {
   conversation: Conversation;
@@ -15,9 +24,28 @@ interface ConversationItemProps {
   onClick: () => void;
   onDelete: (e: React.MouseEvent) => void;
   needsReply?: boolean;
+  /** Owner-only: active agents to assign this chat to. When provided, the
+   *  owner assignment UI (3-dot menu + "A" badge) is rendered. */
+  agents?: AgentRecord[];
+  /** The agent this chat is currently assigned to, if any. */
+  assignedAgent?: { id: number; name: string } | null;
+  /** Assign this chat to an agent id, or release when null. */
+  onAssign?: (agentId: number | null) => void;
 }
 
-export function ConversationItem({ conversation, isActive, onClick, onDelete, needsReply = false }: ConversationItemProps) {
+export function ConversationItem({
+  conversation,
+  isActive,
+  onClick,
+  onDelete,
+  needsReply = false,
+  agents,
+  assignedAgent = null,
+  onAssign,
+}: ConversationItemProps) {
+  // Owner-only assignment UI is active only when the parent passes an agents list
+  // (i.e. the workspace id is valid and the current user is the owner).
+  const ownerControls = Array.isArray(agents);
   let lastMessagePreview = 'No messages yet';
 
   if (conversation.messages && conversation.messages.length > 0) {
@@ -45,7 +73,8 @@ export function ConversationItem({ conversation, isActive, onClick, onDelete, ne
       <button
         onClick={onClick}
         className={cn(
-          'w-full p-4 text-left border-b transition-all duration-200 group relative overflow-hidden pr-10', // Added pr-10 for delete button space
+          'w-full p-4 text-left border-b transition-all duration-200 group relative overflow-hidden', // right padding reserves space for hover actions
+          ownerControls ? 'pr-16' : 'pr-10',
           'hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10',
           'hover:shadow-sm hover:border-l-4 hover:border-l-primary/50',
           'active:scale-[0.99] active:bg-primary/10',
@@ -93,6 +122,16 @@ export function ConversationItem({ conversation, isActive, onClick, onDelete, ne
                 attribution={conversation.attribution_data}
                 compact
               />
+
+              {/* Assigned-to-agent badge (owner view) */}
+              {ownerControls && assignedAgent && (
+                <span
+                  className="flex-shrink-0 px-2 py-0.5 text-xs font-bold text-emerald-700 bg-emerald-100 rounded-full"
+                  title={`Assigned to ${assignedAgent.name}`}
+                >
+                  A
+                </span>
+              )}
 
               {/* Unread badge with animation */}
               {hasUnread && (
@@ -161,6 +200,66 @@ export function ConversationItem({ conversation, isActive, onClick, onDelete, ne
           }
         `}</style>
       </button>
+
+      {/* Assign menu (owner only) - Only visible on hover */}
+      {ownerControls && (
+        <div
+          className="absolute top-1/2 right-9 -translate-y-1/2 z-30 opacity-0 group-hover/item:opacity-100 transition-all duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full transition-all duration-200"
+                title="Assign to agent"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuLabel>Assign to agent</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {agents && agents.filter((a) => a.is_active).length > 0 ? (
+                agents
+                  .filter((a) => a.is_active)
+                  .map((agent) => {
+                    const isAssigned = assignedAgent?.id === agent.id;
+                    return (
+                      <DropdownMenuItem
+                        key={agent.id}
+                        className="flex items-center justify-between cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAssign?.(agent.id);
+                        }}
+                      >
+                        <span className="truncate">{agent.display_name || agent.username}</span>
+                        {isAssigned && <Check className="w-3.5 h-3.5 text-primary ml-2 shrink-0" />}
+                      </DropdownMenuItem>
+                    );
+                  })
+              ) : (
+                <DropdownMenuItem disabled>No agents yet</DropdownMenuItem>
+              )}
+              {assignedAgent && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer text-destructive focus:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAssign?.(null);
+                    }}
+                  >
+                    Release / Unassign
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
 
       {/* Delete Button - Only visible on hover */}
       <button

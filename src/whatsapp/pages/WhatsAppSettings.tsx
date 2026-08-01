@@ -17,6 +17,7 @@ import { ConnectFacebookAdsCard } from '@/ctwa/components/ConnectFacebookAdsCard
 import { AdAccountSettingsCard } from '@/ctwa/components/AdAccountSettingsCard';
 import OwnerAgentsManager from '@/agent_login/components/AgentsManager';
 import PaymentsSettings from '@/whatsapp/commerce/PaymentsSettings';
+import { usePlan } from '@/contexts/PlanContext';
 import apiClient from '@/lib/apiClient';
 import { makeOwnerAgentApi } from '@/agent_login/lib/agentAdminApi';
 import {
@@ -629,6 +630,7 @@ export function WhatsAppSettings() {
   // Payments tab (PayU) is gated to the internal SocioChat tenant — the backend
   // reports availability so white-label tenants never see the tab.
   const [paymentsAvailable, setPaymentsAvailable] = useState(false);
+  const { isFeatureEnabled } = usePlan();  // feature gating (agent_login / commerce_payment)
   useEffect(() => {
     let alive = true;
     apiClient.get('/whatsapp/commerce/payment-config')
@@ -1288,8 +1290,8 @@ export function WhatsAppSettings() {
                   <TabsTrigger value="verification">Verification Center</TabsTrigger>
                   <TabsTrigger value="trust">Trust Timeline</TabsTrigger>
                   <TabsTrigger value="operator">Operator Tools</TabsTrigger>
-                  <TabsTrigger value="agents">Agents</TabsTrigger>
-                  {paymentsAvailable && <TabsTrigger value="payments">Payments</TabsTrigger>}
+                  {isFeatureEnabled('agent_login') && <TabsTrigger value="agents">Agents</TabsTrigger>}
+                  {paymentsAvailable && isFeatureEnabled('commerce_payment') && <TabsTrigger value="payments">Payments</TabsTrigger>}
                 </TabsList>
                 {isWaOpsQaNavVisible(location.search) && (
                   <Alert className="mb-4 border-dashed border-amber-300 bg-amber-50/80">
@@ -1778,20 +1780,22 @@ export function WhatsAppSettings() {
                   <OperationalHealth accountId={account.id} />
                 </TabsContent>
 
-                <TabsContent value="agents" className="mt-0">
-                  <div className="mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                      <Shield className="w-5 h-5 text-primary" />
-                      Agents
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      Create and manage agent logins for your account.
-                    </p>
-                  </div>
-                  <OwnerAgentsManager api={ownerAgentApi} />
-                </TabsContent>
+                {isFeatureEnabled('agent_login') && (
+                  <TabsContent value="agents" className="mt-0">
+                    <div className="mb-4">
+                      <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-primary" />
+                        Agents
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        Create and manage agent logins for your account.
+                      </p>
+                    </div>
+                    <OwnerAgentsManager api={ownerAgentApi} />
+                  </TabsContent>
+                )}
 
-                {paymentsAvailable && (
+                {paymentsAvailable && isFeatureEnabled('commerce_payment') && (
                   <TabsContent value="payments" className="mt-0">
                     <PaymentsSettings />
                   </TabsContent>

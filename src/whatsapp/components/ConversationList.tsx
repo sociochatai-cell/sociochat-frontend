@@ -32,6 +32,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { makeOwnerAgentApi, type AgentRecord } from '@/agent_login/lib/agentAdminApi';
 
 interface ConversationListProps {
   selectedConversationId: number | null;
@@ -39,6 +40,16 @@ interface ConversationListProps {
   initialFilter?: FilterType;
   autoSelectUnread?: boolean;
   forceServerUnreadLoad?: boolean;
+  /** Owner's workspace id (string, from getWorkspaceId). When it parses to a
+   *  valid number the owner agent-assignment UI is enabled on each row. */
+  workspaceId?: string;
+}
+
+/** Normalize a phone to its last 10 digits so "919999320932" and
+ *  "9999320932" match across conversation rows and workspace numbers. */
+function normalizePhone(p?: string | null): string {
+  const d = (p || '').replace(/\D/g, '');
+  return d.length >= 10 ? d.slice(-10) : d;
 }
 
 type FilterType = 'all' | 'unread' | 'active' | 'expired' | 'needs_reply' | 'human_required' | 'opted_out';
@@ -59,6 +70,7 @@ export function ConversationList({
   initialFilter = 'all',
   autoSelectUnread = false,
   forceServerUnreadLoad = false,
+  workspaceId,
 }: ConversationListProps) {
   // Subscribe to store using separate selectors to ensure referential stability
   const conversations = useSyncExternalStore(subscribeToConversations, getConversationList, getConversationList);
@@ -73,6 +85,86 @@ export function ConversationList({
   const [isDbLoading, setIsDbLoading] = useState(false);
   const [dbReloadKey, setDbReloadKey] = useState(0);
   const lastDbQueryKeyRef = useRef('');
+
+  // ── Owner agent assignment (only when workspaceId parses to a valid number) ──
+  const wid = parseInt(workspaceId || '', 10);
+  const widValid = !Number.isNaN(wid);
+  const ownerApiRef = useRef<ReturnType<typeof makeOwnerAgentApi> | null>(null);
+  if (widValid && !ownerApiRef.current) ownerApiRef.current = makeOwnerAgentApi();
+
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  // normalized phone -> assigned agent
+  const [assignmentMap, setAssignmentMap] = useState<Map<string, { id: number; name: string }>>(new Map());
+
+  const refreshAssignments = useCallback(async () => {
+    const api = ownerApiRef.current;
+    if (!api || !widValid) return;
+    const numbersRes = await api.listNumbers(wid);
+    if (numbersRes.ok && numbersRes.data) {
+      const map = new Map<string, { id: number; name: string }>();
+      for (const n of numbersRes.data.numbers) {
+        if (n.assigned_agent_id != null) {
+          const key = normalizePhone(n.customer_phone);
+          if (key) map.set(key, { id: n.assigned_agent_id, name: n.assigned_agent_name || `Agent ${n.assigned_agent_id}` });
+        }
+      }
+      setAssignmentMap(map);
+    }
+  }, [wid, widValid]);
+
+  useEffect(() => {
+    if (!widValid) return;
+    let cancelled = false;
+    const api = ownerApiRef.current;
+    if (!api) return;
+    (async () => {
+      const [agentsRes] = await Promise.all([api.listAgents(), refreshAssignments()]);
+      if (cancelled) return;
+      if (agentsRes.ok && agentsRes.data) setAgents(agentsRes.data.agents || []);
+    })();
+    return () => { cancelled = true; };
+  }, [widValid, refreshAssignments]);
+
+  const handleAssign = useCallback(async (conv: Conversation, agentId: number | null) => {
+    const api = ownerApiRef.current;
+    if (!api || !widValid) return;
+    const phone = conv.user_phone || '';
+    if (!phone) return;
+    const key = normalizePhone(phone);
+    try {
+      if (agentId === null) {
+        const current = assignmentMap.get(key);
+        if (!current) return;
+        const res = await api.releaseNumbers(current.id, { workspace_id: wid, phones: [phone] });
+        if (res.ok) {
+          setAssignmentMap((prev) => {
+            const next = new Map(prev);
+            next.delete(key);
+            return next;
+          });
+          toast.success('Chat unassigned');
+        } else {
+          toast.error('Failed to unassign');
+        }
+      } else {
+        const res = await api.assignNumbers(agentId, { workspace_id: wid, phones: [phone] });
+        if (res.ok) {
+          const agent = agents.find((a) => a.id === agentId);
+          const name = agent ? (agent.display_name || agent.username) : `Agent ${agentId}`;
+          setAssignmentMap((prev) => {
+            const next = new Map(prev);
+            next.set(key, { id: agentId, name });
+            return next;
+          });
+          toast.success(`Assigned to ${name}`);
+        } else {
+          toast.error('Failed to assign');
+        }
+      }
+    } catch {
+      toast.error('Assignment failed');
+    }
+  }, [wid, widValid, agents, assignmentMap]);
 
   useEffect(() => {
     setActiveFilter(initialFilter);
@@ -427,6 +519,9 @@ export function ConversationList({
                 onClick={() => onSelectConversation(conv)}
                 onDelete={(e) => handleDeleteConversation(e, conv.id)}
                 needsReply={needsReply(conv)}
+                agents={widValid ? agents : undefined}
+                assignedAgent={widValid ? (assignmentMap.get(normalizePhone(conv.user_phone)) || null) : null}
+                onAssign={widValid ? (agentId) => handleAssign(conv, agentId) : undefined}
               />
             </div>
           ))

@@ -582,6 +582,7 @@ export function WhatsAppInbox() {
             initialFilter={inboxFilter}
             autoSelectUnread={shouldAutoSelectUnread}
             forceServerUnreadLoad={shouldForceServerUnreadLoad}
+            workspaceId={workspaceId}
           />
         </div>
         <div className={[

@@ -164,7 +164,7 @@ function PriceBlock({ info }: { info: PlanInfo }) {
 
 export default function SubscriptionPage() {
     const navigate = useNavigate();
-    const { plan: currentPlan, refreshPlan } = usePlan();
+    const { plan: currentPlan, refreshPlan, isFeatureEnabled } = usePlan();
     const [plans, setPlans] = useState<Record<string, Record<string, unknown>>>({});
     const [current, setCurrent] = useState<CurrentInfo | null>(null);
     const [loading, setLoading] = useState(true);
@@ -260,7 +260,7 @@ export default function SubscriptionPage() {
             if (res.status === 402 || data.requires_payment) {
                 // After payment, return to THIS subscription page (where they
                 // started) so they see their now-active plan — not a generic dashboard.
-                const r = await startPayuCheckout('user_plan', slug, '/subscription', autoRenew);
+                const r = await startPayuCheckout('user_plan', slug, '/subscription', autoRenew && isFeatureEnabled('recurring_payment'));
                 if (!r.ok) alert(payuErrorMessage(r.error, r.isTenantLicense));
                 return;
             }
@@ -295,14 +295,18 @@ export default function SubscriptionPage() {
                     )}
                 </div>
 
-                {/* Auto-renew: current status + cancel */}
-                <AutoRenewManager />
+                {isFeatureEnabled('recurring_payment') && (
+                  <>
+                    {/* Auto-renew: current status + cancel */}
+                    <AutoRenewManager />
 
-                {/* Auto-renew opt-in applied to the next checkout */}
-                <label className="flex items-center gap-2 justify-center text-sm text-muted-foreground cursor-pointer">
-                    <input type="checkbox" checked={autoRenew} onChange={(e) => setAutoRenew(e.target.checked)} className="h-4 w-4" />
-                    Auto-renew my plan each period (recurring payment via PayU) — you can turn this off anytime.
-                </label>
+                    {/* Auto-renew opt-in applied to the next checkout */}
+                    <label className="flex items-center gap-2 justify-center text-sm text-muted-foreground cursor-pointer">
+                        <input type="checkbox" checked={autoRenew} onChange={(e) => setAutoRenew(e.target.checked)} className="h-4 w-4" />
+                        Auto-renew my plan each period (recurring payment via PayU) — you can turn this off anytime.
+                    </label>
+                  </>
+                )}
 
                 {current?.has_selected_plan && (() => {
                     const planName =

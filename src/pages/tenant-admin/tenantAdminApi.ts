@@ -107,6 +107,49 @@ export interface UsersResponse {
     users: TenantUser[];
 }
 
+/* --------------------------- User Analytics ------------------------------ */
+// Shared shape returned by BOTH the super-admin (/api/admin/analytics/users)
+// and tenant-admin (/tenant/admin/analytics/users) analytics endpoints.
+
+export type SubStatus = 'free' | 'active' | 'expiring' | 'expired';
+
+export interface AnalyticsSummary {
+    total_users: number;
+    paid_users: number;
+    free_users: number;
+    active_subscriptions: number;
+    expiring_soon: number;
+    expired: number;
+    meta_connected: number;
+    auto_renew: number;
+    new_last_30d: number;
+    inactive_dead: number;
+    plan_mix: Record<string, number>;
+}
+
+export interface AnalyticsRow {
+    id: number;
+    name: string;
+    email: string;
+    phone?: string | null;
+    role?: string | null;
+    status?: string | null;
+    plan?: string | null;
+    sub_status: SubStatus;
+    days_to_expiry?: number | null;
+    subscription_expires_at?: string | null;
+    auto_renew?: boolean;
+    meta_connected?: boolean;
+    is_dead?: boolean;
+    created_at?: string | null;
+}
+
+export interface AnalyticsResponse {
+    success: boolean;
+    summary: AnalyticsSummary;
+    rows: AnalyticsRow[];
+}
+
 export interface CreateUserPayload {
     name: string;
     email: string;
@@ -347,6 +390,12 @@ export const tenantAdminApi = {
 
     listUsers: async (): Promise<UsersResponse> =>
         unwrap(await apiClient.get(`${BASE}/users`)),
+
+    // User Analytics console — summary KPIs + per-user subscription/meta rows.
+    // The tenant portal exposes this at /admin/analytics/users (relative to the
+    // apiClient base), mirroring how listUsers calls /admin/users.
+    getUserAnalytics: async (): Promise<AnalyticsResponse> =>
+        unwrap(await apiClient.get(`${BASE}/analytics/users`)),
 
     createUser: async (payload: CreateUserPayload): Promise<CreateUserResponse> =>
         unwrap(await apiClient.post(`${BASE}/users`, payload)),

@@ -30,6 +30,7 @@ const AdminSubscriptions = lazy(() => import('./pages/admin/AdminSubscriptions')
 const AdminPlans = lazy(() => import('./pages/admin/AdminPlans'));
 const AdminPrivateSlot = lazy(() => import('./pages/admin/AdminPrivateSlot'));
 const AdminAgents = lazy(() => import('./pages/admin/AdminAgents'));
+const AdminUserAnalytics = lazy(() => import('./pages/admin/AdminUserAnalytics'));
 
 // Super Admin — Tenant Management (multi-tenant white-label)
 const TenantListPage = lazy(() => import('./pages/superadmin/TenantListPage'));
@@ -44,6 +45,7 @@ const TenantAdminUsers = lazy(() => import('./pages/tenant-admin/TenantAdminUser
 const TenantAdminPlan = lazy(() => import('./pages/tenant-admin/TenantAdminPlan'));
 const TenantAdminSubscription = lazy(() => import('./pages/tenant-admin/TenantAdminSubscription'));
 const TenantAdminPrivateSlot = lazy(() => import('./pages/tenant-admin/TenantAdminPrivateSlot'));
+const TenantUserAnalytics = lazy(() => import('./pages/tenant-admin/TenantUserAnalytics'));
 
 import { WhatsAppErrorBoundary } from './whatsapp/components/WhatsAppErrorBoundary';
 
@@ -151,6 +153,7 @@ export default function App() {
         <Route path="plans" element={<Suspense fallback={<PageLoader />}><AdminPlans /></Suspense>} />
         <Route path="private-slot" element={<Suspense fallback={<PageLoader />}><AdminPrivateSlot /></Suspense>} />
         <Route path="agents" element={<Suspense fallback={<PageLoader />}><AdminAgents /></Suspense>} />
+        <Route path="user-analytics" element={<Suspense fallback={<PageLoader />}><AdminUserAnalytics /></Suspense>} />
       </Route>
 
       {/* Super Admin — Tenant Management (platform-admin only; rendered inside the admin shell) */}
@@ -169,6 +172,7 @@ export default function App() {
         <Route path="plan" element={<Suspense fallback={<PageLoader />}><TenantAdminPlan /></Suspense>} />
         <Route path="subscription" element={<Suspense fallback={<PageLoader />}><TenantAdminSubscription /></Suspense>} />
         <Route path="private-slot" element={<Suspense fallback={<PageLoader />}><TenantAdminPrivateSlot /></Suspense>} />
+        <Route path="user-analytics" element={<Suspense fallback={<PageLoader />}><TenantUserAnalytics /></Suspense>} />
       </Route>
 
       <Route path="/dashboard" element={<DashboardLayout />}>

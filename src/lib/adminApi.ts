@@ -81,6 +81,27 @@ export const adminApi = {
         return res.json();
     },
 
+    // User Analytics console — summary KPIs + per-user subscription/meta rows.
+    getUserAnalytics: async () => {
+        const res = await fetch(`${API_BASE_URL}/api/admin/analytics/users`, {
+            credentials: 'include',
+            headers: adminHeaders(),
+        });
+        return res.json();
+    },
+
+    // Permanently delete a user. Requires the admin's own password, sent as a
+    // header so it never lands in the URL/logs. Returns {success} or 403
+    // {error:'invalid_password'}.
+    deleteUser: async (userId: number, password: string) => {
+        const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+            headers: { ...adminHeaders(), 'X-Confirm-Password': password },
+        });
+        return res.json();
+    },
+
     getReviewUsers: async () => {
         const res = await fetch(`${API_BASE_URL}/api/admin/review`, {
             method: 'POST',

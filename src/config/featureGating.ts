@@ -24,7 +24,10 @@ export type FeatureKey =
     | 'unified_dashboard_analytics'
     | 'crm'
     | 'whatsapp_coexistence'
-    | 'whatsapp_bookings';
+    | 'whatsapp_bookings'
+    | 'agent_login'
+    | 'recurring_payment'
+    | 'commerce_payment';
 
 export type PlanName = 'beta' | 'starter' | 'growth' | 'premium' | 'enterprise';
 
@@ -132,6 +135,11 @@ export const FEATURE_PLAN_MAP: Record<FeatureKey, PlanName> = {
     crm: 'starter',
     whatsapp_coexistence: 'starter',
     whatsapp_bookings: 'starter',
+    // Gated add-ons — default OFF; the backend features map (enabled:false) is
+    // authoritative. Fallback tier is 'enterprise' so they never leak on absence.
+    agent_login: 'enterprise',
+    recurring_payment: 'enterprise',
+    commerce_payment: 'enterprise',
 };
 
 export default ROUTE_FEATURE_MAP;

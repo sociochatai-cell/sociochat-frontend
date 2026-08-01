@@ -4,7 +4,7 @@
 // tenant's branding (useBranding) so each white-label tenant sees its own brand.
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, ArrowLeft, LogOut, Menu, Sparkles, Crown, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Users, ArrowLeft, LogOut, Menu, Sparkles, Crown, CreditCard, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,6 +16,7 @@ import { MobileNavSheet } from '@/components/layout/MobileNavSheet';
 const navItems = [
     { path: '/tenant-admin', label: 'Overview', icon: LayoutDashboard, exact: true },
     { path: '/tenant-admin/users', label: 'Users', icon: Users },
+    { path: '/tenant-admin/user-analytics', label: 'User Analytics', icon: BarChart3 },
     { path: '/tenant-admin/plan', label: 'Plan & Features', icon: Sparkles },
     { path: '/tenant-admin/subscription', label: 'Subscription', icon: CreditCard },
     { path: '/tenant-admin/private-slot', label: 'Private Slot', icon: Crown },

@@ -22,10 +22,11 @@ import {
     ArrowUp,
     ArrowDown,
     Image as ImageIcon,
+    Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
-import { uploadAdMedia } from '@/ctwa';
+import { uploadAdMedia, generateAdImage, generateAdCopy } from '@/ctwa';
 
 // ------------------------------------------------------------------
 // Types
@@ -156,6 +157,50 @@ export function CarouselBuilder({
         [workspaceId, patchCard],
     );
 
+    // ---- AI: generate a whole carousel (N images + headlines) at once ----
+    const [aiOpen, setAiOpen] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiCount, setAiCount] = useState(3);
+    const [aiBusy, setAiBusy] = useState(false);
+
+    const handleAiGenerate = useCallback(async () => {
+        const n = Math.min(MAX_CARDS, Math.max(MIN_CARDS, aiCount || MIN_CARDS));
+        setAiBusy(true);
+        try {
+            // Images: the backend caps a single call at 4, so batch until we have N.
+            const images: string[] = [];
+            while (images.length < n) {
+                const batch = await generateAdImage(workspaceId, aiPrompt || undefined, Math.min(4, n - images.length));
+                if (!batch.length) break;
+                images.push(...batch.map(b => b.url));
+            }
+            if (!images.length) throw new Error('No images were generated.');
+
+            // Headlines/descriptions: best-effort — cycle through a few AI variations.
+            let copy: { primary_text: string; headline?: string }[] = [];
+            try {
+                copy = await generateAdCopy(workspaceId, aiPrompt || undefined);
+            } catch { /* headlines are optional */ }
+
+            const newCards: CarouselCard[] = images.slice(0, n).map((url, i) => ({
+                image_url: url,
+                headline: (copy[i % (copy.length || 1)]?.headline || '').slice(0, HEADLINE_MAX),
+                description: (copy[i % (copy.length || 1)]?.primary_text || '').slice(0, DESCRIPTION_MAX),
+            }));
+            onChange(newCards);
+            toast({ title: 'Carousel generated', description: `${newCards.length} cards created with AI.` });
+            setAiOpen(false);
+        } catch (err) {
+            toast({
+                title: 'Generation failed',
+                description: err instanceof Error ? err.message : 'Could not generate the carousel.',
+                variant: 'destructive',
+            });
+        } finally {
+            setAiBusy(false);
+        }
+    }, [workspaceId, aiPrompt, aiCount, onChange]);
+
     const count = cards.length;
     const belowMinimum = count < MIN_CARDS;
 
@@ -176,17 +221,62 @@ export function CarouselBuilder({
                         A carousel needs at least 2 cards. Each card is a swipeable panel in the ad.
                     </p>
                 </div>
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addCard}
-                    disabled={count >= MAX_CARDS}
-                >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add card
-                </Button>
+                <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setAiOpen(o => !o)}>
+                        <Sparkles className="mr-2 h-4 w-4" /> Generate with AI
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addCard}
+                        disabled={count >= MAX_CARDS}
+                    >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add card
+                    </Button>
+                </div>
             </div>
+
+            {/* ---- AI generate panel: choose how many cards, optional prompt ---- */}
+            {aiOpen && (
+                <Card className="border-fuchsia-200 bg-fuchsia-50/40">
+                    <CardContent className="space-y-3 p-4">
+                        <p className="text-sm font-medium">Generate a carousel with AI</p>
+                        <div className="flex flex-wrap items-end gap-3">
+                            <div className="space-y-1">
+                                <Label className="text-xs">Number of cards</Label>
+                                <Input
+                                    type="number"
+                                    min={MIN_CARDS}
+                                    max={MAX_CARDS}
+                                    value={aiCount}
+                                    onChange={e => setAiCount(parseInt(e.target.value) || MIN_CARDS)}
+                                    className="w-24"
+                                    disabled={aiBusy}
+                                />
+                            </div>
+                            <div className="flex-1 space-y-1 min-w-[200px]">
+                                <Label className="text-xs">Prompt (optional — leave empty to use your business details)</Label>
+                                <Input
+                                    value={aiPrompt}
+                                    onChange={e => setAiPrompt(e.target.value)}
+                                    placeholder="e.g. summer sale, 3 product shots"
+                                    disabled={aiBusy}
+                                />
+                            </div>
+                        </div>
+                        <Button type="button" size="sm" onClick={handleAiGenerate} disabled={aiBusy}>
+                            {aiBusy
+                                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating {aiCount} cards…</>
+                                : <><Sparkles className="mr-2 h-4 w-4" /> Generate {aiCount} cards</>}
+                        </Button>
+                        <p className="text-[11px] text-muted-foreground">
+                            Replaces the current cards with {aiCount} AI-generated images + headlines. You can edit them after.
+                        </p>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* ---- Empty state ---- */}
             {count === 0 && (

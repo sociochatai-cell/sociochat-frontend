@@ -1,6 +1,6 @@
 import { useState, useLayoutEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Users, CreditCard, LayoutGrid, LogOut, ShieldCheck, UserSearch, ClipboardList, Menu, Lock, Building2, ScrollText, UserCog } from 'lucide-react';
+import { Users, CreditCard, LayoutGrid, LogOut, ShieldCheck, UserSearch, ClipboardList, Menu, Lock, Building2, ScrollText, UserCog, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { adminApi } from '@/lib/adminApi';
@@ -13,6 +13,7 @@ const navItems = [
     { path: '/superadmin/tenants', label: 'Tenant Management', icon: Building2 },
     { path: '/superadmin/tenant-plans', label: 'Tenant Plans', icon: ScrollText },
     { path: '/admin/users', label: 'Users', icon: Users },
+    { path: '/admin/user-analytics', label: 'User Analytics', icon: BarChart3 },
     { path: '/admin/agents', label: 'Agents', icon: UserCog },
     { path: '/admin/inspect-login', label: 'Inspect Login', icon: UserSearch },
     { path: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
