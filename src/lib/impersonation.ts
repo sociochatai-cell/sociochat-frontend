@@ -1,59 +1,74 @@
 // Impersonation return-stack.
 // ===========================
-// When a super-admin impersonates a tenant/user we FULLY switch the browser to
-// that user's identity (user JWT as Bearer, admin markers cleared) so the tenant
-// renders correctly and post-payment redirects don't bounce back to the admin.
-// That switch, however, removed the old "return to admin" path. This module saves
-// the admin's own session BEFORE the switch so we can restore it exactly on
-// "Return to Admin".
-//
-// IMPORTANT: restoring the admin token client-side is NOT sufficient — the backend
-// resolves identity from the SESSION first and the Bearer token only as a fallback
-// (auth_core.authenticated_user_id / authenticated_admin_id). So the return flow
-// must also call POST /api/superadmin/resume-admin to pop session['user_id'] and
-// re-set session['admin_id'].
+// Multi-level: Super Admin → Tenant Admin → Tenant User, each level pushes a
+// bundle onto the stack. "Return to Admin" pops the top, restoring the previous
+// level. When the stack is empty, the user is back to their original session.
 
 import apiClient from '@/lib/apiClient';
 
-const BUNDLE_KEY = 'sv_impersonation_return';
+const STACK_KEY = 'sv_impersonation_stack';
 
 interface ReturnBundle {
     token: string;
     adminId: string;
-    user: string; // JSON string of the admin user object
+    user: string;
     returnPath: string;
+    tenantCode: string;
+    brandVars: string;
 }
 
-/** Save the CURRENT (admin) session so we can return to it. Call this BEFORE
- *  swapping the browser to the impersonated user's identity. */
+function _readStack(): ReturnBundle[] {
+    try {
+        const raw = localStorage.getItem(STACK_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function _writeStack(stack: ReturnBundle[]): void {
+    try {
+        if (stack.length === 0) {
+            localStorage.removeItem(STACK_KEY);
+        } else {
+            localStorage.setItem(STACK_KEY, JSON.stringify(stack));
+        }
+    } catch { /* ignore */ }
+}
+
+/** Save the CURRENT session onto the stack. Call BEFORE swapping identity. */
 export function beginImpersonation(returnPath = '/superadmin/tenants'): void {
     const bundle: ReturnBundle = {
         token: sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token') || '',
         adminId: sessionStorage.getItem('sv_admin_id') || localStorage.getItem('sv_admin_id') || '',
         user: localStorage.getItem('sv_user') || sessionStorage.getItem('sv_user') || '',
         returnPath,
+        tenantCode: localStorage.getItem('sv_tenant_code') || '',
+        brandVars: localStorage.getItem('sv_brand_vars') || '',
     };
-    try {
-        localStorage.setItem(BUNDLE_KEY, JSON.stringify(bundle));
-    } catch {
-        /* ignore */
-    }
+    const stack = _readStack();
+    stack.push(bundle);
+    _writeStack(stack);
 }
 
 export function hasImpersonationReturn(): boolean {
-    return !!localStorage.getItem(BUNDLE_KEY);
+    return _readStack().length > 0;
 }
 
 export function getImpersonationReturnPath(): string {
-    try {
-        return (JSON.parse(localStorage.getItem(BUNDLE_KEY) || '{}') as ReturnBundle).returnPath || '/superadmin/tenants';
-    } catch {
-        return '/superadmin/tenants';
-    }
+    const stack = _readStack();
+    if (stack.length === 0) return '/superadmin/tenants';
+    return stack[stack.length - 1].returnPath || '/superadmin/tenants';
 }
 
-// Tenant-scoped keys that must be dropped when returning to the platform/admin so
-// the SocioChat super-admin surface re-renders cleanly (no leaked tenant context).
+/** How many impersonation levels deep we are. */
+export function impersonationDepth(): number {
+    return _readStack().length;
+}
+
+// Tenant-scoped keys to drop when popping a level.
 const TENANT_CONTEXT_KEYS = [
     'sv_tenant_code',
     'sv_whatsapp_workspace_id',
@@ -64,72 +79,79 @@ const TENANT_CONTEXT_KEYS = [
     'current_workspace_id',
 ];
 
-/** Restore the saved admin session (client side) and clear the impersonated
- *  tenant context. Returns the path to navigate back to. Caller must ALSO hit
- *  POST /api/superadmin/resume-admin and then do a full reload. */
+/** Pop the top bundle off the stack and restore that session client-side.
+ *  Returns the path to navigate to. Caller must ALSO call exitImpersonation()
+ *  and then hard-reload. */
 export function restoreAdminSession(): string {
-    let returnPath = '/superadmin/tenants';
-    try {
-        const b = JSON.parse(localStorage.getItem(BUNDLE_KEY) || '{}') as ReturnBundle;
-        returnPath = b.returnPath || returnPath;
-        if (b.token) {
-            localStorage.setItem('sv_token', b.token);
-            sessionStorage.setItem('sv_token', b.token);
-        }
-        if (b.adminId) {
-            localStorage.setItem('sv_admin_id', b.adminId);
-            sessionStorage.setItem('sv_admin_id', b.adminId);
-        }
-        if (b.user) {
-            // Owner realm (tenant-admin) — restore the owner's own user object.
-            localStorage.setItem('sv_user', b.user);
-            sessionStorage.setItem('sv_user', b.user);
-            try {
-                localStorage.setItem('sv_user_id', String(JSON.parse(b.user)?.id || ''));
-            } catch {
-                /* ignore */
-            }
-        } else {
-            // Admin realms (super-admin / platform-admin) carry NO sv_user — they
-            // authenticate via sv_admin_id + admin JWT. Drop the impersonated user
-            // identity so it doesn't linger after returning to the admin surface.
-            localStorage.removeItem('sv_user');
-            sessionStorage.removeItem('sv_user');
-            localStorage.removeItem('sv_user_id');
-            sessionStorage.removeItem('sv_user_id');
-        }
-    } catch {
-        /* ignore */
-    }
+    const stack = _readStack();
+    if (stack.length === 0) return '/superadmin/tenants';
+
+    const b = stack.pop()!;
+    _writeStack(stack);
+
+    let returnPath = b.returnPath || '/superadmin/tenants';
+
+    // Clear tenant context keys first
     TENANT_CONTEXT_KEYS.forEach((k) => {
         try {
             localStorage.removeItem(k);
             sessionStorage.removeItem(k);
-        } catch {
-            /* ignore */
-        }
+        } catch { /* ignore */ }
     });
-    // NOTE: the return bundle is intentionally NOT discarded here — the caller
-    // discards it (via clearImpersonationReturn) ONLY after the server confirms
-    // the session was flipped back, so a failed exit keeps a working retry path.
+
+    // Restore token
+    if (b.token) {
+        localStorage.setItem('sv_token', b.token);
+        sessionStorage.setItem('sv_token', b.token);
+    }
+
+    // Restore admin ID if present
+    if (b.adminId) {
+        localStorage.setItem('sv_admin_id', b.adminId);
+        sessionStorage.setItem('sv_admin_id', b.adminId);
+    } else {
+        localStorage.removeItem('sv_admin_id');
+        sessionStorage.removeItem('sv_admin_id');
+    }
+
+    // Restore user object
+    if (b.user) {
+        localStorage.setItem('sv_user', b.user);
+        sessionStorage.setItem('sv_user', b.user);
+        try {
+            localStorage.setItem('sv_user_id', String(JSON.parse(b.user)?.id || ''));
+        } catch { /* ignore */ }
+    } else {
+        localStorage.removeItem('sv_user');
+        sessionStorage.removeItem('sv_user');
+        localStorage.removeItem('sv_user_id');
+        sessionStorage.removeItem('sv_user_id');
+    }
+
+    // Restore tenant code (critical: prevents stale tenant code from blocking login)
+    if (b.tenantCode) {
+        localStorage.setItem('sv_tenant_code', b.tenantCode);
+    } else {
+        localStorage.removeItem('sv_tenant_code');
+    }
+
+    // Restore branding cache
+    if (b.brandVars) {
+        localStorage.setItem('sv_brand_vars', b.brandVars);
+    } else {
+        localStorage.removeItem('sv_brand_vars');
+    }
+
     return returnPath;
 }
 
-/** Discard the saved return bundle. Call this ONLY after exitImpersonation()
- *  succeeds, so a transient failure leaves the banner + bundle intact for retry. */
+/** Discard the entire stack. Call after the final exitImpersonation() succeeds. */
 export function clearImpersonationReturn(): void {
-    try {
-        localStorage.removeItem(BUNDLE_KEY);
-    } catch {
-        /* ignore */
-    }
+    _writeStack([]);
 }
 
 /** Re-establish the admin/owner SESSION server-side from the (already-restored)
- *  Bearer token — the backend resolves identity from the session before the
- *  token, so restoring the token client-side alone is not enough (critically for
- *  the tenant-admin realm, whose token was never swapped and cannot override a
- *  stale session['user_id']). Returns true only if the server confirmed the flip. */
+ *  Bearer token. Returns true only if the server confirmed the flip. */
 export async function exitImpersonation(): Promise<boolean> {
     try {
         const res = await apiClient.post('/auth/exit-impersonation');

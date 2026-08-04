@@ -627,6 +627,14 @@ export default function DashboardLayout() {
     const { branding } = useBranding();
 
     useEffect(() => {
+        const userId = localStorage.getItem('sv_user_id');
+        const svToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
+        if (!userId && !svToken) {
+            navigate('/login', { replace: true });
+        }
+    }, [navigate]);
+
+    useEffect(() => {
         setNavigate(navigate);
     }, [navigate, setNavigate]);
 

@@ -15,7 +15,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Loader2, X, Users, Sparkles } from 'lucide-react';
+import { Search, Loader2, X, Users, Sparkles, ExternalLink, Info } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { searchTargeting, listAudiences } from '@/ctwa';
 
@@ -317,15 +318,58 @@ export function TargetingPicker({
             <Card>
                 <CardContent className="space-y-4 pt-6">
                     <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4 text-primary" />
-                            <h3 className="text-sm font-semibold">
-                                Saved Audiences (Custom &amp; Lookalike)
-                            </h3>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-primary" />
+                                <h3 className="text-sm font-semibold">
+                                    Saved Audiences (Custom &amp; Lookalike)
+                                </h3>
+                            </div>
+                            {/* One-click into Meta Ads Manager → Audiences page */}
+                            <a
+                                href="https://adsmanager.facebook.com/adsmanager/audiences"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <Button type="button" variant="outline" size="sm">
+                                    <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                                    Open Meta Audiences
+                                </Button>
+                            </a>
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Target your own custom audiences, or lookalikes modelled on
                             them. Pick any that fit this campaign.
+                        </p>
+                    </div>
+
+                    {/* Detailed how-to note — always visible so anyone can create them */}
+                    <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 text-xs text-blue-900">
+                        <p className="flex items-center gap-1.5 font-medium">
+                            <Info className="h-3.5 w-3.5" /> How to create audiences (once, in Meta)
+                        </p>
+                        <ol className="mt-2 ml-4 list-decimal space-y-1">
+                            <li>
+                                Click <b>Open Meta Audiences</b> above — sign in with the Facebook
+                                account linked to your ad account.
+                            </li>
+                            <li>
+                                Top-left, make sure the <b>Ad Account</b> selector shows the SAME
+                                account you saved in <b>Settings → WhatsApp Ads — Account Setup</b>
+                                (audiences are per-account).
+                            </li>
+                            <li>
+                                Click <b>Create audience</b>:
+                                <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                                    <li><b>Custom Audience</b> → from a customer list (upload phones/emails), your website (Pixel), or engagement.</li>
+                                    <li><b>Lookalike Audience</b> → pick a Custom Audience as the source; Meta finds similar people.</li>
+                                </ul>
+                            </li>
+                            <li>Name it, save it — that's it. Come back here and hit refresh; it'll appear below.</li>
+                        </ol>
+                        <p className="mt-2 text-[11px] text-blue-800">
+                            Audiences can only be <b>created</b> inside Meta (they use Meta's own data).
+                            We can only <b>read + pick</b> them here.
                         </p>
                     </div>
 
@@ -340,7 +384,7 @@ export function TargetingPicker({
                         </p>
                     ) : audiences.length === 0 ? (
                         <p className="py-3 text-sm text-muted-foreground">
-                            No saved audiences — create them in Meta Ads Manager.
+                            No saved audiences yet — use the button above to create one in Meta, then come back and refresh.
                         </p>
                     ) : (
                         <ul className="space-y-1">

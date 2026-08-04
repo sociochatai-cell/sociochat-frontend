@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Gift, Zap, Crown, Gem, Building, Check, Sparkles, MessageCircle, Loader2 } from 'lucide-react';
+import { Gift, Zap, Crown, Gem, Building, Check, Sparkles, MessageCircle, Loader2, RefreshCw } from 'lucide-react';
 import { API_BASE_URL } from '@/config';
 import { useBranding } from '@/branding/BrandingContext';
 
@@ -146,7 +146,8 @@ export default function PricingPage() {
 
     const selectPlan = (slug: string) => {
         const userId = localStorage.getItem('sv_user_id');
-        if (!userId) {
+        const svToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
+        if (!userId && !svToken) {
             // Not logged in → send to SIGN-UP first; remember the plan + come back
             // to the subscription page after they authenticate.
             try {
@@ -238,13 +239,23 @@ export default function PricingPage() {
                                             </li>
                                         ))}
                                     </ul>
+                                    {!free && !custom && (
+                                        <div className="mt-auto pt-4 border-t border-slate-100 flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                                            <RefreshCw className="w-3.5 h-3.5" />
+                                            Auto-renew available
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
                     </div>
                 )}
 
-                <div className="max-w-3xl mx-auto text-center">
+                <div className="max-w-3xl mx-auto flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3 text-sm text-emerald-800">
+                        <RefreshCw className="w-4 h-4 flex-shrink-0" />
+                        <span><strong>Auto-renew available</strong> — enable recurring payments at checkout so your plan renews automatically each period. You can turn it off anytime from your Subscription page.</span>
+                    </div>
                     <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded-xl px-5 py-3 inline-block">
                         Plan price covers the platform only. WhatsApp conversation charges are billed separately at
                         Meta's rates — marketing ₹1.09, utility &amp; authentication ₹0.145, service (user-initiated) free.

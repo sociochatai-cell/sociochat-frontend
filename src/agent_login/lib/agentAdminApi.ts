@@ -189,7 +189,6 @@ export interface AccountRow {
   id: number;
   name: string;
   email: string;
-  tenant_id?: number | null;
   workspace_count: number;
   agent_count: number;
 }

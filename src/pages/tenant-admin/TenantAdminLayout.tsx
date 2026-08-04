@@ -12,6 +12,7 @@ import { useBranding } from '@/branding/BrandingContext';
 import { clearCache } from '@/whatsapp/hooks/useDataCache';
 import apiClient from '@/lib/apiClient';
 import { MobileNavSheet } from '@/components/layout/MobileNavSheet';
+import { ReturnToAdminBanner } from '@/components/admin/ReturnToAdminBanner';
 
 const navItems = [
     { path: '/tenant-admin', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -83,7 +84,9 @@ export default function TenantAdminLayout() {
     );
 
     return (
-        <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row overflow-x-hidden">
+        <div className="min-h-screen bg-slate-50 flex flex-col overflow-x-hidden">
+            <ReturnToAdminBanner />
+            <div className="flex flex-1 flex-col md:flex-row">
             <aside className="hidden md:flex w-64 flex-col bg-white border-r border-slate-200 fixed h-full z-40">
                 <div className="p-6">
                     <Brand />
@@ -143,6 +146,7 @@ export default function TenantAdminLayout() {
                 <main className="flex-1 p-4 sm:p-6 md:p-10 min-w-0 overflow-x-hidden">
                     <Outlet />
                 </main>
+            </div>
             </div>
         </div>
     );

@@ -40,6 +40,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { superAdminApi, type TenantListItem } from '@/components/superadmin/useSuperAdminApi';
 import { beginImpersonation } from '@/lib/impersonation';
+import { useBranding } from '@/branding/BrandingContext';
 import { getExpiryStatus, EXPIRY_TONE_CLASS } from '@/components/superadmin/subscriptionDisplay';
 
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
@@ -59,6 +60,7 @@ function formatDate(d?: string | null): string {
 export default function TenantListPage() {
     const navigate = useNavigate();
     const { toast } = useToast();
+    const { setBranding: applyGlobalBranding } = useBranding();
 
     const [tenants, setTenants] = useState<TenantListItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -142,12 +144,17 @@ export default function TenantListPage() {
                     }
                     localStorage.removeItem('sv_admin_id');
                     sessionStorage.removeItem('sv_admin_id');
+                    const tenantCode = (res as any)?.tenant?.tenant_code;
+                    if (tenantCode) localStorage.setItem('sv_tenant_code', String(tenantCode));
                 } catch { /* ignore */ }
                 if (res.workspaces?.[0]?.id) {
                     localStorage.setItem('sv_whatsapp_workspace_id', String(res.workspaces[0].id));
                 }
+                const tn = (res as any)?.tenant;
+                if (tn?.branding) applyGlobalBranding(tn.branding, tn.tenant_code);
                 toast({ title: 'Impersonating', description: `Entered ${t.company_name}` });
-                navigate('/dashboard');
+                const dest = res.user?.role === 'tenant_admin' ? '/tenant-admin' : '/dashboard';
+                navigate(dest);
             }
         } catch (err) {
             toast({

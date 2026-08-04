@@ -62,12 +62,14 @@ function activeTenantUser(): boolean {
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
     const [branding, setBrandingState] = useState<TenantBranding>(() => {
-        // On the shared platform URL (localhost / devtunnel / sociochat.ai),
-        // show the DEFAULT SocioChat brand unless a real tenant user is logged
-        // in — never a leftover tenant's cached branding. On a tenant custom
-        // domain the DomainGate applies the right brand.
-        if (isPlatformHost() && !activeTenantUser()) return DEFAULT_BRANDING;
-        return loadCachedBranding() || DEFAULT_BRANDING;
+        // Use cached tenant branding when a tenant user is active (impersonation
+        // or real tenant login). On the platform host with NO active tenant user,
+        // fall back to the default SocioChat brand so logged-out visitors and
+        // super-admins never see a leftover tenant's branding.
+        const cached = loadCachedBranding();
+        if (activeTenantUser() && cached) return cached;
+        if (!isPlatformHost()) return cached || DEFAULT_BRANDING;
+        return DEFAULT_BRANDING;
     });
     const appliedOnce = useRef(false);
 

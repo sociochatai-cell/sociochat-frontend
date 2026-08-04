@@ -106,7 +106,55 @@ export default function LandingPage() {
             }
         });
 
-        // 5. Add an Admin Portal link into the footer (once).
+        // 5. Hero text overrides (tenant branding fields → iframe DOM).
+        const heroH1 = doc.querySelector<HTMLElement>('.hero-content h1');
+        if (heroH1 && b.landing_headline) {
+            const hl = heroH1.querySelector('.highlight');
+            if (hl) hl.textContent = '';
+            heroH1.textContent = b.landing_headline;
+        }
+        const heroP = doc.querySelector<HTMLElement>('.hero-content p');
+        if (heroP && b.landing_subheadline) heroP.innerHTML = b.landing_subheadline;
+        const heroCta = doc.querySelector<HTMLAnchorElement>('.hero-ctas .btn-primary');
+        if (heroCta && b.landing_cta_text) heroCta.textContent = b.landing_cta_text;
+        const heroImg = doc.querySelector<HTMLImageElement>('.hero-visual .hero-composite-img');
+        if (heroImg && b.landing_image_url) heroImg.src = b.landing_image_url;
+
+        // 6. Feature section overrides (7 sections).
+        const FEATURE_IDS = [
+            'feature-broadcast', 'feature-lead-alerts', 'feature-crm',
+            'feature-drip', 'feature-triggers', 'feature-flows', 'feature-chatbot',
+        ];
+        FEATURE_IDS.forEach((fid, i) => {
+            const n = i + 1;
+            const titleKey = `landing_feature${n}_title` as keyof typeof b;
+            const descKey = `landing_feature${n}_desc` as keyof typeof b;
+            const imgKey = `landing_feature${n}_image` as keyof typeof b;
+            const section = doc.getElementById(fid);
+            if (!section) return;
+            const title = b[titleKey] as string;
+            const desc = b[descKey] as string;
+            const img = b[imgKey] as string;
+            if (title) {
+                const h2 = section.querySelector('h2');
+                if (h2) h2.textContent = title;
+            }
+            if (desc) {
+                const lead = section.querySelector('.feature-lead');
+                if (lead) lead.textContent = desc;
+            }
+            const featureImg = section.querySelector<HTMLImageElement>('.hero-composite-img');
+            if (featureImg) {
+                if (img) {
+                    featureImg.src = img;
+                    featureImg.style.display = '';
+                } else if (!featureImg.getAttribute('src')?.startsWith('/')) {
+                    featureImg.style.display = 'none';
+                }
+            }
+        });
+
+        // 7. Add an Admin Portal link into the footer (once).
         const footer = doc.querySelector('footer') || doc.body;
         if (footer && !doc.getElementById('sv-admin-link')) {
             const a = doc.createElement('a');

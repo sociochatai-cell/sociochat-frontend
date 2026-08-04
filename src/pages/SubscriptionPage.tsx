@@ -173,6 +173,14 @@ export default function SubscriptionPage() {
     const [autoRenew, setAutoRenew] = useState(true);  // auto-renew opt-in at checkout
 
     useEffect(() => {
+        const userId = localStorage.getItem('sv_user_id');
+        const svToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
+        if (!userId && !svToken) {
+            navigate('/signup', { replace: true });
+        }
+    }, [navigate]);
+
+    useEffect(() => {
         const loadPlans = async () => {
             try {
                 // Prefer the authenticated, tenant-aware catalog so a tenant's users

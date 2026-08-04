@@ -601,7 +601,8 @@ export default function TenantEditPage() {
             // shows its colors / font / logo (not the previous/old branding).
             const t = (res as any)?.tenant;
             if (t?.branding) applyGlobalBranding(t.branding, t.tenant_code);
-            navigate('/dashboard');
+            const dest = res.user?.role === 'tenant_admin' ? '/tenant-admin' : '/dashboard';
+            navigate(dest);
         } catch (e: any) {
             toast({ title: 'Impersonation failed', description: e?.message, variant: 'destructive' });
         }
@@ -655,7 +656,8 @@ export default function TenantEditPage() {
             // Apply the impersonated tenant's branding immediately.
             const t = (res as any)?.tenant;
             if (t?.branding) applyGlobalBranding(t.branding, t.tenant_code);
-            navigate('/dashboard');
+            const dest = res.user?.role === 'tenant_admin' ? '/tenant-admin' : '/dashboard';
+            navigate(dest);
         } catch (e: any) {
             toast({ title: 'Login as user failed', description: e?.message, variant: 'destructive' });
         } finally {

@@ -3,9 +3,9 @@ import { ArrowLeft, Loader2, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import {
-    clearImpersonationReturn,
     exitImpersonation,
     hasImpersonationReturn,
+    impersonationDepth,
     restoreAdminSession,
 } from '@/lib/impersonation';
 
@@ -29,6 +29,8 @@ export function ReturnToAdminBanner() {
     const [busy, setBusy] = useState(false);
 
     if (!hasImpersonationReturn()) return null;
+
+    const depth = impersonationDepth();
 
     // Best-effort label for who we're currently viewing as.
     let asWho = '';
@@ -56,8 +58,8 @@ export function ReturnToAdminBanner() {
             setBusy(false);
             return; // keep the bundle + banner so the user can retry
         }
-        // 3. Server confirmed — discard the bundle and hard-reload as the admin.
-        clearImpersonationReturn();
+        // 3. Server confirmed — hard-reload as the admin (stack was already popped
+        //    by restoreAdminSession; remaining levels stay for further returns).
         window.location.href = returnPath;
     };
 
@@ -68,7 +70,7 @@ export function ReturnToAdminBanner() {
                 <span className="truncate">
                     Viewing as{' '}
                     {asWho ? <strong className="font-semibold">{asWho}</strong> : 'another user'}{' '}
-                    &middot; impersonation
+                    &middot; impersonation{depth > 1 ? ` (level ${depth})` : ''}
                 </span>
             </div>
             <Button

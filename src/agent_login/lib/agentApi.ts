@@ -18,7 +18,6 @@ const AGENT_DATA_KEY = "sociovia_agent_data";
 export interface AgentData {
   id: number;
   owner_user_id: number;
-  tenant_id?: number | null;
   username: string;
   display_name?: string;
   is_active: boolean;
