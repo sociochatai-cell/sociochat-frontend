@@ -232,6 +232,12 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
         return !key || isFeatureEnabled(key);
     });
 
+    // Show "Return to Sociovia" only when this session was launched from Sociovia via SSO.
+    const [isFromSociovia, setIsFromSociovia] = useState(false);
+    useEffect(() => {
+        setIsFromSociovia(localStorage.getItem('sociovia_source') === 'true');
+    }, []);
+
     return (
         <motion.aside
             animate={{ width: expanded ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W }}
@@ -279,6 +285,15 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
             {expanded ? (
                 /* ── EXPANDED: standard sidebar with icon + label ── */
                 <nav className="flex-1 min-h-0 overflow-y-auto py-1 px-3 space-y-0.5 no-scrollbar">
+                    {isFromSociovia && (
+                        <a
+                            href="https://sociovia.com/dashboard"
+                            className="flex items-center gap-2 px-3 py-2 mb-1 rounded-xl text-[12px] font-semibold text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-800 transition-colors border border-slate-200"
+                        >
+                            <span className="text-base leading-none">&#8592;</span>
+                            Sociovia Dashboard
+                        </a>
+                    )}
                     {visibleNav.map(({ label, path, icon: Icon, exact }) => {
                         const isActive = exact
                             ? location.pathname === path
@@ -312,6 +327,15 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
             ) : (
                 /* ── COLLAPSED: dock with fish-eye magnification ── */
                 <div className="flex-1 min-h-0 mx-1.5 relative overflow-y-auto overflow-x-visible no-scrollbar">
+                    {isFromSociovia && (
+                        <a
+                            href="https://sociovia.com/dashboard"
+                            title="Return to Sociovia Dashboard"
+                            className="flex items-center justify-center w-10 h-10 mx-auto mb-1 rounded-xl text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-800 transition-colors border border-slate-200 text-base"
+                        >
+                            &#8592;
+                        </a>
+                    )}
                     <div
                         className="min-h-full flex flex-col items-center gap-1 py-2 px-1.5 rounded-[20px]"
                         style={{

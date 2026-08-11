@@ -15,6 +15,7 @@ const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
 const PaymentResult = lazy(() => import('./pages/PaymentResult'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const WaEntryPage = lazy(() => import('./pages/WaEntryPage'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 // Local-testing tenant switch: /t/:code sets a tenant override + reloads.
 const TenantSwitch = lazy(() => import('./domain/TenantSwitch'));
@@ -141,6 +142,8 @@ export default function App() {
       <Route path="/forgot-password" element={<Suspense fallback={<PageLoader />}><ForgotPasswordPage /></Suspense>} />
       <Route path="/reset-password" element={<Suspense fallback={<PageLoader />}><ResetPasswordPage /></Suspense>} />
       <Route path="/privacy-policy" element={<Suspense fallback={<PageLoader />}><PrivacyPolicy /></Suspense>} />
+      {/* Sociovia → SocioChat SSO bridge */}
+      <Route path="/wa-entry" element={<Suspense fallback={<PageLoader />}><WaEntryPage /></Suspense>} />
 
       {/* Admin portal */}
       <Route path="/admin/login" element={<Suspense fallback={<PageLoader />}><AdminLogin /></Suspense>} />
