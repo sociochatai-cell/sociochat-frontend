@@ -2,7 +2,7 @@
 // ====================
 
 import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,11 +20,13 @@ import {
     Loader2,
     MessageCircle,
     Rocket,
+    ArrowLeft,
 } from 'lucide-react';
 import { listCampaigns, deleteCampaign, activateCampaign, pauseCampaign, publishCampaign, CTWACampaign } from '@/ctwa';
 import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 
 export function CampaignsListPage() {
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     // Use the active workspace (not a hardcoded '4') so published campaigns show up.
     const workspaceId = searchParams.get('workspace_id') || getWorkspaceId() || '';
@@ -115,6 +117,10 @@ export function CampaignsListPage() {
 
     return (
         <div className="container max-w-6xl mx-auto py-8 px-4">
+            <Button variant="ghost" onClick={() => navigate('/dashboard')} className="mb-4">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+            </Button>
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>

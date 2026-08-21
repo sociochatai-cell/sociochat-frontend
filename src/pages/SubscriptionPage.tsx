@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Crown, Check, Loader2, CalendarClock, Lock, Sparkles, Tag } from 'lucide-react';
+import { Crown, Check, Loader2, CalendarClock, Lock, Sparkles, Tag, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -293,6 +293,10 @@ export default function SubscriptionPage() {
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4">
             <div className="max-w-5xl mx-auto space-y-8">
+                <Button variant="ghost" onClick={() => navigate('/dashboard')} className="mb-2">
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back to Dashboard
+                </Button>
                 <div className="text-center">
                     <Crown className="h-10 w-10 mx-auto text-amber-500 mb-3" />
                     <h1 className="text-3xl font-bold">Your Subscription</h1>

@@ -371,11 +371,18 @@ export default function WhatsAppDashboard() {
 
                 let selected: string | null = null;
                 const storedWs = getWorkspaceId();
+                // RESPECT the workspace the user actually selected (from the header
+                // dropdown, persisted as sv_selected_workspace_id). Use it AS-IS —
+                // even when it has no WhatsApp connected, so the dashboard shows the
+                // correct "not connected" state for THAT workspace. It must never
+                // silently auto-jump to a different (connected) workspace, which was
+                // the cause of every workspace showing the same WhatsApp data.
                 if (storedWs && mapped.some((w: Workspace) => String(w.id) === String(storedWs))) {
-                    if (await isWorkspaceConnected(storedWs)) {
-                        selected = String(storedWs);
-                    }
+                    selected = String(storedWs);
                 }
+                // Only when there is NO valid stored selection at all (e.g. the very
+                // first login) do we fall back to the first connected workspace, then
+                // to the first workspace in the list.
                 if (!selected) {
                     for (const w of mapped) {
                         if (await isWorkspaceConnected(w.id)) {
@@ -931,23 +938,11 @@ function DashboardHeader({
                             </div>
                         </div>
                         <div className="flex items-center gap-2 md:gap-3">
-                            <Select
-                                value={selectedWorkspaceId || ''}
-                                onValueChange={onWorkspaceChange}
-                                disabled={workspacesLoading || workspaces.length === 0}
-                            >
-                                <SelectTrigger className="w-32 md:w-48">
-                                    <Building2 className="w-4 h-4 mr-2 hidden md:inline" />
-                                    <SelectValue placeholder="Workspace" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {workspaces.map((ws) => (
-                                        <SelectItem key={ws.id} value={String(ws.id)}>
-                                            {ws.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            {/* Inner WhatsApp workspace dropdown removed — the header
+                                WorkspaceSwitcher (top of the app) is now the single
+                                source of truth. Having two selectors caused them to
+                                fall out of sync (top showed one workspace, this showed
+                                another). This dashboard follows the header selection. */}
 
                             {!hasLinkedAccount && (
                                 <Button

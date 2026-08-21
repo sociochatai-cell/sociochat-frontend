@@ -51,6 +51,19 @@ export function beginImpersonation(returnPath = '/superadmin/tenants'): void {
     const stack = _readStack();
     stack.push(bundle);
     _writeStack(stack);
+
+    // CRITICAL: clear the OUTGOING identity's workspace/account context so the
+    // impersonated user does NOT inherit the admin's selected workspace. Without
+    // this, the dashboard tries to load a workspace the impersonated user doesn't
+    // own → 403 → "Connect to WhatsApp". The caller sets the new user's own
+    // sv_whatsapp_workspace_id immediately after this, and the dashboard then
+    // resolves to the impersonated user's first workspace on load.
+    TENANT_CONTEXT_KEYS.concat(['sv_workspaces']).forEach((k) => {
+        try {
+            localStorage.removeItem(k);
+            sessionStorage.removeItem(k);
+        } catch { /* ignore */ }
+    });
 }
 
 export function hasImpersonationReturn(): boolean {

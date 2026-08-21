@@ -435,6 +435,22 @@ function Header() {
     const [userEmail, setUserEmail] = useState('');
     const [userRole, setUserRole] = useState('');
     const [showDropdown, setShowDropdown] = useState(false);
+
+    // "Return to main dashboard" (Sociovia) — shown ONLY for users who exist in
+    // BOTH systems (synced). Checked via GET /api/sync/status.
+    const [showReturnToSociovia, setShowReturnToSociovia] = useState(false);
+    useEffect(() => {
+        let cancelled = false;
+        fetch(`${API_BASE_URL}/api/sync/status`, { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => {
+                if (!cancelled && d?.success && (d.synced || d.eligible)) {
+                    setShowReturnToSociovia(true);
+                }
+            })
+            .catch(() => { /* not synced / not eligible → hide button */ });
+        return () => { cancelled = true; };
+    }, []);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -492,6 +508,17 @@ function Header() {
             </div>
 
             <div className="flex items-center gap-2">
+                {showReturnToSociovia && (
+                    <a
+                        href="https://sociovia.com/dashboard"
+                        className="flex items-center gap-1.5 h-9 px-3 rounded-lg border border-indigo-200 bg-indigo-50 text-sm font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
+                        title="Return to your Sociovia dashboard"
+                    >
+                        <Home className="w-4 h-4" />
+                        <span className="hidden sm:inline">Main Dashboard</span>
+                    </a>
+                )}
+
                 <WorkspaceSwitcher />
 
                 <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block" />

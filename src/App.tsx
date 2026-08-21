@@ -48,6 +48,11 @@ const TenantAdminSubscription = lazy(() => import('./pages/tenant-admin/TenantAd
 const TenantAdminPrivateSlot = lazy(() => import('./pages/tenant-admin/TenantAdminPrivateSlot'));
 const TenantUserAnalytics = lazy(() => import('./pages/tenant-admin/TenantUserAnalytics'));
 
+// Activity tracking (isolated) — page activity + landing analytics + feature usage
+const AdminPageActivity = lazy(() => import('./pages/admin/AdminPageActivity'));
+const TenantPageActivity = lazy(() => import('./pages/tenant-admin/TenantPageActivity'));
+import { PageTrackingProvider, LandingTracker } from '@/tracking';
+
 import { WhatsAppErrorBoundary } from './whatsapp/components/WhatsAppErrorBoundary';
 
 /* ── Lazy-loaded WhatsApp pages ── */
@@ -128,6 +133,9 @@ function StripWhatsAppPrefix() {
 
 export default function App() {
   return (
+    <>
+    <PageTrackingProvider />
+    <LandingTracker />
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SignupPage /></Suspense>} />
@@ -157,6 +165,7 @@ export default function App() {
         <Route path="private-slot" element={<Suspense fallback={<PageLoader />}><AdminPrivateSlot /></Suspense>} />
         <Route path="agents" element={<Suspense fallback={<PageLoader />}><AdminAgents /></Suspense>} />
         <Route path="user-analytics" element={<Suspense fallback={<PageLoader />}><AdminUserAnalytics /></Suspense>} />
+        <Route path="page-activity" element={<Suspense fallback={<PageLoader />}><AdminPageActivity /></Suspense>} />
       </Route>
 
       {/* Super Admin — Tenant Management (platform-admin only; rendered inside the admin shell) */}
@@ -176,6 +185,7 @@ export default function App() {
         <Route path="subscription" element={<Suspense fallback={<PageLoader />}><TenantAdminSubscription /></Suspense>} />
         <Route path="private-slot" element={<Suspense fallback={<PageLoader />}><TenantAdminPrivateSlot /></Suspense>} />
         <Route path="user-analytics" element={<Suspense fallback={<PageLoader />}><TenantUserAnalytics /></Suspense>} />
+        <Route path="page-activity" element={<Suspense fallback={<PageLoader />}><TenantPageActivity /></Suspense>} />
       </Route>
 
       <Route path="/dashboard" element={<DashboardLayout />}>
@@ -270,5 +280,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
