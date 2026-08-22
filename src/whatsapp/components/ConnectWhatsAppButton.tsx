@@ -197,17 +197,19 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected }: ConnectWhats
                     // the popup could open under the user gesture; make sure it has
                     // resolved before exchange since it carries the resume token.
                     try { onboardingSessionRef.current = await sessionPromise; } catch { /* best effort */ }
-                    const assets = await waitForEmbeddedSignupAssets(() => sessionAssetsRef.current, 30000);
+                    // Wait briefly for the Embedded Signup `message` event (WABA/phone
+                    // assets). Do NOT hard-require it: that postMessage is unreliable
+                    // across domains/browsers, and blocking on it means a completed
+                    // signup never gets saved. If assets are missing we still call
+                    // exchange — the backend auto-discovers the WABA/phone from the
+                    // token (resolve_binding_for_auto_connect) and returns
+                    // PROVISIONING_INCOMPLETE / ambiguity only when it genuinely can't.
+                    const assets = await waitForEmbeddedSignupAssets(() => sessionAssetsRef.current, 8000);
                     if (!hasEmbeddedSignupAssets(assets)) {
-                        toast({
-                            title: 'Finish Meta signup',
-                            description:
-                                'Facebook logged in, but WhatsApp account details were not received. ' +
-                                'Complete the popup (select your business and phone number), then try again.',
-                            variant: 'destructive',
-                        });
-                        setLoading(false);
-                        return;
+                        console.warn(
+                            '[whatsapp] No Embedded Signup assets from message event; ' +
+                            'proceeding to exchange with backend auto-discovery.',
+                        );
                     }
                     exchangeEmbeddedSignupCode(
                         workspaceId,
