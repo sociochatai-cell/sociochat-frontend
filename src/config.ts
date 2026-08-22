@@ -15,10 +15,17 @@ const IS_DEV_TUNNEL_HOST =
  * On Dev Tunnels this keeps all API traffic on the 5173 tunnel (no separate :5000 hop).
  * Never set https://127.0.0.1:5000 — Flask is HTTP-only and the browser will TLS-handshake fail.
  */
+const _CADDY_SERVED_HOSTS = ["app.sociochat.ai", "sc.sociovia.com"];
+const _isCaddyHost =
+    typeof window !== "undefined" &&
+    _CADDY_SERVED_HOSTS.includes(window.location.hostname.toLowerCase());
+
 export const API_BASE_URL = (
-    HAS_EXPLICIT_API_BASE
-        ? import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || ""
-        : ""
+    _isCaddyHost
+        ? ""
+        : HAS_EXPLICIT_API_BASE
+            ? import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || ""
+            : ""
 ).toString().replace(/\/$/, "");
 
 if (import.meta.env.DEV && IS_DEV_TUNNEL_HOST) {

@@ -84,9 +84,11 @@ import { maskPhoneNumber } from '@/lib/phoneMask';
 import { useToast } from '@/hooks/use-toast';
 import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 import { useWhatsAppRealtime } from '@/whatsapp/hooks/useWhatsAppRealtime';
+import { API_BASE_URL } from '@/config';
 
-// API Base URL from environment
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').toString().replace(/\/$/, '');
+// API Base URL — same-origin-aware (empty on Caddy hosts). Reading the raw
+// VITE_API_BASE_URL sent calls cross-origin to app.sociochat.ai → 401 on sc.sociovia.com.
+const API_BASE = API_BASE_URL;
 
 // Types
 const CampaignTimer = ({ targetDate }: { targetDate: string }) => {
@@ -792,19 +794,12 @@ export default function BulkMessaging() {
     // Preview animation state - cycles through recipients
     const [previewIndex, setPreviewIndex] = useState(0);
 
-    // Animate preview cycling through recipients
+    // Preview is MANUAL: the user steps through recipients with Prev/Next buttons
+    // (no auto-cycling — it was changing every 2s and made the preview unreadable).
+    // Just keep the index in range if the recipient list changes.
     useEffect(() => {
-        if (currentStep === 2 && recipients.length > 1) {
-            const hasVars = selectedTemplate ? getTemplateVariables(selectedTemplate).length > 0 : false;
-            // Only animate if we have variables to show differences
-            if (hasVars) {
-                const interval = setInterval(() => {
-                    setPreviewIndex(prev => (prev + 1) % recipients.length);
-                }, 2000); // Change every 2 seconds
-                return () => clearInterval(interval);
-            }
-        }
-    }, [currentStep, recipients.length, selectedTemplate]);
+        setPreviewIndex(prev => (recipients.length === 0 ? 0 : Math.min(prev, recipients.length - 1)));
+    }, [currentStep, recipients.length]);
 
     // Initialize workspace
     useEffect(() => {
@@ -3568,11 +3563,23 @@ export default function BulkMessaging() {
                                             <CardTitle className="text-base">Message Preview</CardTitle>
                                             {selectedTemplate?.variable_count > 0 && recipients.length > 1 && (
                                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                    <span className="relative flex h-2 w-2">
-                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                                    </span>
-                                                    Cycling through {recipients.length} recipients
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPreviewIndex(prev => (prev - 1 + recipients.length) % recipients.length)}
+                                                        className="px-2 py-1 rounded border border-green-200 bg-white hover:bg-green-50"
+                                                        aria-label="Previous recipient"
+                                                    >
+                                                        ‹ Prev
+                                                    </button>
+                                                    <span className="font-medium">Recipient {previewIndex + 1} of {recipients.length}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPreviewIndex(prev => (prev + 1) % recipients.length)}
+                                                        className="px-2 py-1 rounded border border-green-200 bg-white hover:bg-green-50"
+                                                        aria-label="Next recipient"
+                                                    >
+                                                        Next ›
+                                                    </button>
                                                 </div>
                                             )}
                                         </CardHeader>

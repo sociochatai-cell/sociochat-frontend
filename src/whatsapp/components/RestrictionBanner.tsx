@@ -55,7 +55,7 @@ export function RestrictionBanner({ accountId }: { accountId: number }) {
           <p className="text-sm mt-1 mb-3">
             {hasReconnectAction.message || "Your Meta access token is corrupted or expired. You must reconnect your account to continue sending messages."}
           </p>
-          <a href="/settings/whatsapp/connect" className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg shadow-sm hover:bg-red-700">
+          <a href="/dashboard/whatsapp/setup" className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg shadow-sm hover:bg-red-700">
             Reconnect Meta
           </a>
         </div>

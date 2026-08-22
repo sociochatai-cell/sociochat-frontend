@@ -304,7 +304,7 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
                                 to={path}
                                 end={exact}
                                 className={`
-                                    flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
+                                    group/nav relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
                                     transition-all duration-150
                                     ${isActive
                                         ? 'bg-gradient-to-r from-emerald-500/10 to-teal-500/5 text-emerald-700 shadow-sm ring-1 ring-emerald-200/40'
@@ -312,7 +312,22 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
                                     }
                                 `}
                             >
-                                <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} className="flex-shrink-0" />
+                                <span className="relative flex-shrink-0">
+                                    <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} />
+                                    <span
+                                        className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-9 z-[9999] whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-semibold text-white opacity-0 scale-90 transition-all duration-150 group-hover/nav:opacity-100 group-hover/nav:scale-100"
+                                        style={{
+                                            background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+                                            boxShadow: '0 4px 12px rgba(2,6,23,0.25)',
+                                        }}
+                                    >
+                                        {label}
+                                        <span
+                                            className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 rotate-45"
+                                            style={{ background: '#0f172a' }}
+                                        />
+                                    </span>
+                                </span>
                                 <motion.span
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
@@ -557,14 +572,6 @@ function Header() {
                                     <p className="text-xs text-slate-400 mt-0.5">{userEmail}</p>
                                 </div>
                                 <div className="p-1.5">
-                                    {(userRole === 'tenant_admin' || userRole === 'admin') && (
-                                        <button
-                                            onClick={() => { setShowDropdown(false); navigate('/tenant-admin'); }}
-                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
-                                        >
-                                            <Users className="w-4 h-4" /> Team Management
-                                        </button>
-                                    )}
                                     <button
                                         onClick={() => { setShowDropdown(false); navigate('/dashboard/settings'); }}
                                         className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
@@ -671,7 +678,7 @@ function AnimatedOutlet() {
    MAIN LAYOUT
    ══════════════════════════════════════════════ */
 export default function DashboardLayout() {
-    const [expanded, setExpanded] = useState(false);
+    const [expanded, setExpanded] = useState(true);
     const isMobile = useIsMobile();
     const navigate = useNavigate();
     const setNavigate = useAgentStore((s) => s.setNavigate);
