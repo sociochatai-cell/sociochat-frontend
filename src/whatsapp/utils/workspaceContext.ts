@@ -39,6 +39,18 @@ function consumeSsoWorkspaceParam(): void {
                 localStorage.removeItem(k);
                 sessionStorage.removeItem(k);
             });
+            // Purge the WhatsApp persistent data cache (connection / analytics /
+            // accounts, prefixed `wa_cache:`). A fresh SSO is a new identity+workspace
+            // context; any surviving cache from a previous session on this domain can
+            // pin the dashboard to a stale "not connected" / empty state so it never
+            // refetches — showing blank skeletons forever. Done inline (not via
+            // clearWhatsAppCache) to avoid a circular import at module-eval time.
+            try {
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const k = localStorage.key(i);
+                    if (k && k.startsWith('wa_cache:')) localStorage.removeItem(k);
+                }
+            } catch { /* ignore */ }
             sessionStorage.setItem('sso_login_pending', '1');
             // Mark this session as launched from Sociovia so DashboardLayout shows the
             // "← Sociovia Dashboard" / "Main Dashboard" return link.

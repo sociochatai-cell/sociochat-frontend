@@ -6,7 +6,12 @@
  * 2. Localhost fallback (for local development)
  */
 
-const PRIMARY_URL = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').toString().replace(/\/$/, '');
+import { API_BASE_URL } from '@/config';
+
+// Same-origin-aware base (empty on Caddy-served hosts like sc.sociovia.com /
+// app.sociochat.ai). Using the raw VITE_API_BASE_URL here sent calls cross-origin,
+// so the host session cookie was dropped → 401.
+const PRIMARY_URL = API_BASE_URL;
 const FALLBACK_URL = (import.meta.env.VITE_API_FALLBACK_URL || 'https://sociovia-backend-362038465411.europe-west1.run.app').toString().replace(/\/$/, '');
 
 let activeBaseUrl: string | null = null;

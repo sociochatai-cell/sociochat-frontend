@@ -121,6 +121,38 @@ export default function AdminPlans() {
         setSaving(null);
     };
 
+    // Turn a plan on/off from the Active switch and PERSIST immediately, so the
+    // toggle actually works without needing a separate "Save name" click. The
+    // backend plan catalog already hides is_active=false plans from customers
+    // (/plans and /my-plans both filter is_active), so this instantly shows/hides
+    // the plan (e.g. the Free plan) on the customer subscription/pricing page.
+    const toggleActive = async (slug: string, value: boolean) => {
+        const edit = planEdits[slug];
+        // Optimistic UI update
+        setPlanEdits(prev => ({ ...prev, [slug]: { ...prev[slug], is_active: value } }));
+        setSaving(`meta-${slug}`);
+        const priceNum = parseFloat(edit?.price_monthly_inr ?? '');
+        const res = await adminApi.updatePlanCatalog(slug, {
+            name: (edit?.name || slug).trim(),
+            is_active: value,
+            billing_period: edit?.billing_period || 'monthly',
+            offer_text: edit?.offer_text ?? '',
+            ...(edit && edit.price_monthly_inr.trim() !== '' && !isNaN(priceNum) ? { price_monthly_inr: priceNum } : {}),
+        });
+        if (res.success) {
+            toast({
+                title: value ? 'Plan activated' : 'Plan deactivated',
+                description: `${edit?.name || slug} is now ${value ? 'visible to' : 'hidden from'} customers.`,
+            });
+            load();
+        } else {
+            // Revert on failure
+            setPlanEdits(prev => ({ ...prev, [slug]: { ...prev[slug], is_active: !value } }));
+            toast({ title: 'Error', description: res.error || 'Update failed', variant: 'destructive' });
+        }
+        setSaving(null);
+    };
+
     const deletePlan = async (slug: string) => {
         const plan = plans.find(p => p.slug === slug);
         if (!plan?.is_deletable) return;
@@ -257,10 +289,8 @@ export default function AdminPlans() {
                                     <span className="text-xs text-muted-foreground">Active</span>
                                     <Switch
                                         checked={active}
-                                        onCheckedChange={v => setPlanEdits(prev => ({
-                                            ...prev,
-                                            [plan.slug]: { ...edit, is_active: v },
-                                        }))}
+                                        disabled={saving === `meta-${plan.slug}`}
+                                        onCheckedChange={v => toggleActive(plan.slug, v)}
                                     />
                                 </div>
                                 <Button

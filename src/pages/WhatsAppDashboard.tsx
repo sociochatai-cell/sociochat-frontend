@@ -51,6 +51,7 @@ import {
     ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { API_BASE_URL } from '@/config';
 import { useWhatsAppConnection, connectionPathHasLinkedAccount } from '@/whatsapp/hooks/useWhatsAppData';
 import { getWorkspaceId, setWorkspaceId as persistWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 
@@ -64,8 +65,11 @@ import {
     ExportButtons,
 } from '@/whatsapp/components/analytics';
 
-// API Base URL from environment
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').toString().replace(/\/$/, '');
+// API Base URL — MUST use the same-origin-aware value from config (empty string on
+// Caddy-served hosts like sc.sociovia.com / app.sociochat.ai). Reading the raw
+// VITE_API_BASE_URL here sent every call cross-origin to app.sociochat.ai, so the
+// sc.sociovia.com session cookie was never included → 401 on /api/workspaces etc.
+const API_BASE = API_BASE_URL;
 
 // Optional personal-workspace lock. Kept configurable via env so the id/password
 // aren't hardcoded literals in shared source (falls back to the original values
