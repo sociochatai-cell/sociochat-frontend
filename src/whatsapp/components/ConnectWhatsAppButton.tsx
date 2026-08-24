@@ -85,12 +85,31 @@ async function exchangeEmbeddedSignupCode(
     return data;
 }
 
+interface WabaCandidate {
+    waba_id?: string;
+    waba_name?: string;
+    phone_number_id?: string;
+    display_phone_number?: string;
+    verified_name?: string;
+    business_id?: string;
+    business_name?: string;
+}
+
 export function ConnectWhatsAppButton({ workspaceId, onConnected }: ConnectWhatsAppButtonProps) {
     const [loading, setLoading] = useState(false);
     const [fbReady, setFbReady] = useState(false);
     const sessionAssetsRef = useRef<EmbeddedSignupAssets>({});
     const onboardingSessionRef = useRef<{ sessionId?: string; resumeToken?: string }>({});
     const { user } = useAuth();
+
+    // When the Meta account has MORE THAN ONE WhatsApp Business Account, the backend
+    // returns requires_user_choice + candidates (it won't guess). We show a picker and
+    // finish via a "resume" exchange that reuses the stashed token (no re-login).
+    const [wabaChoice, setWabaChoice] = useState<{
+        candidates: WabaCandidate[];
+        sessionId?: string;
+        resumeToken?: string;
+    } | null>(null);
 
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
@@ -244,6 +263,29 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected }: ConnectWhats
                             return;
                         }
 
+                        // Multiple WhatsApp Business Accounts on this Meta account →
+                        // the backend can't auto-pick. Show a picker; the choice is
+                        // finished via a resume exchange (reuses the stashed token).
+                        const choiceData = data as unknown as {
+                            requires_user_choice?: boolean;
+                            candidates?: WabaCandidate[];
+                            onboarding_session_id?: string;
+                        };
+                        if (
+                            choiceData.requires_user_choice &&
+                            Array.isArray(choiceData.candidates) &&
+                            choiceData.candidates.length > 1
+                        ) {
+                            setWabaChoice({
+                                candidates: choiceData.candidates,
+                                sessionId:
+                                    choiceData.onboarding_session_id ||
+                                    onboardingSessionRef.current.sessionId,
+                                resumeToken: onboardingSessionRef.current.resumeToken,
+                            });
+                            return;
+                        }
+
                         throw new Error(formatConnectExchangeError(data));
                     })
                     .catch((err: unknown) => {
@@ -281,24 +323,122 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected }: ConnectWhats
         );
     }, [workspaceId, fbReady, onConnected, user?.id]);
 
+    // Finish a multi-WABA connection: reuse the token stashed during the ambiguous
+    // exchange (no re-login) and connect the WABA the user picked.
+    const finishWithChosenWaba = useCallback(async (candidate: WabaCandidate) => {
+        if (!wabaChoice) return;
+        setLoading(true);
+        try {
+            const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/connect/exchange`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    workspace_id: workspaceId,
+                    onboarding_session_id: wabaChoice.sessionId,
+                    resume_token: wabaChoice.resumeToken,
+                    waba_id: candidate.waba_id,
+                    phone_number_id: candidate.phone_number_id,
+                    business_id: candidate.business_id,
+                }),
+            });
+            const data = (await res.json()) as ConnectExchangeResponse;
+            if (data.success) {
+                invalidateWhatsAppAccountsCache(workspaceId);
+                toast({
+                    title: 'WhatsApp connected',
+                    description: `Connected: ${data.account?.display_phone_number || candidate.display_phone_number || candidate.verified_name || 'Account linked'}`,
+                });
+                setWabaChoice(null);
+                requestWhatsAppAccountStatusPopup(workspaceId);
+                onConnected?.();
+                return;
+            }
+            toast({
+                title: 'Connection Failed',
+                description: formatConnectExchangeError(data),
+                variant: 'destructive',
+            });
+        } catch (err) {
+            toast({
+                title: 'Connection Failed',
+                description: err instanceof Error ? err.message : 'Failed to connect the selected number',
+                variant: 'destructive',
+            });
+        } finally {
+            setLoading(false);
+        }
+    }, [wabaChoice, workspaceId, onConnected]);
+
     return (
-        <Button
-            onClick={handleConnect}
-            disabled={loading || !workspaceId}
-            className="bg-[#25D366] hover:bg-[#128C7E] text-white"
-            data-connect-whatsapp="true"
-        >
-            {loading ? (
-                <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Connecting...
-                </>
-            ) : (
-                <>
-                    <MessageCircle className="w-4 h-4 mr-2" />
-                    Connect WhatsApp
-                </>
+        <>
+            <Button
+                onClick={handleConnect}
+                disabled={loading || !workspaceId}
+                className="bg-[#25D366] hover:bg-[#128C7E] text-white"
+                data-connect-whatsapp="true"
+            >
+                {loading ? (
+                    <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Connecting...
+                    </>
+                ) : (
+                    <>
+                        <MessageCircle className="w-4 h-4 mr-2" />
+                        Connect WhatsApp
+                    </>
+                )}
+            </Button>
+
+            {wabaChoice && (
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"
+                    onClick={() => !loading && setWabaChoice(null)}
+                >
+                    <div
+                        className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="mb-1 text-lg font-semibold text-gray-900">
+                            Choose a WhatsApp number
+                        </h3>
+                        <p className="mb-4 text-sm text-gray-500">
+                            This Meta account has more than one WhatsApp number. Pick the one you want to connect.
+                        </p>
+                        <div className="space-y-2">
+                            {wabaChoice.candidates.map((c, i) => (
+                                <button
+                                    key={`${c.waba_id}-${c.phone_number_id}-${i}`}
+                                    type="button"
+                                    disabled={loading}
+                                    onClick={() => finishWithChosenWaba(c)}
+                                    className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left hover:border-[#25D366] hover:bg-green-50 disabled:opacity-60"
+                                >
+                                    <span>
+                                        <span className="block font-medium text-gray-900">
+                                            {c.display_phone_number || c.verified_name || 'WhatsApp number'}
+                                        </span>
+                                        <span className="block text-xs text-gray-500">
+                                            {c.verified_name || c.waba_name || c.business_name || ''}
+                                            {c.waba_id ? ` · WABA ${c.waba_id}` : ''}
+                                        </span>
+                                    </span>
+                                    <MessageCircle className="h-5 w-5 text-[#25D366]" />
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => setWabaChoice(null)}
+                            className="mt-4 w-full rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-60"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
             )}
-        </Button>
+        </>
     );
 }
