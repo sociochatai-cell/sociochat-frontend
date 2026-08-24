@@ -4,6 +4,7 @@
  */
 
 import { WHATSAPP_REST_API_PREFIX } from '@/config';
+import { ownerAuthHeaders } from '@/lib/authToken';
 
 export interface EmbeddedSignupAssets {
   business_id?: string;
@@ -167,7 +168,7 @@ export async function createOnboardingSession(
   try {
     const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/onboarding/sessions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...ownerAuthHeaders() },
       credentials: 'include',
       body: JSON.stringify({
         workspace_id: workspaceId,
@@ -197,7 +198,7 @@ export async function postEmbeddedSignupEvent(
   try {
     await fetch(`${WHATSAPP_REST_API_PREFIX}/onboarding/sessions/${sessionId}/events`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...ownerAuthHeaders() },
       credentials: 'include',
       body: JSON.stringify({ event_type: eventType, payload }),
     });

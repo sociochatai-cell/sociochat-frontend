@@ -16,6 +16,7 @@ import { STORAGE_KEYS } from './types';
 import { WHATSAPP_API_ENDPOINT, WHATSAPP_REST_API_PREFIX } from "@/config";
 import { getWorkspaceId } from './utils/workspaceContext';
 import { parseWhatsAppJsonResponse } from './utils/parseApiResponse';
+import { ownerAuthHeaders } from '@/lib/authToken';
 
 const API_BASE = WHATSAPP_API_ENDPOINT;
 
@@ -34,9 +35,14 @@ async function waRequest<T>(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    // SSO/shared-identity: carry the owner identity (Bearer sv_token + X-User-Id)
+    // like apiClient, so WhatsApp calls authenticate even when the session cookie
+    // isn't honored (incognito/mobile/SSO). The backend prefers the cookie when
+    // present, so this is additive.
+    ...ownerAuthHeaders(),
   };
 
-  // Add Authorization header only if token is provided
+  // An explicit WhatsApp access token (rare) overrides the owner Bearer.
   if (accessToken) {
     headers['Authorization'] = `Bearer ${accessToken}`;
   }

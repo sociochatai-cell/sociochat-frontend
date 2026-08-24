@@ -43,3 +43,32 @@ export function getActiveAuth(): ActiveAuth {
 export function credentialsMode(): RequestCredentials {
   return isAgentMode() ? "omit" : "include";
 }
+
+/**
+ * Identity headers for raw fetch() calls that bypass apiClient — notably the
+ * WhatsApp API layer (waRequest / coexReq / the Embedded-Signup connect calls),
+ * which historically sent cookies ONLY. Under the SSO / shared-identity model
+ * the session cookie is not the primary auth, so those cookie-only calls were
+ * unauthenticated. This mirrors apiClient (Authorization: Bearer sv_token +
+ * X-User-Id fallback) so the WhatsApp layer authenticates the same way as the
+ * rest of the app. Safe to always add: the backend prefers the session cookie
+ * when present, so this only helps the no-cookie case (incognito/mobile/SSO).
+ */
+export function ownerAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  try {
+    const { token, isAgent } = getActiveAuth();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (isAgent) return headers; // agent portal: Bearer only, never X-User-Id
+    let uid: string | null = null;
+    try {
+      uid = localStorage.getItem("sv_user_id");
+      if (!uid) {
+        const u = JSON.parse(localStorage.getItem("sv_user") || "null");
+        if (u?.id) uid = String(u.id);
+      }
+    } catch { /* ignore */ }
+    if (uid) headers["X-User-Id"] = uid;
+  } catch { /* ignore */ }
+  return headers;
+}

@@ -3,6 +3,7 @@
 // API functions for WhatsApp Coexistence mode (connecting existing WABA)
 
 import { API_BASE_URL } from '@/config';
+import { ownerAuthHeaders } from '@/lib/authToken';
 
 const API = `${API_BASE_URL}/api/whatsapp/coexistence`;
 
@@ -11,6 +12,7 @@ async function coexReq<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...ownerAuthHeaders(),
       ...options.headers,
     },
     credentials: 'include',

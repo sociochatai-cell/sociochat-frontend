@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, MessageCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { WHATSAPP_REST_API_PREFIX } from "@/config";
+import { ownerAuthHeaders } from '@/lib/authToken';
 import { requestWhatsAppAccountStatusPopup } from '@/whatsapp/utils/accountStatusPopup';
 import { invalidateWhatsAppAccountsCache } from '@/whatsapp/hooks/useWhatsAppData';
 import { useAuth } from '@/contexts/AuthContext';
@@ -73,7 +74,7 @@ async function exchangeEmbeddedSignupCode(
 
     const res = await fetch(`${WHATSAPP_REST_API_PREFIX}/connect/exchange`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...ownerAuthHeaders() },
         credentials: 'include',
         body: JSON.stringify(body),
     });

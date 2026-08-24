@@ -16,6 +16,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ownerAuthHeaders } from '@/lib/authToken';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -136,6 +137,7 @@ async function coexistenceApi(path: string, options?: RequestInit) {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...ownerAuthHeaders(),
       ...(options?.headers || {}),
     },
     credentials: 'include',
