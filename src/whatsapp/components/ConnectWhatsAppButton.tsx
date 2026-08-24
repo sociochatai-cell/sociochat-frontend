@@ -172,14 +172,17 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected }: ConnectWhats
         sessionAssetsRef.current = {};
         onboardingSessionRef.current = {};
 
-        void (async () => {
-            if (user?.id) {
-                onboardingSessionRef.current = await createOnboardingSession(
-                    workspaceId,
-                    user.id,
-                    { configId: WHATSAPP_CONFIG_ID },
-                );
-            }
+        // FB.login() MUST be called SYNCHRONOUSLY inside this click handler.
+        // Awaiting anything first (e.g. createOnboardingSession, which does a network
+        // POST) consumes the browser's transient user-activation, so Meta's popup is
+        // blocked and FB.login returns { authResponse: null, status: 'unknown' }
+        // instantly ("not waiting"). So we kick the onboarding-session creation off
+        // WITHOUT awaiting here and resolve it inside the callback before exchange.
+        const sessionPromise: Promise<{ sessionId?: string; resumeToken?: string }> =
+            user?.id
+                ? createOnboardingSession(workspaceId, user.id, { configId: WHATSAPP_CONFIG_ID })
+                : Promise.resolve<{ sessionId?: string; resumeToken?: string }>({});
+        void sessionPromise.then((s) => { onboardingSessionRef.current = s; }).catch(() => { /* best effort */ });
 
         console.log('[whatsapp] Starting Embedded Signup flow (sessionInfoVersion 4)');
 
@@ -190,6 +193,10 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected }: ConnectWhats
 
                 const authCode = extractEmbeddedSignupCode(response.authResponse);
                 if (authCode) {
+                    // The onboarding session was started (not awaited) at click time so
+                    // the popup could open under the user gesture; make sure it has
+                    // resolved before exchange since it carries the resume token.
+                    try { onboardingSessionRef.current = await sessionPromise; } catch { /* best effort */ }
                     const assets = await waitForEmbeddedSignupAssets(() => sessionAssetsRef.current, 30000);
                     if (!hasEmbeddedSignupAssets(assets)) {
                         toast({
@@ -270,7 +277,6 @@ export function ConnectWhatsAppButton({ workspaceId, onConnected }: ConnectWhats
                 }
             }
         );
-        })();
     }, [workspaceId, fbReady, onConnected, user?.id]);
 
     return (

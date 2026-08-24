@@ -393,12 +393,16 @@ function NotConnectedView({
     sessionAssetsRef.current = {};
     onboardingSessionRef.current = {};
 
-    if (user?.id) {
-      onboardingSessionRef.current = await createOnboardingSession(workspaceId, user.id, {
-        isCoexistence: true,
-        configId: WHATSAPP_CONFIG_ID,
-      });
-    }
+    // FB.login() MUST run synchronously in this click handler. Awaiting anything
+    // first (createOnboardingSession does a network POST) consumes the browser's
+    // transient user-activation, so Meta's popup is blocked and FB.login returns
+    // { authResponse: null, status: 'unknown' } instantly. Start the session WITHOUT
+    // awaiting here; it is resolved inside the callback before the coexistence connect.
+    const sessionPromise: Promise<{ sessionId?: string; resumeToken?: string }> =
+      user?.id
+        ? createOnboardingSession(workspaceId, user.id, { isCoexistence: true, configId: WHATSAPP_CONFIG_ID })
+        : Promise.resolve<{ sessionId?: string; resumeToken?: string }>({});
+    void sessionPromise.then((s) => { onboardingSessionRef.current = s; }).catch(() => { /* best effort */ });
 
     // Launch Facebook Embedded Signup flow with WhatsApp Business App onboarding (coexistence)
     window.FB.login(
@@ -420,7 +424,10 @@ function NotConnectedView({
             setConnecting(false);
             return;
           }
-          const session = onboardingSessionRef.current;
+          // The onboarding session was started (not awaited) at click time so the
+          // popup could open under the user gesture; make sure it has resolved here.
+          let session = onboardingSessionRef.current;
+          try { session = await sessionPromise; onboardingSessionRef.current = session; } catch { /* best effort */ }
           coexistenceApi('/connect', {
             method: 'POST',
             body: JSON.stringify({
