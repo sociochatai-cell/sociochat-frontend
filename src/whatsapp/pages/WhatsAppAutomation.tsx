@@ -1345,6 +1345,9 @@ function IceBreakersSection({
 
 function AIChatbotSection({ accountId, workspaceId }: { accountId: number; workspaceId?: string | number }) {
     const [enabled, setEnabled] = useState(false);
+    // NEW advanced-agent brain toggle — SEPARATE from the enable switch above.
+    const [agentMode, setAgentMode] = useState(false);
+    const [agentSaving, setAgentSaving] = useState(false);
     const [systemPrompt, setSystemPrompt] = useState('');
     const [fallbackMessage, setFallbackMessage] = useState("I'm sorry, I couldn't process your request. A team member will assist you soon.");
     const [adminAlertTemplate, setAdminAlertTemplate] = useState('admin_alert');
@@ -1367,6 +1370,11 @@ function AIChatbotSection({ accountId, workspaceId }: { accountId: number; works
                     setFallbackMessage(data.fallback_message || '');
                     setAdminAlertTemplate(data.admin_alert_template || 'admin_alert');
                 }
+                // Advanced AI agent toggle (separate endpoint)
+                try {
+                    const ar = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/ai/agent-mode`, { credentials: 'include' });
+                    if (ar.ok) { const ad = await ar.json(); setAgentMode(!!ad.ai_agent_mode); }
+                } catch { /* non-fatal */ }
             } catch (err) {
                 console.error('Failed to load AI config:', err);
             } finally {
@@ -1393,6 +1401,23 @@ function AIChatbotSection({ accountId, workspaceId }: { accountId: number; works
             console.error('Failed to toggle AI:', err);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleAgentToggle = async (checked: boolean) => {
+        setAgentSaving(true);
+        try {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/ai/agent-mode`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: checked }),
+            });
+            if (res.ok) setAgentMode(checked);
+        } catch (err) {
+            console.error('Failed to toggle AI agent mode:', err);
+        } finally {
+            setAgentSaving(false);
         }
     };
 
@@ -1470,6 +1495,20 @@ function AIChatbotSection({ accountId, workspaceId }: { accountId: number; works
                             AI Auto-Reply handles messages that don't match any automation rules. It uses your Knowledge Base to provide accurate, context-aware responses about your business.
                         </AlertDescription>
                     </Alert>
+
+                    {/* NEW: Advanced AI Agent toggle — separate from the enable switch above */}
+                    <div className="flex items-center justify-between rounded-lg border border-purple-200 bg-white/70 p-3">
+                        <div className="pr-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-900">Advanced AI Agent</span>
+                                <Badge className="bg-amber-100 text-amber-700 text-[10px]">Beta</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                Let the AI use tools (your Knowledge Base now — catalog, products &amp; actions coming soon) instead of simple answers. Turn OFF for the classic behavior.
+                            </p>
+                        </div>
+                        <Switch checked={agentMode} onCheckedChange={handleAgentToggle} disabled={agentSaving || !enabled} />
+                    </div>
 
                     <div className="space-y-4">
                         <div>
