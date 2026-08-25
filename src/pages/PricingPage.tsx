@@ -80,9 +80,6 @@ function priceLabel(p: number | null | undefined): { price: string; period: stri
 // not yet seeded. Mirrors the launch catalog; the DB (Admin → Plans) overrides
 // this whenever the backend responds.
 const DEFAULT_PLANS: PlanRow[] = [
-    { slug: 'beta', name: 'Free', description: 'Get on WhatsApp, free', price_monthly_inr: 0, sort_order: 0,
-      workspaces: 1, users: 1, messages_per_day: 250, interactive_flows: 0, image_credits: 0, ad_spend_limit: 0,
-      whatsapp_coexistence: true, crm: true },
     { slug: 'starter', name: 'Basic', description: 'For small businesses starting out', price_monthly_inr: 999, sort_order: 1,
       workspaces: 1, users: 5, messages_per_day: 1000, interactive_flows: 5, image_credits: 0, ad_spend_limit: 100000,
       whatsapp_automation: true, unified_dashboard_analytics: true, human_agent_whatsapp: true, crm: true, whatsapp_smart_ai: true, whatsapp_coexistence: true },
@@ -128,7 +125,7 @@ export default function PricingPage() {
                     data = await res.json().catch(() => ({}));
                 }
                 const map = data?.success && data.plans ? (data.plans as Record<string, PlanRow>) : null;
-                const rows: PlanRow[] = map ? Object.values(map) : [];
+                const rows: PlanRow[] = map ? Object.values(map).filter(p => p.slug !== 'beta' && p.price_monthly_inr !== 0) : [];
                 rows.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
                 // Always show prices — fall back to the built-in defaults when the
                 // API returns nothing (offline / not yet seeded).

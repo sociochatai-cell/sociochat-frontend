@@ -54,6 +54,7 @@ export interface ConnectionData {
         quality_rating?: string;
         platform_type?: string;
         is_coexistence?: boolean;
+        is_active?: boolean;
     };
     message?: string;
 }

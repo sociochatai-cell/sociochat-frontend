@@ -201,6 +201,12 @@ export default function WhatsAppDashboard() {
     // accounts that merely need a token refresh or setup completion.
     const hasLinkedAccount = useMemo(() => {
         if (!connectionData) return null;
+        // An account the user explicitly UNLINKED (is_active === false) must NOT
+        // show as "Connected" on the dashboard. The connection-path still returns
+        // it as RELINK_REQUIRED so templates/inbox can find the row for migration,
+        // but here we show the "Connect WhatsApp" screen instead of a green
+        // "Connected" badge with stale analytics.
+        if (connectionData.account_summary?.is_active === false) return false;
         return connectionPathHasLinkedAccount(connectionData);
     }, [connectionData]);
 

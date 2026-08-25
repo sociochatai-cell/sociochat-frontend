@@ -69,6 +69,10 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
 
     // Upload file to Meta
     const handleMediaUpload = async (file: File) => {
+        if (!accountId) {
+            setUploadError('No WhatsApp account connected. Please connect your WhatsApp account first in Settings.');
+            return;
+        }
         const rules = getMediaRules();
         const allowedTypes = rules.accept.split(',');
         if (!allowedTypes.includes(file.type)) {
@@ -144,6 +148,10 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
 
     // Upload from URL
     const handleUrlUpload = async () => {
+        if (!accountId) {
+            setUploadError('No WhatsApp account connected. Please connect your WhatsApp account first in Settings.');
+            return;
+        }
         if (!urlInput.trim()) {
             setUploadError('Please enter an image URL');
             return;
