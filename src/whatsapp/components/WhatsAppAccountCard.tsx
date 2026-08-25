@@ -115,6 +115,10 @@ export function WhatsAppAccountCard({
 
       invalidateWhatsAppAccountsCache(account.workspace_id ?? undefined);
       onUpdate?.();
+      // Hard-refresh so the dashboard connection status (hasLinkedAccount) and every
+      // other cached view re-fetch immediately. Without this the UI can keep showing
+      // "connected" from a stale cached connection status until the next poll.
+      setTimeout(() => { try { window.location.reload(); } catch { /* ignore */ } }, 900);
     } catch (error) {
       toast({
         title: 'Error',
