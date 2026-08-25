@@ -434,6 +434,21 @@ function FieldRow({
     } catch { /* ignore */ } finally { setLoadingSlots(false); }
   };
 
+  // Auto-load configured Bookings availability for a TIME field so the customer-facing
+  // form ALWAYS reflects the workspace's saved business hours — no manual button click
+  // needed. Runs once per field/account (tracked by ref) and only when the field has no
+  // options yet, so it never clobbers a list the operator has hand-edited.
+  const autoLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (field.type !== 'time' || !accountId) return;
+    const key = `${field.id}:${accountId}`;
+    if (autoLoadedRef.current === key) return;
+    if (field.options && field.options.length > 0) return;
+    autoLoadedRef.current = key;
+    loadFromAvailability();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [field.type, field.id, accountId]);
+
   return (
     <div 
       className="border rounded-lg p-2 bg-white hover:border-gray-300 transition-colors"

@@ -95,16 +95,6 @@ export const getFieldLabel = (type: FieldType): string => {
   return labels[type] || 'Text';
 };
 
-// Default time slots for appointment booking (1-hour intervals, full day)
-// Meta Dropdown supports max 20 data-source options
-const DEFAULT_TIME_SLOTS = [
-  '6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM',
-  '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM',
-  '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM',
-  '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM',
-  '10:00 PM', '11:00 PM', '12:00 AM'
-];
-
 export const createDefaultField = (type: FieldType): Field => {
   const baseField: Field = {
     id: generateId(),
@@ -118,9 +108,11 @@ export const createDefaultField = (type: FieldType): Field => {
     baseField.options = ['Option 1', 'Option 2', 'Option 3'];
   }
 
-  // Add default time slots for time type
+  // Time slots are NOT hardcoded — they are loaded from the workspace's configured
+  // Bookings availability (business hours) automatically in the builder (see StepCard
+  // auto-load). Left empty so a stale full-day list can never be shipped to customers.
   if (type === 'time') {
-    baseField.options = [...DEFAULT_TIME_SLOTS];
+    baseField.options = [];
     baseField.label = 'Preferred Time Slot';
   }
 
