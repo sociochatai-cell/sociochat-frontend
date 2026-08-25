@@ -125,7 +125,11 @@ export function useWhatsAppConnection(workspaceId: string, enabled = true) {
             }
         },
         pollInterval: POLL_INTERVALS.SLOW, // Check every minute
-        staleTime: POLL_INTERVALS.NORMAL, // Consider stale after 30 seconds
+        // Always revalidate the connection status on mount (staleTime 0). Otherwise a
+        // cached "CONNECTED" could show for up to 30s even after the account was
+        // unlinked (is_active=False) — the dashboard would show Connected + Unlink
+        // while Settings correctly shows "not connected". Fresh check keeps them in sync.
+        staleTime: 0,
         enabled: !!workspaceId && enabled,
     });
 }
