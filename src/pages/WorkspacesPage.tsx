@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Plus, Pencil, Trash2, Check, Loader2, Layers,
   Building2, MapPin, Globe, Calendar, MessageCircle,
@@ -48,6 +49,7 @@ function qualityClasses(score?: string | null): string {
  */
 export default function WorkspacesPage() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [list, setList] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(() => getWorkspaceId());
@@ -113,6 +115,13 @@ export default function WorkspacesPage() {
           return;
         }
         toast({ title: "Workspace created", description: name });
+        // Take the owner straight to the business-profile page for the new workspace.
+        const newId = res.data?.workspace?.id;
+        setDialogOpen(false);
+        if (newId) {
+          navigate(`/dashboard/workspaces/${newId}/profile`);
+          return;
+        }
       } else if (renameTarget) {
         const res = await apiClient.put(`/workspaces/${renameTarget.id}`, { name });
         if (!res.ok) {
@@ -222,6 +231,9 @@ export default function WorkspacesPage() {
                     )}
                     <Button size="sm" variant="outline" onClick={() => openRename(ws)} disabled={busy}>
                       <Pencil className="h-4 w-4 mr-1" /> Rename
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => navigate(`/dashboard/workspaces/${ws.id}/profile`)} disabled={busy}>
+                      <Building2 className="h-4 w-4 mr-1" /> Business details
                     </Button>
                     <Button
                       size="sm"

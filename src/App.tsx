@@ -7,6 +7,7 @@ import RequireTenantAdmin from '@/components/auth/RequireTenantAdmin';
 // New Layouts & Pages
 import DashboardLayout from './layouts/DashboardLayout';
 import WorkspacesPage from './pages/WorkspacesPage';
+const BusinessProfilePage = lazy(() => import('./pages/BusinessProfilePage'));
 const SignupPage = lazy(() => import('./pages/SignupPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
@@ -191,6 +192,7 @@ export default function App() {
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<G feature="unified_dashboard_analytics"><WhatsAppDashboard /></G>} />
         <Route path="workspaces" element={<WorkspacesPage />} />
+        <Route path="workspaces/:id/profile" element={<Suspense fallback={<PageLoader />}><BusinessProfilePage /></Suspense>} />
         <Route path="hub" element={<WhatsAppHub />} />
         <Route path="inbox" element={<G feature="whatsapp_inbox"><WhatsAppErrorBoundary label="Inbox"><WhatsAppInbox /></WhatsAppErrorBoundary></G>} />
         <Route path="conversations" element={<G feature="whatsapp_inbox"><ConversationsInbox /></G>} />

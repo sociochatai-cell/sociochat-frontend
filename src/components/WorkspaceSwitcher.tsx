@@ -125,7 +125,9 @@ export default function WorkspaceSwitcher() {
       setWorkspaceId(String(ws.id));
       clearStoredAccountIds();
       setCreateOpen(false);
-      window.location.reload();
+      // Full navigation (fresh state for the new active workspace) straight to its
+      // business-profile page so the owner can fill in details right after creating.
+      window.location.href = `/dashboard/workspaces/${ws.id}/profile`;
     } finally {
       setBusy(false);
     }
