@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Gift, Zap, Crown, Gem, Building, Check, Sparkles, MessageCircle, Loader2, RefreshCw } from 'lucide-react';
 import { API_BASE_URL } from '@/config';
@@ -96,15 +96,50 @@ const DEFAULT_PLANS: PlanRow[] = [
 
 export default function PricingPage() {
     const navigate = useNavigate();
-    const { branding } = useBranding();
+    useBranding();
     const [plans, setPlans] = useState<PlanRow[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Custom/"Contact sales" tiers (null price) open a mailto to the tenant's
-    // support address instead of self-serve checkout.
+    // Custom/"Contact sales" tiers (null price) open a lead form; on submit the
+    // backend emails the team (POST /api/subscription/contact-sales).
+    const [contactPlan, setContactPlan] = useState<PlanRow | null>(null);
+    const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', company: '', message: '' });
+    const [contactSubmitting, setContactSubmitting] = useState(false);
+    const [contactDone, setContactDone] = useState(false);
+    const [contactError, setContactError] = useState('');
+
     const contactSales = (plan: PlanRow) => {
-        const email = branding.support_email || 'sales@sociochat.ai';
-        window.location.href = `mailto:${email}?subject=${encodeURIComponent(`Enquiry: ${plan.name} plan`)}`;
+        setContactPlan(plan);
+        setContactForm({ name: '', email: '', phone: '', company: '', message: '' });
+        setContactDone(false);
+        setContactError('');
+    };
+
+    const submitContactSales = async (e: FormEvent) => {
+        e.preventDefault();
+        setContactError('');
+        if (!contactForm.name.trim() || !contactForm.email.trim() || !contactForm.phone.trim()) {
+            setContactError('Please fill in your name, email and phone.');
+            return;
+        }
+        setContactSubmitting(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/subscription/contact-sales`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...contactForm, plan: contactPlan?.name || 'Enterprise' }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data?.success) {
+                setContactDone(true);
+            } else {
+                setContactError(data?.error || 'Could not send your enquiry. Please try again.');
+            }
+        } catch {
+            setContactError('Network error. Please try again.');
+        } finally {
+            setContactSubmitting(false);
+        }
     };
 
     // Load the plan catalog from the DB (admin-editable via Admin → Plans). Use
@@ -259,6 +294,90 @@ export default function PricingPage() {
                     </p>
                 </div>
             </div>
+
+            {/* Contact Sales modal (Enterprise / custom-priced plans) */}
+            {contactPlan && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                    onClick={() => !contactSubmitting && setContactPlan(null)}
+                >
+                    <div
+                        className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {contactDone ? (
+                            <div className="text-center py-6">
+                                <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
+                                    <Check className="w-6 h-6 text-emerald-600" />
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-900 mb-1">Thank you!</h3>
+                                <p className="text-sm text-slate-500 mb-5">
+                                    Our sales team has received your details and will reach out to you shortly.
+                                </p>
+                                <button
+                                    onClick={() => setContactPlan(null)}
+                                    className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex items-start justify-between mb-4">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-900">Contact Sales</h3>
+                                        <p className="text-sm text-slate-500">
+                                            Tell us about your needs for the {contactPlan.name} plan and our team will get in touch.
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setContactPlan(null)}
+                                        className="text-slate-400 hover:text-slate-600 text-xl leading-none"
+                                        aria-label="Close"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                                <form onSubmit={submitContactSales} className="space-y-3">
+                                    <input
+                                        type="text" placeholder="Full name *" value={contactForm.name}
+                                        onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                    />
+                                    <input
+                                        type="email" placeholder="Work email *" value={contactForm.email}
+                                        onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                    />
+                                    <input
+                                        type="tel" placeholder="Phone number *" value={contactForm.phone}
+                                        onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                    />
+                                    <input
+                                        type="text" placeholder="Company (optional)" value={contactForm.company}
+                                        onChange={(e) => setContactForm({ ...contactForm, company: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                    />
+                                    <textarea
+                                        placeholder="What are you looking for? (optional)" value={contactForm.message}
+                                        onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                                        rows={3}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                                    />
+                                    {contactError && <p className="text-sm text-red-600">{contactError}</p>}
+                                    <button
+                                        type="submit" disabled={contactSubmitting}
+                                        className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold bg-gradient-to-r from-brand-800 to-brand-700 text-white shadow-lg shadow-brand-500/20 hover:shadow-xl disabled:opacity-60"
+                                    >
+                                        {contactSubmitting ? 'Sending…' : 'Send enquiry'}
+                                    </button>
+                                </form>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
