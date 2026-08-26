@@ -232,7 +232,13 @@ export default function PricingPage() {
                             const Icon = ICONS[plan.slug] || Zap;
                             const color = COLORS[plan.slug] || 'from-slate-500 to-slate-600';
                             const popular = plan.slug === popularSlug;
-                            const { price, period, free, custom } = priceLabel(plan.price_monthly_inr ?? null);
+                            // The Enterprise tier is always "Contact Sales" (custom), no matter
+                            // what price is stored — admin can still set other plans to custom by
+                            // clearing their price (null -> custom below).
+                            const isEnterprise = plan.slug === 'enterprise';
+                            const { price, period, free, custom } = priceLabel(
+                                isEnterprise ? null : (plan.price_monthly_inr ?? null)
+                            );
                             const cta = free ? 'Start free' : custom ? 'Contact sales' : 'Get started';
                             const bullets = bulletsFor(plan);
                             return (
