@@ -10,7 +10,8 @@ import { AnalyticsTab } from './FlowOS/AnalyticsTab';
 
 import {
     Plus, Edit, Trash2, Loader2, CheckCircle, Clock, XCircle,
-    Send, MessageCircle, RefreshCw, Eye, Archive, FileText, Calendar, BarChart3, ClipboardList
+    Send, MessageCircle, RefreshCw, Eye, Archive, FileText, Calendar, BarChart3, ClipboardList,
+    Bell, BellOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WHATSAPP_API_BASE_URL } from "@/config";
@@ -29,6 +30,7 @@ interface Flow {
     flow_version: number;
     screen_count: number;
     meta_flow_id: string | null;
+    notify_owner_whatsapp: boolean;
     created_at: string;
     updated_at: string;
     published_at: string | null;
@@ -39,6 +41,7 @@ export function FlowsList() {
     const { toast } = useToast();
     const [publishing, setPublishing] = useState<number | null>(null);
     const [syncing, setSyncing] = useState(false);
+    const [togglingNotify, setTogglingNotify] = useState<number | null>(null);
     const [activeTab, setActiveTab] = useState<'flows' | 'submissions' | 'bookings' | 'analytics'>('flows');
 
     // Get workspace_id from storage (set during login/workspace selection)
@@ -198,6 +201,35 @@ export function FlowsList() {
         }
     };
 
+    const toggleNotify = async (flow: Flow) => {
+        try {
+            setTogglingNotify(flow.id);
+            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flow.id}/notify-toggle`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: !flow.notify_owner_whatsapp }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setFlows((prev: Flow[] | null) =>
+                    (prev || []).map(f => f.id === flow.id ? { ...f, notify_owner_whatsapp: data.notify_owner_whatsapp } : f)
+                );
+                toast({
+                    title: data.notify_owner_whatsapp ? 'Notifications On' : 'Notifications Off',
+                    description: data.notify_owner_whatsapp
+                        ? 'You will receive form submissions on your WhatsApp number'
+                        : 'WhatsApp submission notifications turned off',
+                });
+            } else {
+                toast({ title: 'Error', description: data.error || 'Failed to update notification setting', variant: 'destructive' });
+            }
+        } catch {
+            toast({ title: 'Error', description: 'Failed to update notification setting', variant: 'destructive' });
+        } finally {
+            setTogglingNotify(null);
+        }
+    };
+
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'PUBLISHED':
@@ -326,7 +358,28 @@ export function FlowsList() {
                                         </CardTitle>
                                         <CardDescription>{flow.category}</CardDescription>
                                     </div>
-                                    {getStatusBadge(flow.status)}
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); toggleNotify(flow); }}
+                                            disabled={togglingNotify === flow.id}
+                                            title={flow.notify_owner_whatsapp ? 'WhatsApp notifications ON — click to turn off' : 'WhatsApp notifications OFF — click to turn on'}
+                                            className={cn(
+                                                "p-1.5 rounded-md transition-colors",
+                                                flow.notify_owner_whatsapp
+                                                    ? "text-emerald-600 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50"
+                                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                            )}
+                                        >
+                                            {togglingNotify === flow.id ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : flow.notify_owner_whatsapp ? (
+                                                <Bell className="w-4 h-4" />
+                                            ) : (
+                                                <BellOff className="w-4 h-4" />
+                                            )}
+                                        </button>
+                                        {getStatusBadge(flow.status)}
+                                    </div>
                                 </div>
                             </CardHeader>
                             <CardContent>
