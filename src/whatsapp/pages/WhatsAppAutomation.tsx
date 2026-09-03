@@ -1360,8 +1360,13 @@ function AIChatbotSection({ accountId, workspaceId }: { accountId: number; works
     useEffect(() => {
         async function loadConfig() {
             try {
+                // waBypass: always load config fresh from the server. Caching this GET
+                // makes a post-save refresh show the STALE cached config (cold reads
+                // return cache first), so edits + the agent toggle look like they never
+                // saved even though the backend persisted them.
                 const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/ai/config`, {
-                    credentials: 'include'
+                    credentials: 'include',
+                    waBypass: true,
                 });
                 if (res.ok) {
                     const data = await res.json();
@@ -1370,9 +1375,9 @@ function AIChatbotSection({ accountId, workspaceId }: { accountId: number; works
                     setFallbackMessage(data.fallback_message || '');
                     setAdminAlertTemplate(data.admin_alert_template || 'admin_alert');
                 }
-                // Advanced AI agent toggle (separate endpoint)
+                // Advanced AI agent toggle (separate endpoint) — also load fresh.
                 try {
-                    const ar = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/ai/agent-mode`, { credentials: 'include' });
+                    const ar = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/accounts/${accountId}/ai/agent-mode`, { credentials: 'include', waBypass: true });
                     if (ar.ok) { const ad = await ar.json(); setAgentMode(!!ad.ai_agent_mode); }
                 } catch { /* non-fatal */ }
             } catch (err) {
