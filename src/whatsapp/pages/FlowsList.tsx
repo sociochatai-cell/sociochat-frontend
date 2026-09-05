@@ -11,7 +11,7 @@ import { AnalyticsTab } from './FlowOS/AnalyticsTab';
 import {
     Plus, Edit, Trash2, Loader2, CheckCircle, Clock, XCircle,
     Send, MessageCircle, RefreshCw, Eye, Archive, FileText, Calendar, BarChart3, ClipboardList,
-    Bell, BellOff
+    Bell, BellOff, Settings, Copy, Phone, AlertCircle, CheckCircle2, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WHATSAPP_API_BASE_URL } from "@/config";
@@ -43,6 +43,12 @@ export function FlowsList() {
     const [syncing, setSyncing] = useState(false);
     const [togglingNotify, setTogglingNotify] = useState<number | null>(null);
     const [activeTab, setActiveTab] = useState<'flows' | 'submissions' | 'bookings' | 'analytics'>('flows');
+    const [showNotifySettings, setShowNotifySettings] = useState(false);
+    const [notifyPhone, setNotifyPhone] = useState('');
+    const [notifyPhoneSaving, setNotifyPhoneSaving] = useState(false);
+    const [notifySettings, setNotifySettings] = useState<any>(null);
+    const [notifySettingsLoading, setNotifySettingsLoading] = useState(false);
+    const [checkingTemplate, setCheckingTemplate] = useState(false);
 
     // Get workspace_id from storage (set during login/workspace selection)
     const workspaceId = getWorkspaceId();
@@ -201,6 +207,83 @@ export function FlowsList() {
         }
     };
 
+    const loadNotifySettings = async () => {
+        if (!workspaceId) return;
+        try {
+            setNotifySettingsLoading(true);
+            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/notification-settings?workspace_id=${workspaceId}`);
+            const data = await res.json();
+            if (data.success) {
+                setNotifySettings(data);
+                setNotifyPhone(data.notification_phone_number || '');
+            }
+        } catch {
+            toast({ title: 'Error', description: 'Failed to load notification settings', variant: 'destructive' });
+        } finally {
+            setNotifySettingsLoading(false);
+        }
+    };
+
+    const saveNotifyPhone = async () => {
+        if (!workspaceId || !notifyPhone.trim()) return;
+        try {
+            setNotifyPhoneSaving(true);
+            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/notification-settings?workspace_id=${workspaceId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notification_phone_number: notifyPhone.trim() }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                toast({ title: 'Saved', description: 'Notification phone number saved' });
+                setNotifySettings((prev: any) => ({ ...prev, notification_phone_number: data.notification_phone_number }));
+            } else {
+                toast({ title: 'Error', description: data.error || 'Failed to save', variant: 'destructive' });
+            }
+        } catch {
+            toast({ title: 'Error', description: 'Failed to save phone number', variant: 'destructive' });
+        } finally {
+            setNotifyPhoneSaving(false);
+        }
+    };
+
+    const checkTemplateStatus = async () => {
+        if (!workspaceId) return;
+        try {
+            setCheckingTemplate(true);
+            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/check-template-status?workspace_id=${workspaceId}`, {
+                method: 'POST',
+            });
+            const data = await res.json();
+            if (data.success) {
+                setNotifySettings((prev: any) => ({ ...prev, template_status: data.template_status }));
+                const statusMsg: Record<string, string> = {
+                    approved: 'Template approved and ready!',
+                    pending: 'Template is pending approval from Meta',
+                    rejected: 'Template was rejected by Meta. Please recreate it.',
+                    not_created: 'Template not found. Please create it following the guide below.',
+                    fallback_approved: 'Using fallback template (human_required). Create the dedicated template for better formatting.',
+                };
+                toast({ title: 'Template Status', description: statusMsg[data.template_status] || data.template_status });
+            }
+        } catch {
+            toast({ title: 'Error', description: 'Failed to check template status', variant: 'destructive' });
+        } finally {
+            setCheckingTemplate(false);
+        }
+    };
+
+    const openNotifySettings = () => {
+        setShowNotifySettings(true);
+        loadNotifySettings();
+    };
+
+    const copyToClipboard = (text: string, label: string) => {
+        navigator.clipboard.writeText(text).then(() => {
+            toast({ title: 'Copied', description: `${label} copied to clipboard` });
+        });
+    };
+
     const toggleNotify = async (flow: Flow) => {
         try {
             setTogglingNotify(flow.id);
@@ -221,7 +304,12 @@ export function FlowsList() {
                         : 'WhatsApp submission notifications turned off',
                 });
             } else {
-                toast({ title: 'Error', description: data.error || 'Failed to update notification setting', variant: 'destructive' });
+                if (data.error === 'setup_required' || data.error === 'template_missing' || data.error === 'same_as_business') {
+                    toast({ title: 'Setup Required', description: data.message, variant: 'destructive' });
+                    openNotifySettings();
+                } else {
+                    toast({ title: 'Error', description: data.message || data.error || 'Failed to update', variant: 'destructive' });
+                }
             }
         } catch {
             toast({ title: 'Error', description: 'Failed to update notification setting', variant: 'destructive' });
@@ -267,11 +355,14 @@ export function FlowsList() {
                     <Button variant="outline" size="icon" onClick={syncFlows} disabled={isRefreshing || syncing || !accountId} title="Sync from Meta">
                         <RefreshCw className={cn("w-4 h-4", (isRefreshing || syncing) && "animate-spin")} />
                     </Button>
-                    {activeTab === 'flows' && (
+                    {activeTab === 'flows' && (<>
+                        <Button variant="outline" size="icon" onClick={openNotifySettings} title="Notification Settings">
+                            <Settings className="w-4 h-4" />
+                        </Button>
                         <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate('/dashboard/whatsapp/flows/new')}>
                             <Plus className="w-4 h-4 mr-2" /> Create Form
                         </Button>
-                    )}
+                    </>)}
                 </div>
             </div>
 
@@ -433,7 +524,7 @@ export function FlowsList() {
                                             <Button
                                                 size="sm"
                                                 variant="outline"
-                                                onClick={() => navigate(`/dashboard/whatsapp/flows/${flow.id}`)}
+                                                onClick={() => navigate(`/dashboard/whatsapp/flows/${flow.id}/edit`)}
                                             >
                                                 <Eye className="w-4 h-4 mr-1" />
                                                 View
@@ -458,6 +549,196 @@ export function FlowsList() {
                 </div>
             )}
             </>)}
+
+            {/* Notification Settings Panel */}
+            {showNotifySettings && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowNotifySettings(false)}>
+                    <div className="bg-background border rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto mx-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-4 border-b">
+                            <h2 className="text-lg font-semibold flex items-center gap-2">
+                                <Bell className="w-5 h-5 text-emerald-600" />
+                                Notification Settings
+                            </h2>
+                            <button onClick={() => setShowNotifySettings(false)} className="p-1 rounded hover:bg-muted">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {notifySettingsLoading ? (
+                            <div className="flex justify-center py-12">
+                                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : (
+                            <div className="p-4 space-y-6">
+
+                                {/* Step 1: Phone Number */}
+                                <div className="space-y-3">
+                                    <h3 className="font-medium flex items-center gap-2">
+                                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold dark:bg-emerald-950 dark:text-emerald-400">1</span>
+                                        Notification Phone Number
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Enter your personal WhatsApp number to receive form submission notifications. This cannot be your business number.
+                                    </p>
+                                    {notifySettings?.business_phone_number && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Your business number: <span className="font-mono">{notifySettings.business_phone_number}</span>
+                                        </p>
+                                    )}
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                            <input
+                                                type="tel"
+                                                placeholder="e.g. 919876543210"
+                                                value={notifyPhone}
+                                                onChange={e => setNotifyPhone(e.target.value)}
+                                                className="w-full pl-9 pr-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                            />
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            onClick={saveNotifyPhone}
+                                            disabled={notifyPhoneSaving || !notifyPhone.trim()}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                        >
+                                            {notifyPhoneSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+                                        </Button>
+                                    </div>
+                                    {notifySettings?.notification_phone_number && (
+                                        <p className="text-xs text-emerald-600 flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3" /> Saved: {notifySettings.notification_phone_number}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <hr />
+
+                                {/* Step 2: Template Setup */}
+                                <div className="space-y-3">
+                                    <h3 className="font-medium flex items-center gap-2">
+                                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold dark:bg-emerald-950 dark:text-emerald-400">2</span>
+                                        WhatsApp Template Setup
+                                    </h3>
+
+                                    {/* Template Status */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm">Status:</span>
+                                        {notifySettings?.template_status === 'approved' ? (
+                                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">Approved</Badge>
+                                        ) : notifySettings?.template_status === 'fallback_approved' ? (
+                                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400">Using Fallback</Badge>
+                                        ) : notifySettings?.template_status === 'pending' ? (
+                                            <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">Pending Approval</Badge>
+                                        ) : notifySettings?.template_status === 'rejected' ? (
+                                            <Badge className="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400">Rejected</Badge>
+                                        ) : (
+                                            <Badge variant="outline">Not Created</Badge>
+                                        )}
+                                        <Button variant="ghost" size="sm" onClick={checkTemplateStatus} disabled={checkingTemplate}>
+                                            {checkingTemplate ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                            <span className="ml-1 text-xs">Check</span>
+                                        </Button>
+                                    </div>
+
+                                    {notifySettings?.template_status === 'approved' ? (
+                                        <p className="text-sm text-emerald-600 flex items-center gap-1">
+                                            <CheckCircle2 className="w-4 h-4" /> Template is approved and ready. You can enable notifications on any form.
+                                        </p>
+                                    ) : (
+                                        <>
+                                            <p className="text-sm text-muted-foreground">
+                                                {notifySettings?.template_status === 'fallback_approved'
+                                                    ? 'Notifications work with the fallback template. For better formatting, create the dedicated template below.'
+                                                    : 'Create this template in Meta Business Manager for form notifications to work.'
+                                                }
+                                            </p>
+
+                                            {/* Template creation guide */}
+                                            <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-sm">
+                                                <p className="font-medium">How to create the template:</p>
+                                                <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground">
+                                                    <li>Go to <strong>Meta Business Manager</strong> &rarr; WhatsApp Manager &rarr; Message Templates</li>
+                                                    <li>Click <strong>"Create Template"</strong></li>
+                                                    <li>Category: Select <strong>Utility</strong></li>
+                                                    <li>
+                                                        Name: Enter exactly
+                                                        <button
+                                                            onClick={() => copyToClipboard(notifySettings?.template_to_create?.name || 'form_submission_alert', 'Template name')}
+                                                            className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-background border rounded text-xs font-mono hover:bg-muted"
+                                                        >
+                                                            {notifySettings?.template_to_create?.name || 'form_submission_alert'}
+                                                            <Copy className="w-3 h-3" />
+                                                        </button>
+                                                    </li>
+                                                    <li>Language: <strong>English</strong></li>
+                                                    <li>
+                                                        Body: Paste the text below
+                                                    </li>
+                                                    <li>Submit for approval (usually approved within minutes)</li>
+                                                    <li>Come back here and click <strong>"Check"</strong> above</li>
+                                                </ol>
+                                            </div>
+
+                                            {/* Template body to copy */}
+                                            <div className="relative">
+                                                <pre className="bg-muted/50 border rounded-lg p-3 text-xs whitespace-pre-wrap font-mono">
+{notifySettings?.template_to_create?.body || `📋 *New Form Submission*
+
+Form: {{1}}
+From: {{2}}
+Submission Details: {{3}}
+Submitted at: {{4}}
+
+Please respond to the customer promptly.`}
+                                                </pre>
+                                                <button
+                                                    onClick={() => copyToClipboard(
+                                                        notifySettings?.template_to_create?.body || "📋 *New Form Submission*\n\nForm: {{1}}\nFrom: {{2}}\nSubmission Details: {{3}}\nSubmitted at: {{4}}\n\nPlease respond to the customer promptly.",
+                                                        'Template body'
+                                                    )}
+                                                    className="absolute top-2 right-2 p-1.5 rounded bg-background border hover:bg-muted"
+                                                    title="Copy template body"
+                                                >
+                                                    <Copy className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+
+                                <hr />
+
+                                {/* Step 3: Enable */}
+                                <div className="space-y-2">
+                                    <h3 className="font-medium flex items-center gap-2">
+                                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold dark:bg-emerald-950 dark:text-emerald-400">3</span>
+                                        Enable Notifications
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Once setup is complete, click the <Bell className="w-3.5 h-3.5 inline" /> bell icon on any form card to enable notifications for that form.
+                                    </p>
+                                    {notifySettings?.notification_phone_number && (notifySettings?.template_status === 'approved' || notifySettings?.template_status === 'fallback_approved') ? (
+                                        <p className="text-sm text-emerald-600 flex items-center gap-1">
+                                            <CheckCircle2 className="w-4 h-4" /> All set! You can enable notifications on individual forms now.
+                                        </p>
+                                    ) : (
+                                        <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-md dark:bg-amber-950/20 dark:border-amber-800">
+                                            <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                                            <p className="text-xs text-amber-700 dark:text-amber-400">
+                                                {!notifySettings?.notification_phone_number
+                                                    ? 'Set your notification phone number above (Step 1)'
+                                                    : 'Create and get the template approved (Step 2)'
+                                                }
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { RefreshCw, Plus, Database, Upload, ArrowLeft, Trash2, FileSpreadsheet, Users, Link2, Edit, CloudDownload, Settings, MessageCircle } from 'lucide-react';
+import { RefreshCw, Plus, Database, Upload, ArrowLeft, Trash2, FileSpreadsheet, Users, Link2, Edit, CloudDownload, Settings, MessageCircle, Download } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { getWorkspaceId } from '../utils/workspaceContext';
 import { cachedFetch } from '../utils/waPersistentCache';
@@ -629,6 +629,28 @@ export default function WhatsAppDatasets() {
         } finally { setUploading(false); }
     };
 
+    const handleDownloadCsv = async () => {
+        if (!selectedDataset) return;
+        try {
+            const res = await cachedFetch(`${WHATSAPP_REST_API_PREFIX}/datasets/${selectedDataset.id}/export-csv`, {
+                waBypass: true,
+            });
+            if (!res.ok) throw new Error('Download failed');
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${selectedDataset.name || 'dataset'}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            toast({ title: "Downloaded", description: `${selectedDataset.name}.csv downloaded.` });
+        } catch (err) {
+            toast({ title: "Error", description: "Failed to download CSV", variant: "destructive" });
+        }
+    };
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !selectedDataset) return;
@@ -834,6 +856,11 @@ export default function WhatsAppDatasets() {
                                         onChange={handleFileUpload}
                                         disabled={uploading}
                                     />
+                                </Button>
+
+                                {/* Download CSV */}
+                                <Button variant="outline" size="sm" onClick={handleDownloadCsv}>
+                                    <Download className="mr-1 h-4 w-4" /> Download CSV
                                 </Button>
                             </div>
                         </div>
