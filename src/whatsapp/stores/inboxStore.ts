@@ -319,8 +319,15 @@ export async function loadConversationList(workspaceId?: string): Promise<void> 
       store.isInitialLoadDone = true;
       store.lastFetchTime = Date.now();
 
-      store.conversationOffset = result.conversations.length;
-      store.hasMoreConversations = result.conversations.length === limit;
+      // Advance the offset by the REQUESTED page size (the raw rows the DB
+      // consumed), NOT the post-dedup array length. The backend dedups
+      // duplicate-phone rows AFTER applying LIMIT, so a full 50-row page can
+      // come back as e.g. 49 — using that shrunken count as the offset (and to
+      // gate hasMore below) was permanently stopping infinite scroll at ~49.
+      // Keep paging until a page returns ZERO rows (dedup can never turn ≥1 raw
+      // rows into 0, so an empty page is the only true end-of-list signal).
+      store.conversationOffset = result.conversations.length > 0 ? limit : 0;
+      store.hasMoreConversations = result.conversations.length > 0;
 
       persistConversationSnapshot(wsId);
 
@@ -374,10 +381,14 @@ export async function loadMoreConversations(): Promise<void> {
         }
       });
       conversationListCache = null;
-      store.conversationOffset += result.conversations.length;
+      // Advance by the requested page size (raw rows consumed), not the
+      // post-dedup count — see the note in the initial-load path above.
+      store.conversationOffset += limit;
     }
 
-    store.hasMoreConversations = result.conversations.length === limit;
+    // Only an empty page means we've reached the end; a short (deduped) page
+    // still has more behind it.
+    store.hasMoreConversations = result.conversations.length > 0;
     console.log('📦 [InboxStore] Loaded next page:', result.conversations.length, 'convs, offset:', store.conversationOffset);
 
   } catch (err) {
