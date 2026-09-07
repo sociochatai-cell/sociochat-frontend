@@ -312,6 +312,12 @@ export interface ValidateTokenResponse {
   user_id?: string;
   name?: string;
   error?: string;
+  // Expiry / permanence (best-effort, from Meta debug_token). Lets the UI tell the
+  // user whether the pasted token is a permanent (never-expiring) System User token.
+  is_permanent?: boolean | null;   // true => never expires
+  expires_at?: number | null;      // unix seconds; 0 => never
+  token_type?: string | null;      // "SYSTEM_USER" | "USER" | ...
+  scopes?: string[];
 }
 
 // ============================================================

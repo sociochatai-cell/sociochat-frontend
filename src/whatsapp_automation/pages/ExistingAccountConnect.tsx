@@ -85,6 +85,12 @@ export const ExistingAccountConnect: React.FC<ExistingAccountConnectProps> = ({
     const [isValidating, setIsValidating] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+    // Permanence/expiry of the pasted token (from Meta debug_token via validate-token).
+    const [tokenInfo, setTokenInfo] = useState<{
+        is_permanent?: boolean | null;
+        expires_at?: number | null;
+        token_type?: string | null;
+    } | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const isReconnect = !!existingAccount;
@@ -102,6 +108,15 @@ export const ExistingAccountConnect: React.FC<ExistingAccountConnectProps> = ({
         try {
             const result = await whatsappApi.validateToken(token);
             setTokenValid(result.valid);
+            setTokenInfo(
+                result.valid
+                    ? {
+                          is_permanent: result.is_permanent,
+                          expires_at: result.expires_at,
+                          token_type: result.token_type,
+                      }
+                    : null,
+            );
             if (!result.valid && result.error) {
                 setError(`Token validation: ${result.error}`);
             } else {
@@ -109,6 +124,7 @@ export const ExistingAccountConnect: React.FC<ExistingAccountConnectProps> = ({
             }
         } catch {
             setTokenValid(false);
+            setTokenInfo(null);
         } finally {
             setIsValidating(false);
         }
@@ -182,6 +198,38 @@ export const ExistingAccountConnect: React.FC<ExistingAccountConnectProps> = ({
                                 rel="noopener noreferrer"
                             >
                                 Open Meta Business Settings
+                                <ExternalLink className="w-3 h-3 ml-1" />
+                            </a>
+                        </Button>
+                    </div>
+                </AlertDescription>
+            </Alert>
+
+            {/* How to create a PERMANENT (never-expiring) token */}
+            <Alert>
+                <HelpCircle className="h-4 w-4" />
+                <AlertTitle>Make it permanent — a token that never expires</AlertTitle>
+                <AlertDescription className="mt-2 space-y-1.5 text-sm">
+                    <p>
+                        A Facebook-login token expires in ~60 days. For a connection that never breaks,
+                        generate a <strong>System User</strong> token set to <strong>Never</strong>:
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1">
+                        <li>Open <strong>Meta Business Settings → Users → System Users</strong>.</li>
+                        <li>Select (or create) a System User and give it <strong>Admin</strong> access to your <strong>WhatsApp Account (WABA)</strong> asset.</li>
+                        <li>Click <strong>Generate new token</strong> → choose your WhatsApp app.</li>
+                        <li>Set <strong>Token expiration = Never</strong> (not 60 days).</li>
+                        <li>Tick the scopes <code>whatsapp_business_messaging</code> and <code>whatsapp_business_management</code>.</li>
+                        <li>Click <strong>Generate</strong>, copy the token, paste it below, then <strong>Save</strong> — we'll confirm it never expires.</li>
+                    </ol>
+                    <div className="flex gap-2 pt-1">
+                        <Button variant="outline" size="sm" asChild>
+                            <a
+                                href="https://business.facebook.com/settings/system-users"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                Open System Users
                                 <ExternalLink className="w-3 h-3 ml-1" />
                             </a>
                         </Button>
@@ -275,6 +323,34 @@ export const ExistingAccountConnect: React.FC<ExistingAccountConnectProps> = ({
                     <p className="text-xs text-muted-foreground">
                         Use a permanent token from System Users for production
                     </p>
+
+                    {/* Permanence indicator — does this token ever expire? */}
+                    {tokenValid === true && tokenInfo && tokenInfo.is_permanent === true && (
+                        <div className="flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                            <span>
+                                <strong>Permanent token</strong> — this token never expires
+                                {tokenInfo.token_type ? ` (${tokenInfo.token_type.replace(/_/g, ' ').toLowerCase()})` : ''}.
+                                You won't need to reconnect again.
+                            </span>
+                        </div>
+                    )}
+                    {tokenValid === true && tokenInfo && tokenInfo.is_permanent === false && (
+                        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                            <span>
+                                This token{' '}
+                                <strong>
+                                    expires
+                                    {tokenInfo.expires_at
+                                        ? ` on ${new Date(tokenInfo.expires_at * 1000).toLocaleDateString()}`
+                                        : ' soon'}
+                                </strong>
+                                . For a connection that never breaks, regenerate it in Meta with{' '}
+                                <strong>Token expiration = Never</strong> (see the steps above) and paste it here.
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Error */}

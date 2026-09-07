@@ -75,7 +75,8 @@ const StatusBadge: React.FC<{ status: ConnectionStatus }> = ({ status }) => {
 const ConnectedAccountView: React.FC<{
     account: AccountSummary;
     onRefresh: () => void;
-}> = ({ account, onRefresh }) => {
+    onUpdateToken: () => void;
+}> = ({ account, onRefresh, onUpdateToken }) => {
     const navigate = useNavigate();
 
     return (
@@ -119,6 +120,17 @@ const ConnectedAccountView: React.FC<{
                     </Button>
                 </div>
             </div>
+
+            {/* Update / set a PERMANENT access token — always available so users can
+                replace an expiring/expired token themselves (no direct link needed). */}
+            <Button
+                variant="outline"
+                onClick={onUpdateToken}
+                className="w-full border-amber-300 text-amber-800 hover:bg-amber-50"
+            >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Update / Set Permanent Access Token
+            </Button>
 
             {/* Test Number Warning */}
             {account.is_test_number && (
@@ -513,8 +525,13 @@ export const WhatsAppConnectionRouter: React.FC<WhatsAppConnectionRouterProps> =
             const result = await whatsappApi.getConnectionPath(workspaceId);
             setConnectionData(result);
 
-            // If already connected, redirect to dashboard
-            if (result.status === 'CONNECTED') {
+            // If already connected, redirect to dashboard — UNLESS the user explicitly
+            // opened the manual form (?manual=1) to update/replace their token (e.g. an
+            // expired one, or swapping to a permanent System User token). In that case we
+            // must stay on this page and show the form instead of bouncing away (blank).
+            const manualRequested =
+                new URLSearchParams(window.location.search).get('manual') === '1';
+            if (result.status === 'CONNECTED' && !manualRequested) {
                 onConnectionComplete?.();
             }
         } catch (err) {
@@ -623,18 +640,22 @@ export const WhatsAppConnectionRouter: React.FC<WhatsAppConnectionRouterProps> =
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                {status === 'CONNECTED' && connectionData?.account_summary ? (
-                    <ConnectedAccountView
-                        account={connectionData.account_summary}
-                        onRefresh={fetchConnectionPath}
-                    />
-                ) : showManualForm ? (
+                {showManualForm ? (
+                    /* Manual form takes priority: an explicit ?manual=1 (or "Update token"
+                       button) must show the paste-token form even when an account is already
+                       connected — e.g. to replace an expired token or set a permanent one. */
                     <ExistingAccountConnect
                         workspaceId={workspaceId}
                         existingAccount={connectionData?.account_summary}
                         onSuccess={handleConnectionSuccess}
                         onCancel={() => setShowManualForm(false)}
                         showCancelButton={true}
+                    />
+                ) : status === 'CONNECTED' && connectionData?.account_summary ? (
+                    <ConnectedAccountView
+                        account={connectionData.account_summary}
+                        onRefresh={fetchConnectionPath}
+                        onUpdateToken={() => setShowManualForm(true)}
                     />
                 ) : (
                     <EmbeddedSignupView

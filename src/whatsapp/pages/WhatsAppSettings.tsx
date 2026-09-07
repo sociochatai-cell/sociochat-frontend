@@ -641,6 +641,11 @@ export function WhatsAppSettings() {
 
   const sendPermissionCheck = healthReport?.checks?.find((c) => c.name === 'messaging_send_permission');
   const webhookSubscriptionCheck = healthReport?.checks?.find((c) => c.name === 'webhook_subscription');
+  // Access-token check: goes critical when the token is invalid/expired (Meta code 190).
+  // The reconnect CTA must surface for THIS too — an expired token is exactly when the
+  // user needs to re-supply a System User token, but the CTA previously only showed for
+  // send-permission / webhook failures, so an expired-token account saw no reconnect button.
+  const accessTokenCheck = healthReport?.checks?.find((c) => c.name === 'access_token');
   const sendPermissionHints = (sendPermissionCheck?.details?.hints as string[] | undefined) || [];
 
   // Get base path from current location (agent or dashboard)
@@ -1261,6 +1266,16 @@ export function WhatsAppSettings() {
                       </div>
                       <span className="text-sm font-medium text-slate-700">Coexistence</span>
                     </button>
+
+                    <button
+                      onClick={() => navigate(`${basePath}/whatsapp/setup?manual=1`)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition-all text-left group"
+                    >
+                      <div className="p-1.5 rounded-md bg-amber-100 group-hover:bg-amber-200 transition-colors">
+                        <RefreshCw className="w-4 h-4 text-amber-700" />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">Update / Permanent Token</span>
+                    </button>
                   </div>
                 </CardContent>
               </Card>
@@ -1437,7 +1452,8 @@ export function WhatsAppSettings() {
                               </div>
                             )}
 
-                            {(sendPermissionCheck?.status === 'critical' ||
+                            {(accessTokenCheck?.status === 'critical' ||
+                              sendPermissionCheck?.status === 'critical' ||
                               webhookSubscriptionCheck?.status === 'critical' ||
                               webhookSubscriptionCheck?.status === 'warning') && (
                               <div className="rounded-lg border border-red-200 bg-red-50/80 p-4 space-y-3">
