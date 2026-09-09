@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Conversation } from '../types';
 import { WHATSAPP_REST_API_PREFIX } from '@/config';
+import { cachedFetch } from '../utils/waPersistentCache';
 
 interface AiInsightsPanelProps {
   conversation: Conversation | null;
@@ -52,18 +53,16 @@ export function AiInsightsPanel({ conversation, isOpen, onClose }: AiInsightsPan
     setLoading(true);
     setError(null);
 
-    const wsId = localStorage.getItem('wa_workspace_id') || '';
-
-    fetch(`${WHATSAPP_REST_API_PREFIX}/conversations/${conversation.id}/insights`, {
-      headers: {
-        'X-Workspace-Id': wsId,
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
+    cachedFetch(`${WHATSAPP_REST_API_PREFIX}/conversations/${conversation.id}/insights`, {
+      waBypass: true,
     })
       .then((r) => r.json())
       .then((data) => {
-        setInsight(data.insight || null);
+        if (data.error) {
+          setError(data.error);
+        } else {
+          setInsight(data.insight || null);
+        }
       })
       .catch(() => {
         setError('Failed to load insights');
