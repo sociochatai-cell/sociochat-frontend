@@ -35,6 +35,7 @@ import {
 import { WHATSAPP_API_BASE_URL } from '@/config';
 import { getWorkspaceId } from '../../utils/workspaceContext';
 import { cachedFetch } from '../../utils/waPersistentCache';
+import { getStoredAccountId } from '../../utils/accountContext';
 
 import { StepCard } from './StepCard';
 import { BlockPalette, BlockPaletteHorizontal } from './BlockPalette';
@@ -108,12 +109,16 @@ export function FlowBuilderV2() {
   // INITIALIZATION
   // ==========================================================================
 
-  // Fetch WhatsApp account
+  // Fetch WhatsApp account — bypass cache to avoid stale empty responses
   useEffect(() => {
     const fetchAccount = async () => {
+      // Try stored account first as immediate fallback
+      const stored = getStoredAccountId();
+      if (stored) setAccountId(stored);
+
       if (!workspaceId) return;
       try {
-        const res = await cachedFetch(`${API_BASE}/api/whatsapp/accounts?workspace_id=${workspaceId}`);
+        const res = await cachedFetch(`${API_BASE}/api/whatsapp/accounts?workspace_id=${workspaceId}`, { waBypass: true });
         const data = await res.json();
         if (data.success && data.accounts?.length > 0) {
           setAccountId((data.accounts.find((a: any) => a.is_active) || data.accounts[0]).id);
@@ -441,6 +446,15 @@ export function FlowBuilderV2() {
       toast({
         title: 'Name required',
         description: 'Please enter a flow name',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (!accountId) {
+      toast({
+        title: 'No WhatsApp account',
+        description: 'Please connect a WhatsApp account first in Settings',
         variant: 'destructive'
       });
       return;
