@@ -11,7 +11,7 @@ import { EmptyState } from './EmptyState';
 import { MessageComposer } from './MessageComposer';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { XCircle, RefreshCcw, User, Clock, Loader2, BarChart3, Power, ChevronLeft, Sparkles } from 'lucide-react';
+import { XCircle, RefreshCcw, User, Clock, Loader2, BarChart3, Power, ChevronLeft, Sparkles, Brain } from 'lucide-react';
 import { ChatAutomationsPanel } from './ChatAutomationsPanel';
 import { toast } from 'sonner';
 import { WHATSAPP_REST_API_PREFIX } from "@/config";
@@ -40,7 +40,7 @@ interface ConversationThreadProps {
   onBack?: () => void;
   showBackButton?: boolean;
   onOpenContactInfo?: () => void;
-  // REMOVED: refreshTrigger - no longer needed, store handles updates
+  onOpenAiInsights?: () => void;
 }
 
 // Module-level template cache (persists across re-renders)
@@ -64,6 +64,7 @@ export function ConversationThread({
   onBack,
   showBackButton = false,
   onOpenContactInfo,
+  onOpenAiInsights,
 }: ConversationThreadProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -570,6 +571,19 @@ export function ConversationThread({
             >
               <BarChart3 className="w-4 h-4" />
               Stats
+            </Button>
+          )}
+
+          {/* AI Insights Button */}
+          {conversation?.id && conversation.id > 0 && onOpenAiInsights && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={onOpenAiInsights}
+            >
+              <Brain className="w-4 h-4" />
+              AI Summary
             </Button>
           )}
 

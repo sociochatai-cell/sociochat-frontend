@@ -47,6 +47,7 @@ export { NavigationCommandCenter } from './NavigationCommandCenter';
 export { ChatAutomationsPanel } from './ChatAutomationsPanel';
 export { ContactInfoPanel } from './ContactInfoPanel';
 export { FlowResponsesPanel } from './FlowResponsesPanel';
+export { AiInsightsPanel } from './AiInsightsPanel';
 
 // Shared cache/refresh controls
 export { RefreshButton, CacheStatusBar, LastUpdated, formatRelativeTime } from './RefreshButton';

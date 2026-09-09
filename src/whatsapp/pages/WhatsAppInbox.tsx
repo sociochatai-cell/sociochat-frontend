@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ConversationList, ConversationThread, TemplatesPanel, InboxLoadingScreen, ContactInfoPanel, FlowResponsesPanel } from '../components';
+import { ConversationList, ConversationThread, TemplatesPanel, InboxLoadingScreen, ContactInfoPanel, FlowResponsesPanel, AiInsightsPanel } from '../components';
 import { Conversation, WhatsAppRealtimeEvent } from '../types';
 import { useWhatsAppRealtime } from '../hooks/useWhatsAppRealtime';
 import logo from '@/assets/sociovia_logo.png';
@@ -89,6 +89,7 @@ export function WhatsAppInbox() {
   const [creatingChat, setCreatingChat] = useState(false);
   const [contactPanelOpen, setContactPanelOpen] = useState(false);
   const [flowPanelOpen, setFlowPanelOpen] = useState(false);
+  const [insightsPanelOpen, setInsightsPanelOpen] = useState(false);
   const [addingToCrm, setAddingToCrm] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const [inboxFilter, setInboxFilter] = useState<InboxFilterType>(initialFilter);
@@ -596,10 +597,12 @@ export function WhatsAppInbox() {
             onBack={handleBackToList}
             showBackButton={isMobile && mobileView === 'chat'}
             onOpenContactInfo={() => setContactPanelOpen(true)}
+            onOpenAiInsights={() => setInsightsPanelOpen(true)}
           />
         </div>
         <ContactInfoPanel conversation={selectedConversation} isOpen={contactPanelOpen} onClose={() => setContactPanelOpen(false)} accountId={account?.id} />
         <FlowResponsesPanel conversation={selectedConversation} isOpen={flowPanelOpen} onClose={() => setFlowPanelOpen(false)} />
+        <AiInsightsPanel conversation={selectedConversation} isOpen={insightsPanelOpen} onClose={() => setInsightsPanelOpen(false)} />
       </div>
 
       <Dialog open={showNewChat} onOpenChange={setShowNewChat}>
