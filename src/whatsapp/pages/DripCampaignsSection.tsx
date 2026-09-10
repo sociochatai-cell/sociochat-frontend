@@ -921,7 +921,7 @@ export function DripCampaignsSection({ accountId: accountIdProp }: { accountId: 
                                                     variant="outline"
                                                     size="sm"
                                                     className="text-amber-700 border-amber-300 hover:bg-amber-100"
-                                                    onClick={() => window.open('/crm/leads', '_blank')}
+                                                    onClick={() => window.open('/dashboard/crm/leads', '_blank')}
                                                 >
                                                     <Users className="w-4 h-4 mr-1" />
                                                     View Leads
@@ -946,7 +946,7 @@ export function DripCampaignsSection({ accountId: accountIdProp }: { accountId: 
                                                     variant="outline"
                                                     size="sm"
                                                     className="text-indigo-700 border-indigo-300 hover:bg-indigo-100"
-                                                    onClick={() => window.open('/crm/contacts', '_blank')}
+                                                    onClick={() => window.open('/dashboard/crm/contacts', '_blank')}
                                                 >
                                                     <Users className="w-4 h-4 mr-1" />
                                                     View Contacts
