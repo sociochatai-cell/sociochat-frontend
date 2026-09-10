@@ -287,7 +287,7 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
                 <nav className="flex-1 min-h-0 overflow-y-auto py-1 px-3 space-y-0.5 no-scrollbar">
                     {isFromSociovia && (
                         <a
-                            href="https://sociovia.com/dashboard"
+                            href={`${window.__SOCIOVIA_DASHBOARD_URL || 'https://sociovia.com/dashboard'}`}
                             className="flex items-center gap-2 px-3 py-2 mb-1 rounded-xl text-[12px] font-semibold text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-800 transition-colors border border-slate-200"
                         >
                             <span className="text-base leading-none">&#8592;</span>
