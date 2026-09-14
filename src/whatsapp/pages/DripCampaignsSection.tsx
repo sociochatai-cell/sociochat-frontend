@@ -1200,15 +1200,6 @@ export function DripCampaignsSection({ accountId: accountIdProp }: { accountId: 
                                                                     setStepFallbacks({});
                                                                 }
                                                                 setStepTemplate(v);
-                                                                // Auto-fill header image from template's stored header_handle
-                                                                const tpl = templates.find(t => t.name === v);
-                                                                const hdr = tpl?.components?.find((c: any) => c.type === 'HEADER');
-                                                                const handles = hdr?.example?.header_handle;
-                                                                if (handles && handles.length > 0) {
-                                                                    setStepHeaderImage(handles[0]);
-                                                                } else {
-                                                                    setStepHeaderImage('');
-                                                                }
                                                             }}>
                                                                 <SelectTrigger className="h-8 bg-white">
                                                                     <SelectValue placeholder="Select template" />

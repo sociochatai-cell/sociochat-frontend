@@ -2763,18 +2763,7 @@ export default function BulkMessaging() {
                                                             setSelectedTemplate(template);
                                                             // Reset image if not an image template
                                                             const hasMediaHeader = templateNeedsMediaHeader(template);
-                                                            if (!hasMediaHeader) {
-                                                                setStepHeaderImage(null);
-                                                            } else {
-                                                                // Auto-fill from template's stored header_handle
-                                                                const hdr = template.components?.find((c: any) => c.type === 'HEADER');
-                                                                const handles = hdr?.example?.header_handle;
-                                                                if (handles && handles.length > 0) {
-                                                                    setStepHeaderImage(handles[0]);
-                                                                } else {
-                                                                    setStepHeaderImage(null);
-                                                                }
-                                                            }
+                                                            if (!hasMediaHeader) setStepHeaderImage(null);
                                                         }}
                                                         className={cn(
                                                             "group relative flex flex-col p-4 rounded-xl border-2 transition-all cursor-pointer hover:border-primary/50",
@@ -2917,20 +2906,22 @@ export default function BulkMessaging() {
                                         {templateNeedsMediaHeader(selectedTemplate) && (
                                             <div className={cn(
                                                 "p-4 rounded-xl border-2 transition-all",
-                                                stepHeaderImage ? "bg-emerald-50 border-emerald-200" : "bg-blue-50 border-blue-200"
+                                                (stepHeaderImage || selectedTemplate?.components?.find((c: any) => c.type === 'HEADER')?.example?.header_handle?.length) ? "bg-emerald-50 border-emerald-200" : "bg-blue-50 border-blue-200"
                                             )}>
                                                 <div className="flex items-center gap-2 mb-2">
-                                                    {stepHeaderImage ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <Info className="w-4 h-4 text-blue-600" />}
-                                                    <span className={cn("text-sm font-bold", stepHeaderImage ? "text-emerald-900" : "text-blue-900")}>
-                                                        {stepHeaderImage ? "Media Ready" : `Header ${getTemplateMediaHeaderFormat(selectedTemplate) || 'Media'} Needed`}
+                                                    {(stepHeaderImage || selectedTemplate?.components?.find((c: any) => c.type === 'HEADER')?.example?.header_handle?.length) ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <Info className="w-4 h-4 text-blue-600" />}
+                                                    <span className={cn("text-sm font-bold", (stepHeaderImage || selectedTemplate?.components?.find((c: any) => c.type === 'HEADER')?.example?.header_handle?.length) ? "text-emerald-900" : "text-blue-900")}>
+                                                        {stepHeaderImage ? "Media Ready" : selectedTemplate?.components?.find((c: any) => c.type === 'HEADER')?.example?.header_handle?.length ? "Media Ready (from template)" : `Header ${getTemplateMediaHeaderFormat(selectedTemplate) || 'Media'} Needed`}
                                                     </span>
                                                 </div>
-                                                <p className={cn("text-xs leading-relaxed mb-3", stepHeaderImage ? "text-emerald-800" : "text-blue-800")}>
+                                                <p className={cn("text-xs leading-relaxed mb-3", (stepHeaderImage || selectedTemplate?.components?.find((c: any) => c.type === 'HEADER')?.example?.header_handle?.length) ? "text-emerald-800" : "text-blue-800")}>
                                                     {stepHeaderImage
                                                         ? "Successfully uploaded. This media will be sent as the header for all messages in this campaign."
-                                                        : `This template requires a ${(getTemplateMediaHeaderFormat(selectedTemplate) || 'media').toLowerCase()} header. Click the upload area in the preview to add one.`}
+                                                        : selectedTemplate?.components?.find((c: any) => c.type === 'HEADER')?.example?.header_handle?.length
+                                                            ? "This template has an approved image that will be used automatically. You can optionally upload a different one."
+                                                            : `This template requires a ${(getTemplateMediaHeaderFormat(selectedTemplate) || 'media').toLowerCase()} header. Click the upload area in the preview to add one.`}
                                                 </p>
-                                                {!stepHeaderImage && (
+                                                {!stepHeaderImage && !selectedTemplate?.components?.find((c: any) => c.type === 'HEADER')?.example?.header_handle?.length && (
                                                     <div className="relative">
                                                         <Button variant="outline" size="sm" className="w-full bg-white border-blue-300" disabled={uploadingImage}>
                                                             {uploadingImage ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Upload className="w-3 h-3 mr-2" />}
@@ -3834,7 +3825,7 @@ export default function BulkMessaging() {
                                 setCurrentStep(prev => prev + 1);
                             }}
                             disabled={
-                                (currentStep === 0 && (!campaignName || !selectedTemplate || (templateNeedsMediaHeader(selectedTemplate) && !stepHeaderImage))) ||
+                                (currentStep === 0 && (!campaignName || !selectedTemplate || (templateNeedsMediaHeader(selectedTemplate) && !stepHeaderImage && !selectedTemplate?.components?.find((c: any) => c.type === 'HEADER')?.example?.header_handle?.length))) ||
                                 (currentStep === 1 && recipients.length === 0 && !phoneNumbersText.trim())
                             }
                         >
