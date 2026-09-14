@@ -2763,7 +2763,18 @@ export default function BulkMessaging() {
                                                             setSelectedTemplate(template);
                                                             // Reset image if not an image template
                                                             const hasMediaHeader = templateNeedsMediaHeader(template);
-                                                            if (!hasMediaHeader) setStepHeaderImage(null);
+                                                            if (!hasMediaHeader) {
+                                                                setStepHeaderImage(null);
+                                                            } else {
+                                                                // Auto-fill from template's stored header_handle
+                                                                const hdr = template.components?.find((c: any) => c.type === 'HEADER');
+                                                                const handles = hdr?.example?.header_handle;
+                                                                if (handles && handles.length > 0) {
+                                                                    setStepHeaderImage(handles[0]);
+                                                                } else {
+                                                                    setStepHeaderImage(null);
+                                                                }
+                                                            }
                                                         }}
                                                         className={cn(
                                                             "group relative flex flex-col p-4 rounded-xl border-2 transition-all cursor-pointer hover:border-primary/50",
