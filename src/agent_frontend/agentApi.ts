@@ -39,7 +39,9 @@ export const agentApi = {
     if (sessionId) body.session_id = sessionId;
     if (workspaceId) body.workspace_id = workspaceId;
 
-    const res = await apiClient.post<AgentResponse>('/agent/chat', body);
+    // Cap the wait so a slow/failed model surfaces as an error instead of an
+    // indefinitely spinning typing indicator with a disabled input.
+    const res = await apiClient.post<AgentResponse>('/agent/chat', body, { timeoutMs: 45000 });
     if (res.ok && res.data) return res.data;
     throw new Error(res.error?.message || res.error || 'Agent request failed');
   },

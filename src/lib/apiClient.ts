@@ -104,7 +104,12 @@ async function request<T = any>(path: string, opts: RequestInit = {}): Promise<A
     }
 
     return { ok: true, status: res.status, data: body, headers: resHeaders };
-  } catch (err) {
+  } catch (err: any) {
+    // A timeout (AbortController) surfaces as an AbortError — turn it into a
+    // clear message so callers can show "timed out" instead of spinning.
+    if (err?.name === "AbortError") {
+      return { ok: false, status: 0, error: { message: "Request timed out. Please try again." } };
+    }
     return { ok: false, status: 0, error: err };
   }
 }
@@ -120,8 +125,19 @@ async function get<T = any>(path: string, params?: Record<string, any>) {
   }
   return request<T>(p, { method: "GET" });
 }
-async function post<T = any>(path: string, body?: any) {
-  return request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
+async function post<T = any>(path: string, body?: any, opts?: { timeoutMs?: number }) {
+  const init: RequestInit = { method: "POST", body: body ? JSON.stringify(body) : undefined };
+  if (opts?.timeoutMs && typeof AbortController !== "undefined") {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs);
+    init.signal = ctrl.signal;
+    try {
+      return await request<T>(path, init);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return request<T>(path, init);
 }
 async function put<T = any>(path: string, body?: any) {
   return request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined });

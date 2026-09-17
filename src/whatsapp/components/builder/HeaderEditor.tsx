@@ -130,8 +130,11 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                 onChange({
                     ...header,
                     type: header.type,
-                    imageUrl: previewUrl,
+                    // Prefer the hosted URL the backend returns — it survives reload
+                    // and is what the preview/send re-use. Fall back to the local blob.
+                    imageUrl: data.url || previewUrl,
                     mediaHandle: data.handle,
+                    mediaUrl: data.url || undefined,
                 });
                 setUploadError(null);
             } else {
@@ -191,8 +194,9 @@ export function HeaderEditor({ header, onChange, error, accountId }: HeaderEdito
                 onChange({
                     ...header,
                     type: header.type,
-                    imageUrl: urlInput,
+                    imageUrl: data.url || urlInput,
                     mediaHandle: data.handle,
+                    mediaUrl: data.url || urlInput,
                 });
                 setUploadError(null);
             } else {

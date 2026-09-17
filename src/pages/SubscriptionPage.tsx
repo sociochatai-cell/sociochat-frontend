@@ -171,6 +171,11 @@ export default function SubscriptionPage() {
     const [selecting, setSelecting] = useState<string | null>(null);
     const [usage, setUsage] = useState<Record<string, unknown> | null>(null);
     const [autoRenew, setAutoRenew] = useState(true);  // auto-renew opt-in at checkout
+    // Recovery for a checkout the user started but didn't complete (e.g. declined
+    // on PayU and got stranded). We remember the last txnid in localStorage and
+    // check its status here so they never have to "log in again in another tab".
+    const [pendingTxn, setPendingTxn] = useState<{ txnid: string; status: string; plan?: string } | null>(null);
+    const [checkingTxn, setCheckingTxn] = useState(false);
 
     useEffect(() => {
         const userId = localStorage.getItem('sv_user_id');
@@ -179,6 +184,47 @@ export default function SubscriptionPage() {
             navigate('/signup', { replace: true });
         }
     }, [navigate]);
+
+    // On return to this page, surface any not-yet-successful last transaction.
+    const refreshPendingTxn = async () => {
+        let txnid: string | null = null;
+        try { txnid = localStorage.getItem('sv_last_txnid'); } catch { /* ignore */ }
+        if (!txnid) { setPendingTxn(null); return; }
+        setCheckingTxn(true);
+        try {
+            const userId = localStorage.getItem('sv_user_id');
+            const svToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
+            const res = await fetch(`${API_BASE_URL}/api/payments/status/${encodeURIComponent(txnid)}`, {
+                credentials: 'include',
+                headers: {
+                    ...(userId ? { 'X-User-Id': userId } : {}),
+                    ...(svToken ? { Authorization: `Bearer ${svToken}` } : {}),
+                },
+            });
+            const data = await res.json().catch(() => ({}));
+            // Endpoint returns { success, transaction: { status, ... } }.
+            const status = String(data?.transaction?.status || '').toLowerCase();
+            if (status === 'success' || status === 'completed') {
+                // Resolved — clear the marker so the banner doesn't reappear.
+                try { localStorage.removeItem('sv_last_txnid'); localStorage.removeItem('sv_last_txn_plan'); } catch { /* ignore */ }
+                setPendingTxn(null);
+                refreshPlan?.();
+            } else {
+                let plan: string | undefined;
+                try { plan = localStorage.getItem('sv_last_txn_plan') || undefined; } catch { /* ignore */ }
+                setPendingTxn({ txnid, status: status || 'pending', plan });
+            }
+        } catch {
+            // Network hiccup — keep whatever we knew; don't strand the user.
+        } finally {
+            setCheckingTxn(false);
+        }
+    };
+
+    useEffect(() => {
+        refreshPendingTxn();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         const loadPlans = async () => {
@@ -306,6 +352,34 @@ export default function SubscriptionPage() {
                         </p>
                     )}
                 </div>
+
+                {pendingTxn && (
+                    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="flex-1">
+                            <p className="text-sm font-semibold text-amber-900">
+                                Your last payment wasn’t completed
+                            </p>
+                            <p className="text-xs text-amber-800 mt-0.5">
+                                Transaction <span className="font-mono">{pendingTxn.txnid}</span>
+                                {pendingTxn.plan ? <> for the <span className="font-semibold capitalize">{PLAN_LABELS[pendingTxn.plan] || pendingTxn.plan}</span> plan</> : null}
+                                {' '}is currently <span className="font-semibold">{pendingTxn.status}</span>. You can check its status or try again — no need to log in again.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <Button size="sm" variant="outline" onClick={refreshPendingTxn} disabled={checkingTxn}>
+                                {checkingTxn ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+                                Check status
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => { try { localStorage.removeItem('sv_last_txnid'); localStorage.removeItem('sv_last_txn_plan'); } catch { /* ignore */ } setPendingTxn(null); }}
+                            >
+                                Dismiss
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 {isFeatureEnabled('recurring_payment') && (
                   <>

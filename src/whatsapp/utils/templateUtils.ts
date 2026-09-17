@@ -28,6 +28,7 @@ export interface TemplateHeader {
     text?: string;
     imageUrl?: string;    // Preview URL for uploaded media (image/video/document)
     mediaHandle?: string; // Meta media_handle from Resumable Upload API (required for media formats)
+    mediaUrl?: string;    // Hosted, viewable URL of the media (for preview + re-send)
 }
 
 export interface TemplateState {
@@ -72,6 +73,9 @@ export interface MetaComponent {
         header_handle?: string[];
         header_text?: string[];
         header_text_named_params?: Array<{ param_name: string; example: string }>;
+        // Hosted viewable URL of the header media (our own field; the backend
+        // stores it and strips it from the payload sent to Meta).
+        header_url?: string;
     };
     buttons?: Array<{
         type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'FLOW' | 'COPY_CODE' | 'VOICE_CALL' | 'CATALOG';
@@ -533,6 +537,10 @@ export function buildMetaTemplateComponents(state: TemplateState): MetaComponent
             format: formatMap[state.header.type],
             example: {
                 header_handle: [state.header.mediaHandle],
+                // Hosted, viewable URL — the backend keeps this for the local
+                // template record (preview + re-send) and strips it from the
+                // payload it sends to Meta (Meta only accepts header_handle).
+                ...(state.header.mediaUrl ? { header_url: state.header.mediaUrl } : {}),
             },
         });
     } else if (state.header.type === 'location') {

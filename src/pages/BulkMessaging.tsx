@@ -2818,21 +2818,23 @@ export default function BulkMessaging() {
                                                             const isImage = headerComp.format === 'IMAGE';
                                                             return (
                                                                 <div className="mb-3 rounded-md overflow-hidden bg-gray-100 aspect-video flex flex-col items-center justify-center border group relative">
-                                                                    {stepHeaderImage ? (
+                                                                    {(stepHeaderImage || (isImage && headerComp?.example?.header_handle?.[0])) ? (
                                                                         <>
                                                                             {isImage ? (
-                                                                                <img src={stepHeaderImage} alt="Header" className="w-full h-full object-cover" />
+                                                                                <img src={stepHeaderImage || headerComp?.example?.header_handle?.[0]} alt="Header" className="w-full h-full object-cover" />
                                                                             ) : (
                                                                                 <div className="flex flex-col items-center gap-2 p-4 text-center text-muted-foreground">
                                                                                     <span className="text-xs font-medium">{headerComp.format} uploaded</span>
                                                                                 </div>
                                                                             )}
+                                                                            {stepHeaderImage && (
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); setStepHeaderImage(null); }}
                                                                                 className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                                                                             >
                                                                                 <X className="w-3 h-3" />
                                                                             </button>
+                                                                            )}
                                                                         </>
                                                                     ) : (
                                                                         <div className="flex flex-col items-center gap-2 p-4 text-center">
@@ -2843,7 +2845,7 @@ export default function BulkMessaging() {
                                                                                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-1">
                                                                                         <Upload className="w-5 h-5" />
                                                                                     </div>
-                                                                                    <p className="text-[10px] font-medium text-muted-foreground">Upload Header Image</p>
+                                                                                    <p className="text-[10px] font-medium text-muted-foreground">Upload Header Image (optional)</p>
                                                                                     <input
                                                                                         type="file"
                                                                                         className="absolute inset-0 opacity-0 cursor-pointer"
@@ -3624,9 +3626,9 @@ export default function BulkMessaging() {
                                                 {/* Media Header Placeholders */}
                                                 {templateNeedsMediaHeader(selectedTemplate) && (
                                                     <div className="mb-2 h-40 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center border">
-                                                        {stepHeaderImage ? (
+                                                        {(stepHeaderImage || selectedTemplate?.components?.find((c: any) => c.type === 'HEADER')?.example?.header_handle?.[0]) ? (
                                                             getTemplateMediaHeaderFormat(selectedTemplate) === 'IMAGE' ? (
-                                                                <img src={stepHeaderImage} alt="Header" className="w-full h-full object-cover" />
+                                                                <img src={stepHeaderImage || selectedTemplate?.components?.find((c: any) => c.type === 'HEADER')?.example?.header_handle?.[0]} alt="Header" className="w-full h-full object-cover" />
                                                             ) : (
                                                                 <span className="text-xs text-muted-foreground">{getTemplateMediaHeaderFormat(selectedTemplate)} header uploaded</span>
                                                             )

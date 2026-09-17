@@ -90,6 +90,17 @@ export async function startPayuCheckout(
                 isTenantLicense: !!(data && data.is_tenant_license),
             };
         }
+        // Remember this transaction so that if PayU never redirects back (the
+        // user declines/cancels and is left on PayU's own screen), the app can
+        // recover — the Subscription page reads sv_last_txnid on return and
+        // offers a "check status / try again" path instead of stranding them.
+        try {
+            const txnid = data?.params?.txnid;
+            if (txnid) {
+                localStorage.setItem('sv_last_txnid', String(txnid));
+                localStorage.setItem('sv_last_txn_plan', String(plan));
+            }
+        } catch { /* ignore */ }
         submitToPayu(data.action, data.params);
         return { ok: true };
     } catch {
