@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import apiClient from "@/lib/apiClient";
-import { Sparkles, Loader2, ArrowLeft } from "lucide-react";
+import { Sparkles, Loader2, ArrowLeft, ImagePlus } from "lucide-react";
 
 /**
  * Business Profile page (/dashboard/workspaces/:id/profile).
@@ -42,6 +42,9 @@ export default function BusinessProfilePage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [logoPath, setLogoPath] = useState<string>("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Prefill from the existing workspace record.
   useEffect(() => {
@@ -66,6 +69,7 @@ export default function BusinessProfilePage() {
               social_links: ws.social_links || "",
             }));
             if (ws.website) setAnalyzeUrl(ws.website);
+            if (ws.logo_path) setLogoPath(String(ws.logo_path));
           }
         }
       } finally {
@@ -73,6 +77,43 @@ export default function BusinessProfilePage() {
       }
     })();
   }, [id]);
+
+  const uploadLogo = async (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Please choose an image file", variant: "destructive" });
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append("logo", file);
+      // Multipart upload — can't go through apiClient (JSON only). Send cookies
+      // plus the same fallback identity headers the rest of the app uses.
+      const headers: Record<string, string> = {};
+      const uid = localStorage.getItem("sv_user_id");
+      const tok = sessionStorage.getItem("sv_token") || localStorage.getItem("sv_token");
+      if (uid) headers["X-User-Id"] = uid;
+      if (tok) headers["Authorization"] = `Bearer ${tok}`;
+      const res = await fetch(`${apiClient.API_BASE}/workspaces/${id}/logo`, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success && data.logo_path) {
+        setLogoPath(String(data.logo_path));
+        toast({ title: "Logo uploaded", description: "It'll be used in your AI-generated ads." });
+      } else {
+        toast({ title: "Logo upload failed", description: data?.error || "Please try again.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Logo upload failed", description: "Please check your connection.", variant: "destructive" });
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const set = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [k]: e.target.value });
@@ -191,6 +232,33 @@ export default function BusinessProfilePage() {
               {field("What does your business do?", "description", "One or two lines about your business", true)}
               {field("Unique selling points (USP)", "usp", "What makes you different", true)}
               {field("Target audience", "audience_description", "Who are your customers?", true)}
+
+              {/* Brand logo — auto-fetch doesn't grab this, so the user adds it.
+                  It's saved to the workspace and composed into AI-generated ads. */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">Brand logo</label>
+                <p className="text-xs text-slate-500 -mt-1">Used on your AI-generated ad creatives. PNG or JPG, up to 5MB.</p>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.currentTarget.value = ""; }}
+                />
+                <div className="flex items-center gap-3">
+                  <div className="h-16 w-16 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                    {logoPath ? (
+                      <img src={logoPath} alt="Brand logo" className="h-full w-full object-contain" />
+                    ) : (
+                      <ImagePlus className="h-6 w-6 text-slate-300" />
+                    )}
+                  </div>
+                  <Button type="button" variant="outline" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo} className="gap-1.5">
+                    {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                    {uploadingLogo ? "Uploading…" : logoPath ? "Replace logo" : "Upload logo"}
+                  </Button>
+                </div>
+              </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => navigate("/dashboard")} disabled={saving}>Skip for now</Button>
