@@ -3,7 +3,7 @@
 // Individual message display (incoming/outgoing)
 
 import { format } from 'date-fns';
-import { Check, CheckCheck, AlertCircle, Image, Video, FileText, Mic, Clock, Star, ExternalLink, ShoppingCart } from 'lucide-react';
+import { Check, CheckCheck, AlertCircle, Image, Video, FileText, Mic, Clock, Star, ExternalLink, ShoppingCart, Play, Pause, Download } from 'lucide-react';
 import { ConversationMessage } from '../types';
 import { cn } from '@/lib/utils';
 import {
@@ -222,14 +222,7 @@ function renderMessageContent(message: ConversationMessage, isOutgoing: boolean,
       return renderVideoMessage(content, isOutgoing);
 
     case 'audio':
-      return (
-        <div className="px-4 py-2">
-          <div className="flex items-center gap-2 bg-black/10 rounded p-3">
-            <Mic className="w-5 h-5" />
-            <span>Audio message</span>
-          </div>
-        </div>
-      );
+      return renderAudioMessage(content, isOutgoing);
 
     case 'document':
       return renderDocumentMessage(content, isOutgoing);
@@ -260,6 +253,7 @@ function renderMessageContent(message: ConversationMessage, isOutgoing: boolean,
       const fallbackType = String(content?.type || '').toLowerCase();
       if (fallbackType === 'image') return renderImageMessage(content, isOutgoing);
       if (fallbackType === 'video') return renderVideoMessage(content, isOutgoing);
+      if (fallbackType === 'audio') return renderAudioMessage(content, isOutgoing);
       if (fallbackType === 'document') return renderDocumentMessage(content, isOutgoing);
       if (fallbackType === 'sticker') return renderStickerMessage(content, isOutgoing);
       if (fallbackType === 'interactive') return renderInteractiveMessage(content, isOutgoing);
@@ -533,6 +527,51 @@ function renderImageMessage(content: any, isOutgoing: boolean) {
       {content?.caption && (
         <p className="px-4 py-2 break-words">{String(content.caption)}</p>
       )}
+    </div>
+  );
+}
+
+function renderAudioMessage(content: any, isOutgoing: boolean) {
+  const workspaceId = getWorkspaceId();
+  const mediaId = content?.id || content?.audio?.id;
+
+  const audioUrl = (mediaId && typeof mediaId === 'string' && mediaId.length > 5)
+    ? `${WHATSAPP_REST_API_PREFIX}/media/${mediaId}?workspace_id=${workspaceId}`
+    : (content?.audio?.link || content?.url || content?.link || content?.media_url);
+
+  if (!audioUrl) {
+    return (
+      <div className="px-4 py-2">
+        <div className="flex items-center gap-2 bg-black/10 rounded-lg p-3">
+          <Mic className="w-5 h-5 opacity-60" />
+          <span className="text-sm opacity-70">Voice message unavailable</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 py-2">
+      <div className={cn(
+        "flex items-center gap-3 rounded-lg p-3 min-w-[240px]",
+        isOutgoing ? "bg-white/15" : "bg-black/5"
+      )}>
+        <div className={cn(
+          "flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center",
+          isOutgoing ? "bg-white/20" : "bg-emerald-100"
+        )}>
+          <Mic className={cn("w-5 h-5", isOutgoing ? "text-white" : "text-emerald-600")} />
+        </div>
+        <audio
+          controls
+          preload="none"
+          className="flex-1 min-w-0 h-8"
+          style={{ maxWidth: '100%' }}
+        >
+          <source src={audioUrl} />
+          Your browser does not support audio playback.
+        </audio>
+      </div>
     </div>
   );
 }
