@@ -202,7 +202,13 @@ interface PendingUpload {
     startTime: number;
     jobId?: string;  // For crawl jobs
     status?: string; // running, completed, failed
+    error?: string;  // Human-readable failure reason (shown when status === 'failed')
 }
+
+// Client-side upload size cap (bytes). Files above this are rejected before
+// hitting the network so the user gets an immediate, clear error rather than
+// a silent 413/timeout from the proxy layer.
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSectionProps) {
     const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
@@ -228,6 +234,9 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
 
         const interval = setInterval(() => {
             setPendingUploads(prev => prev.map(upload => {
+                // Don't animate failed tiles — leave their error state alone.
+                if (upload.status === 'failed') return upload;
+
                 const elapsed = Date.now() - upload.startTime;
                 const elapsedSec = elapsed / 1000;
 
@@ -472,19 +481,25 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         setShowUploadDialog(false);
         setUploadError('');
 
-        // Create pending uploads for all selected files
+        // Create pending uploads for all selected files (or a failed tile up-front
+        // if the file blows past the client-side size cap so the user sees WHY).
         const pendingIds: string[] = [];
         const newPendingUploads: PendingUpload[] = [];
 
         Array.from(files).forEach((file, index) => {
             const pendingId = `pending-${Date.now()}-${index}`;
             pendingIds.push(pendingId);
+            const oversized = file.size > MAX_UPLOAD_BYTES;
             newPendingUploads.push({
                 id: pendingId,
                 title: file.name,
                 source_type: 'uploaded_file',
-                progress: 0,
+                progress: oversized ? 100 : 0,
                 startTime: Date.now(),
+                status: oversized ? 'failed' : undefined,
+                error: oversized
+                    ? `File is ${(file.size / (1024 * 1024)).toFixed(1)} MB — please keep uploads under ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB.`
+                    : undefined,
             });
         });
 
@@ -495,6 +510,9 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const pendingId = pendingIds[i];
+
+            // Skip oversized files — their failed tile is already visible.
+            if (file.size > MAX_UPLOAD_BYTES) continue;
 
             try {
                 // Update progress for current file
@@ -512,18 +530,34 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
                     body: formData,
                 });
 
-                const data = await res.json();
-
-                // Remove this pending upload
-                setPendingUploads(prev => prev.filter(u => u.id !== pendingId));
+                // Response may not be JSON (e.g. 413/502 from proxy) — parse defensively.
+                let data: any = {};
+                try { data = await res.json(); } catch { data = {}; }
 
                 if (!res.ok || !data.success) {
-                    console.error(`Upload failed for ${file.name}:`, data.message || 'Upload failed');
+                    // Keep the tile, mark as failed with a real reason so user can retry.
+                    const reason =
+                        data?.message || data?.error ||
+                        (res.status === 401 ? 'Session expired — please refresh and sign in again.'
+                            : res.status === 413 ? 'File is too large for the server to accept.'
+                            : res.status === 415 ? 'File type not supported.'
+                            : `Upload failed (HTTP ${res.status}).`);
+                    setPendingUploads(prev => prev.map(u =>
+                        u.id === pendingId ? { ...u, status: 'failed', progress: 100, error: reason } : u
+                    ));
+                    console.error(`Upload failed for ${file.name}:`, reason);
+                    continue;
                 }
-            } catch (err) {
-                // Remove pending upload on error
+
+                // Success — remove the tile; the real doc appears via loadData() below.
                 setPendingUploads(prev => prev.filter(u => u.id !== pendingId));
-                console.error(`Upload failed for ${file.name}. Please try again.`);
+            } catch (err: any) {
+                setPendingUploads(prev => prev.map(u =>
+                    u.id === pendingId
+                        ? { ...u, status: 'failed', progress: 100, error: err?.message || 'Network error — check your connection and try again.' }
+                        : u
+                ));
+                console.error(`Upload failed for ${file.name}:`, err);
             }
         }
 
@@ -533,6 +567,11 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
 
         // Reset the file input so the same files can be selected again
         e.target.value = '';
+    };
+
+    // Dismiss a failed pending upload tile (user acknowledges the error).
+    const dismissPendingUpload = (id: string) => {
+        setPendingUploads(prev => prev.filter(u => u.id !== id));
     };
 
     // Add URL
@@ -918,35 +957,61 @@ export default function KnowledgeBaseSection({ workspaceId }: KnowledgeBaseSecti
                                 </Label>
                                 <div className="space-y-2 max-h-60 overflow-y-auto">
                                     {/* Pending uploads - show at top with loading animation */}
-                                    {pendingUploads.map((pending) => (
-                                        <div
-                                            key={pending.id}
-                                            className="relative p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200 overflow-hidden"
-                                        >
-                                            {/* Progress bar background */}
+                                    {pendingUploads.map((pending) => {
+                                        const failed = pending.status === 'failed';
+                                        return (
                                             <div
-                                                className="absolute inset-0 bg-gradient-to-r from-blue-100 to-green-100 transition-all duration-300 ease-out"
-                                                style={{ width: `${pending.progress}%`, opacity: 0.8 }}
-                                            />
-                                            <div className="relative flex items-center gap-3">
-                                                <div className="p-2 bg-white rounded-lg border animate-pulse">
-                                                    {SOURCE_TYPE_ICONS[pending.source_type] || <FileText className="w-4 h-4" />}
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="font-medium text-sm">{pending.title}</p>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <Badge variant="outline" className="text-xs">
-                                                            {SOURCE_TYPE_LABELS[pending.source_type] || pending.source_type}
-                                                        </Badge>
-                                                        <Badge className="bg-blue-100 text-blue-700 text-xs animate-pulse">
-                                                            <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-                                                            Processing... {Math.round(pending.progress)}%
-                                                        </Badge>
+                                                key={pending.id}
+                                                className={`relative p-3 rounded-lg border overflow-hidden ${
+                                                    failed
+                                                        ? 'bg-red-50 border-red-200'
+                                                        : 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200'
+                                                }`}
+                                            >
+                                                {/* Progress bar background (hidden on failure) */}
+                                                {!failed && (
+                                                    <div
+                                                        className="absolute inset-0 bg-gradient-to-r from-blue-100 to-green-100 transition-all duration-300 ease-out"
+                                                        style={{ width: `${pending.progress}%`, opacity: 0.8 }}
+                                                    />
+                                                )}
+                                                <div className="relative flex items-center gap-3">
+                                                    <div className={`p-2 bg-white rounded-lg border ${failed ? '' : 'animate-pulse'}`}>
+                                                        {SOURCE_TYPE_ICONS[pending.source_type] || <FileText className="w-4 h-4" />}
                                                     </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-sm truncate">{pending.title}</p>
+                                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                            <Badge variant="outline" className="text-xs">
+                                                                {SOURCE_TYPE_LABELS[pending.source_type] || pending.source_type}
+                                                            </Badge>
+                                                            {failed ? (
+                                                                <Badge className="bg-red-100 text-red-700 text-xs">Upload failed</Badge>
+                                                            ) : (
+                                                                <Badge className="bg-blue-100 text-blue-700 text-xs animate-pulse">
+                                                                    <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                                                                    Processing... {Math.round(pending.progress)}%
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        {failed && pending.error && (
+                                                            <p className="text-xs text-red-700 mt-1">{pending.error}</p>
+                                                        )}
+                                                    </div>
+                                                    {failed && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => dismissPendingUpload(pending.id)}
+                                                            className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-100"
+                                                        >
+                                                            Dismiss
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
 
                                     {/* Existing documents */}
                                     {documents.map((doc) => (
