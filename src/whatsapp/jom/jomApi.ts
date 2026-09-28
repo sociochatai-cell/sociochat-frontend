@@ -108,7 +108,7 @@ const wsq = (workspaceId: string) => `workspace_id=${encodeURIComponent(workspac
 export const jomApi = {
   listDepartments: (workspaceId: string) =>
     apiClient.get<{ success: boolean; departments: JomDepartment[] }>(
-      "/api/jom/departments",
+      "/jom/departments",
       { workspace_id: workspaceId }
     ),
 
@@ -116,7 +116,7 @@ export const jomApi = {
     workspaceId: string,
     body: { name: string; match_keywords?: string[]; routing_mode?: string; sort_order?: number }
   ) =>
-    apiClient.post<{ success: boolean; department: JomDepartment }>("/api/jom/departments", {
+    apiClient.post<{ success: boolean; department: JomDepartment }>("/jom/departments", {
       workspace_id: Number(workspaceId),
       ...body,
     }),
@@ -127,49 +127,49 @@ export const jomApi = {
     body: Partial<{ name: string; match_keywords: string[]; routing_mode: string; is_active: boolean; sort_order: number }>
   ) =>
     apiClient.patch<{ success: boolean; department: JomDepartment }>(
-      `/api/jom/departments/${departmentId}`,
+      `/jom/departments/${departmentId}`,
       { workspace_id: Number(workspaceId), ...body }
     ),
 
   deleteDepartment: (workspaceId: string, departmentId: number) =>
     apiClient.delete<{ success: boolean }>(
-      `/api/jom/departments/${departmentId}?${wsq(workspaceId)}`
+      `/jom/departments/${departmentId}?${wsq(workspaceId)}`
     ),
 
   addAgent: (workspaceId: string, departmentId: number, agentId: number) =>
     apiClient.post<{ success: boolean; agent_ids: number[] }>(
-      `/api/jom/departments/${departmentId}/agents`,
+      `/jom/departments/${departmentId}/agents`,
       { workspace_id: Number(workspaceId), agent_id: agentId }
     ),
 
   removeAgent: (workspaceId: string, departmentId: number, agentId: number) =>
     apiClient.delete<{ success: boolean; agent_ids: number[] }>(
-      `/api/jom/departments/${departmentId}/agents/${agentId}?${wsq(workspaceId)}`
+      `/jom/departments/${departmentId}/agents/${agentId}?${wsq(workspaceId)}`
     ),
 
   /** Manual override: a human sets a lead's status. */
   setLeadStatus: (workspaceId: string, customerPhone: string, status: string, reason?: string) =>
     apiClient.patch<{ success: boolean; old_status: string; status: string }>(
-      `/api/jom/leads/${encodeURIComponent(customerPhone)}/status`,
+      `/jom/leads/${encodeURIComponent(customerPhone)}/status`,
       { workspace_id: Number(workspaceId), status, ...(reason ? { reason } : {}) }
     ),
 
   /** Demo data for showing the client a populated dashboard. */
   seedDemo: (workspaceId: string) =>
-    apiClient.post<{ success: boolean; seeded: number }>("/api/jom/leads/demo-seed", { workspace_id: Number(workspaceId) }),
+    apiClient.post<{ success: boolean; seeded: number }>("/jom/leads/demo-seed", { workspace_id: Number(workspaceId) }),
   clearDemo: (workspaceId: string) =>
-    apiClient.post<{ success: boolean; cleared: number }>("/api/jom/leads/demo-clear", { workspace_id: Number(workspaceId) }),
+    apiClient.post<{ success: boolean; cleared: number }>("/jom/leads/demo-clear", { workspace_id: Number(workspaceId) }),
 
   /** Per-day outcome report for the CRM date filter. */
   getSummary: (workspaceId: string, days = 30) =>
-    apiClient.get<JomSummary>("/api/jom/leads/summary", {
+    apiClient.get<JomSummary>("/jom/leads/summary", {
       workspace_id: workspaceId,
       days: String(days),
     }),
 
   /** Google Sheet lead intake — config + health. */
   getSheet: (workspaceId: string) =>
-    apiClient.get<{ success: boolean; config: JomSheetConfig }>("/api/jom/sheet", {
+    apiClient.get<{ success: boolean; config: JomSheetConfig }>("/jom/sheet", {
       workspace_id: workspaceId,
     }),
 
@@ -177,20 +177,20 @@ export const jomApi = {
     workspaceId: string,
     body: Partial<{ sheet_url: string; enabled: boolean; header_map: Record<string, string> }>
   ) =>
-    apiClient.post<{ success: boolean; config: JomSheetConfig; error?: string }>("/api/jom/sheet", {
+    apiClient.post<{ success: boolean; config: JomSheetConfig; error?: string }>("/jom/sheet", {
       workspace_id: Number(workspaceId),
       ...body,
     }),
 
   syncSheet: (workspaceId: string, sendOpening = true) =>
-    apiClient.post<JomSheetSyncResult>("/api/jom/sheet/sync", {
+    apiClient.post<JomSheetSyncResult>("/jom/sheet/sync", {
       workspace_id: Number(workspaceId),
       send_opening: sendOpening,
     }),
 
   /** Owner-editable cadence / qualify threshold / template mapping. */
   getSettings: (workspaceId: string) =>
-    apiClient.get<JomSettingsResponse>("/api/jom/settings", { workspace_id: workspaceId }),
+    apiClient.get<JomSettingsResponse>("/jom/settings", { workspace_id: workspaceId }),
 
   saveSettings: (
     workspaceId: string,
@@ -201,14 +201,14 @@ export const jomApi = {
       templates: Record<string, string>;
     }>
   ) =>
-    apiClient.patch<{ success: boolean; settings: JomSettings }>("/api/jom/settings", {
+    apiClient.patch<{ success: boolean; settings: JomSettings }>("/jom/settings", {
       workspace_id: Number(workspaceId),
       ...body,
     }),
 
   listLeads: (workspaceId: string, status?: string) =>
     apiClient.get<{ success: boolean; leads: JomLead[]; counts: Record<string, number>; total: number }>(
-      "/api/jom/leads",
+      "/jom/leads",
       status ? { workspace_id: workspaceId, status } : { workspace_id: workspaceId }
     ),
 };
