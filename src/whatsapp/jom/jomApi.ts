@@ -82,6 +82,27 @@ export interface JomSettingsResponse {
   approved_templates: string[];
 }
 
+export interface JomSheetConfig {
+  enabled: boolean;
+  sheet_url: string | null;
+  header_map: Record<string, string>;
+  last_synced_at: string | null;
+  last_status: "ok" | "error" | null;
+  last_error: string | null;
+  last_row_count: number | null;
+  last_imported_count: number | null;
+  total_imported: number;
+}
+
+export interface JomSheetSyncResult {
+  success: boolean;
+  rows?: number;
+  imported?: number;
+  messaged?: number;
+  error?: string;
+  config: JomSheetConfig;
+}
+
 const wsq = (workspaceId: string) => `workspace_id=${encodeURIComponent(workspaceId)}`;
 
 export const jomApi = {
@@ -144,6 +165,27 @@ export const jomApi = {
     apiClient.get<JomSummary>("/api/jom/leads/summary", {
       workspace_id: workspaceId,
       days: String(days),
+    }),
+
+  /** Google Sheet lead intake — config + health. */
+  getSheet: (workspaceId: string) =>
+    apiClient.get<{ success: boolean; config: JomSheetConfig }>("/api/jom/sheet", {
+      workspace_id: workspaceId,
+    }),
+
+  saveSheet: (
+    workspaceId: string,
+    body: Partial<{ sheet_url: string; enabled: boolean; header_map: Record<string, string> }>
+  ) =>
+    apiClient.post<{ success: boolean; config: JomSheetConfig; error?: string }>("/api/jom/sheet", {
+      workspace_id: Number(workspaceId),
+      ...body,
+    }),
+
+  syncSheet: (workspaceId: string, sendOpening = true) =>
+    apiClient.post<JomSheetSyncResult>("/api/jom/sheet/sync", {
+      workspace_id: Number(workspaceId),
+      send_opening: sendOpening,
     }),
 
   /** Owner-editable cadence / qualify threshold / template mapping. */

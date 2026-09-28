@@ -10,6 +10,7 @@ import { Loader2, RefreshCw, Compass, CalendarDays, Sliders } from "lucide-react
 import { jomApi, JomLead, JomSummary, isJomWorkspace } from "./jomApi";
 import { getWorkspaceId } from "@/whatsapp/utils/workspaceContext";
 import JomSettingsManager from "./JomSettingsManager";
+import JomSheetIntake from "./JomSheetIntake";
 
 const STATUS_STYLES: Record<string, string> = {
   new: "bg-slate-100 text-slate-700",
@@ -109,7 +110,8 @@ export default function JourneyPipeline() {
       </div>
 
       {showSettings && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-4">
+          <JomSheetIntake workspaceId={workspaceId} />
           <JomSettingsManager workspaceId={workspaceId} />
         </div>
       )}
