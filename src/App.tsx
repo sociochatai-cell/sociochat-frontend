@@ -59,6 +59,7 @@ import { WhatsAppErrorBoundary } from './whatsapp/components/WhatsAppErrorBounda
 /* ── Lazy-loaded WhatsApp pages ── */
 const WhatsAppInbox = lazy(() => import('./whatsapp/pages/WhatsAppInbox').then(m => ({ default: m.WhatsAppInbox })));
 const WhatsAppSettings = lazy(() => import('./whatsapp/pages/WhatsAppSettings').then(m => ({ default: m.WhatsAppSettings })));
+const JourneyPipeline = lazy(() => import('./whatsapp/jom/JourneyPipeline'));
 const FlowsList = lazy(() => import('./whatsapp/pages/FlowsList').then(m => ({ default: m.FlowsList })));
 const FlowBuilder = lazy(() => import('./whatsapp/pages/FlowBuilder').then(m => ({ default: m.FlowBuilder })));
 const FlowBuilderV2 = lazy(() => import('./whatsapp/pages/FlowBuilderV2').then(m => ({ default: m.FlowBuilderV2 })));
@@ -225,6 +226,7 @@ export default function App() {
         <Route path="contacts" element={<G feature="whatsapp_contacts"><WhatsAppContacts /></G>} />
         <Route path="datasets" element={<G feature="whatsapp_datasets"><WhatsAppDatasets /></G>} />
         <Route path="settings" element={<WhatsAppSettings />} />
+        <Route path="jom" element={<Suspense fallback={<PageLoader />}><JourneyPipeline /></Suspense>} />
         <Route path="connect" element={<WhatsAppSetupPage />} />
         <Route path="whatsapp/setup" element={<WhatsAppSetupPage />} />
         <Route path="guide" element={<WhatsAppGuide />} />

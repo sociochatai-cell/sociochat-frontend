@@ -9,7 +9,7 @@ import {
     ChevronDown, Home, ClipboardList,
     ChevronsLeft, ChevronsRight, Smartphone,
     LayoutDashboard, UserPlus, Handshake, Contact2, SlidersHorizontal,
-    CreditCard, CalendarClock, Megaphone,
+    CreditCard, CalendarClock, Megaphone, Compass,
 } from 'lucide-react';
 import {
     motion,
@@ -27,6 +27,8 @@ import { clearAllUserData } from '@/lib/userSession';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useBranding } from '@/branding/BrandingContext';
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
+import { isJomWorkspace } from '@/whatsapp/jom/jomApi';
+import { getWorkspaceId } from '@/whatsapp/utils/workspaceContext';
 
 /* ══════════════════════════════════════════════
    NAV ITEMS
@@ -50,6 +52,7 @@ const NAV_ITEMS = [
     { label: 'Coexistence', path: '/dashboard/coexistence', icon: Smartphone },
     { label: 'CRM Dashboard', path: '/dashboard/crm', icon: LayoutDashboard, exact: true },
     { label: 'Leads', path: '/dashboard/crm/leads', icon: UserPlus },
+    { label: 'Journey Pipeline', path: '/dashboard/jom', icon: Compass, jomOnly: true },
     { label: 'Deals', path: '/dashboard/crm/deals', icon: Handshake },
     { label: 'CRM Contacts', path: '/dashboard/crm/contacts', icon: Contact2 },
     { label: 'CRM Settings', path: '/dashboard/crm/settings', icon: SlidersHorizontal },
@@ -227,7 +230,10 @@ function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
     const { isFeatureEnabled } = usePlan();
     const { branding } = useBranding();
     const logoSrc = useBrandLogo();
+    const currentWorkspaceId = getWorkspaceId();
     const visibleNav = NAV_ITEMS.filter(item => {
+        // JOM-only items (custom vertical) show for the JOM workspace alone.
+        if ((item as { jomOnly?: boolean }).jomOnly) return isJomWorkspace(currentWorkspaceId);
         const key = ROUTE_FEATURE_MAP[item.path];
         return !key || isFeatureEnabled(key);
     });

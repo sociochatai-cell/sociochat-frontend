@@ -16,6 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConnectFacebookAdsCard } from '@/ctwa/components/ConnectFacebookAdsCard';
 import { AdAccountSettingsCard } from '@/ctwa/components/AdAccountSettingsCard';
 import OwnerAgentsManager from '@/agent_login/components/AgentsManager';
+import DepartmentsManager from '@/whatsapp/jom/DepartmentsManager';
+import { isJomWorkspace } from '@/whatsapp/jom/jomApi';
 import PaymentsSettings from '@/whatsapp/commerce/PaymentsSettings';
 import { usePlan } from '@/contexts/PlanContext';
 import apiClient from '@/lib/apiClient';
@@ -1306,6 +1308,7 @@ export function WhatsAppSettings() {
                   <TabsTrigger value="trust">Trust Timeline</TabsTrigger>
                   <TabsTrigger value="operator">Operator Tools</TabsTrigger>
                   {isFeatureEnabled('agent_login') && <TabsTrigger value="agents">Agents</TabsTrigger>}
+                  {isJomWorkspace(workspaceId) && <TabsTrigger value="departments">Departments</TabsTrigger>}
                   {paymentsAvailable && isFeatureEnabled('commerce_payment') && <TabsTrigger value="payments">Payments</TabsTrigger>}
                 </TabsList>
                 {isWaOpsQaNavVisible(location.search) && (
@@ -1808,6 +1811,21 @@ export function WhatsAppSettings() {
                       </p>
                     </div>
                     <OwnerAgentsManager api={ownerAgentApi} />
+                  </TabsContent>
+                )}
+
+                {isJomWorkspace(workspaceId) && (
+                  <TabsContent value="departments" className="mt-0">
+                    <div className="mb-4">
+                      <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-primary" />
+                        Departments
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        Destination-based routing. Incoming leads are matched by keyword to a department and auto-assigned (round-robin) to one of its agents.
+                      </p>
+                    </div>
+                    {workspaceId && <DepartmentsManager workspaceId={workspaceId} />}
                   </TabsContent>
                 )}
 
