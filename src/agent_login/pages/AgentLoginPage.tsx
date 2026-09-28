@@ -3,7 +3,7 @@
  * Login with Username + Password.
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAgentAuth } from "../contexts/AgentAuthContext";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { Loader2, Eye, EyeOff, Users, Lock } from "lucide-react";
 
 const AgentLoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, isAuthenticated, loading: authLoading } = useAgentAuth();
+  const { login, loginWithSso, isAuthenticated, loading: authLoading } = useAgentAuth();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -23,10 +23,52 @@ const AgentLoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryAfter, setRetryAfter] = useState<number | null>(null);
+  const [ssoBusy, setSsoBusy] = useState(false);
+  // Guard against React 18 StrictMode double-invoke burning the single-use token twice.
+  const ssoTried = useRef(false);
+
+  // Cross-app SSO landing: the Sociovia monolith redirects a logged-in agent here as
+  // `/agent-login?token=<one-time>&next=<path>&workspace_id=<id>`. Consume it once,
+  // strip it from the URL immediately (single-use; keep it out of history/Referer),
+  // exchange it for a SocioChat agent session, then land on the requested surface.
+  useEffect(() => {
+    if (ssoTried.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const token = (params.get("token") || "").trim();
+    if (!token) return;
+    ssoTried.current = true;
+
+    const nextRaw = params.get("next") || "";
+    // Open-redirect guard: only honor an /agent-scoped next; anything else -> /agent.
+    const next = nextRaw.startsWith("/agent") ? nextRaw : "/agent";
+    const wsRaw = params.get("workspace_id") || params.get("ws") || "";
+    const workspaceId = /^\d+$/.test(wsRaw) ? Number(wsRaw) : null;
+
+    try { window.history.replaceState({}, "", "/agent-login"); } catch { /* ignore */ }
+
+    setSsoBusy(true);
+    (async () => {
+      try {
+        const res = await loginWithSso(token, workspaceId);
+        if (res.success) {
+          navigate(next, { replace: true });
+        } else {
+          setError(res.message || "This sign-in link is invalid or has expired.");
+          setSsoBusy(false);
+        }
+      } catch {
+        setError("We couldn't sign you in. Please try again.");
+        setSsoBusy(false);
+      }
+    })();
+  }, [loginWithSso, navigate]);
 
   useEffect(() => {
+    // Don't auto-bounce while an SSO token is being consumed (the effect above owns
+    // navigation in that case).
+    if (ssoBusy || ssoTried.current) return;
     if (isAuthenticated && !authLoading) navigate("/agent", { replace: true });
-  }, [isAuthenticated, authLoading, navigate]);
+  }, [isAuthenticated, authLoading, navigate, ssoBusy]);
 
   useEffect(() => {
     if (retryAfter === null || retryAfter <= 0) return;
@@ -64,6 +106,20 @@ const AgentLoginPage: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Cross-app SSO in progress (no error yet) — show a dedicated "signing you in" state
+  // instead of the username/password form.
+  if (ssoBusy && !error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
+          <h2 className="mt-4 text-lg font-semibold">Signing you in…</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Connecting your Sociovia agent access to SocioChat.</p>
+        </div>
       </div>
     );
   }

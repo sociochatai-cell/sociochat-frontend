@@ -122,6 +122,25 @@ export const agentApi = {
     return res.data || { success: false, error: "network_error" };
   },
 
+  /**
+   * Cross-app SSO: exchange a one-time token (minted by the Sociovia monolith for
+   * THIS agent identity) for a fresh SocioChat agent session. Public endpoint — no
+   * Bearer needed. Mirrors login()'s success handling so the context/guards behave
+   * identically. Backend: POST /api/agent-auth/sso/entry {token}
+   *   -> {success, token, agent, workspaces}.
+   */
+  async exchangeSso(token: string): Promise<AgentLoginResponse> {
+    const res = await agentRequest<AgentLoginResponse>("/agent-auth/sso/entry", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    });
+    if (res.ok && res.data?.success && res.data.token && res.data.agent) {
+      setAgentToken(res.data.token);
+      setStoredAgentData(res.data.agent);
+    }
+    return res.data || { success: false, error: "network_error" };
+  },
+
   async logout(): Promise<void> {
     try { await agentRequest("/agent-auth/logout", { method: "POST" }); } catch { /* ignore */ }
     clearAgentToken();
