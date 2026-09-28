@@ -30,8 +30,11 @@ import {
   Inbox,
   LayoutTemplate,
   ExternalLink,
-  UserPlus
+  UserPlus,
+  CalendarClock
 } from 'lucide-react';
+import { isJomWorkspace } from '@/whatsapp/jom/jomApi';
+import ScheduleFollowupModal from '@/whatsapp/jom/ScheduleFollowupModal';
 import {
   addMessageLocally,
   updateMessageStatusLocally,
@@ -84,6 +87,7 @@ export function WhatsAppInbox() {
   const shouldAutoSelectUnread = queryParams.get('autoselect') === '1';
   const shouldForceServerUnreadLoad = focusNeedsReply;
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [jomScheduleOpen, setJomScheduleOpen] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [newChatPhone, setNewChatPhone] = useState('');
   const [creatingChat, setCreatingChat] = useState(false);
@@ -549,6 +553,18 @@ export function WhatsAppInbox() {
                 <span className="hidden sm:inline">{addingToCrm ? 'Adding...' : 'Add to CRM'}</span>
               </Button>
             )}
+            {selectedConversation && isJomWorkspace(workspaceId) && (
+              // JOM-only: schedule a one-off follow-up template for this customer.
+              <Button
+                variant="outline"
+                className="gap-2 h-11 hover:bg-primary/10"
+                onClick={() => setJomScheduleOpen(true)}
+                title="Schedule a follow-up"
+              >
+                <CalendarClock className="w-4 h-4" />
+                <span className="hidden sm:inline">Schedule</span>
+              </Button>
+            )}
             {selectedConversation && isDesktop && (
               <Button variant={flowPanelOpen ? "secondary" : "outline"} size="icon" onClick={() => setFlowPanelOpen(!flowPanelOpen)} title="Flow responses">
                 <Workflow className="w-4 h-4" />
@@ -600,6 +616,14 @@ export function WhatsAppInbox() {
             onOpenAiInsights={() => setInsightsPanelOpen(true)}
           />
         </div>
+        {jomScheduleOpen && selectedConversation && isJomWorkspace(workspaceId) && (
+          <ScheduleFollowupModal
+            workspaceId={workspaceId}
+            customerPhone={selectedConversation.user_phone}
+            customerName={selectedConversation.user_name}
+            onClose={() => setJomScheduleOpen(false)}
+          />
+        )}
         <ContactInfoPanel conversation={selectedConversation} isOpen={contactPanelOpen} onClose={() => setContactPanelOpen(false)} accountId={account?.id} />
         <FlowResponsesPanel conversation={selectedConversation} isOpen={flowPanelOpen} onClose={() => setFlowPanelOpen(false)} />
         <AiInsightsPanel conversation={selectedConversation} isOpen={insightsPanelOpen} onClose={() => setInsightsPanelOpen(false)} />

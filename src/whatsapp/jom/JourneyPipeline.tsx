@@ -6,11 +6,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, Compass, CalendarDays, Sliders } from "lucide-react";
+import { Loader2, RefreshCw, Compass, CalendarDays, Sliders, CalendarClock } from "lucide-react";
 import { jomApi, JomLead, JomSummary, isJomWorkspace } from "./jomApi";
 import { getWorkspaceId } from "@/whatsapp/utils/workspaceContext";
 import JomSettingsManager from "./JomSettingsManager";
 import JomSheetIntake from "./JomSheetIntake";
+import ScheduleFollowupModal from "./ScheduleFollowupModal";
 
 const STATUS_STYLES: Record<string, string> = {
   new: "bg-slate-100 text-slate-700",
@@ -45,6 +46,7 @@ export default function JourneyPipeline() {
   const [summary, setSummary] = useState<JomSummary | null>(null);
   const [days, setDays] = useState(30);
   const [showSettings, setShowSettings] = useState(false);
+  const [scheduleFor, setScheduleFor] = useState<JomLead | null>(null);
 
   const load = useCallback(async () => {
     if (!enabled) return;
@@ -236,6 +238,7 @@ export default function JourneyPipeline() {
                     <th className="px-4 py-2.5 font-medium">Last inbound</th>
                     <th className="px-4 py-2.5 font-medium">Msgs</th>
                     <th className="px-4 py-2.5 font-medium">Set status</th>
+                    <th className="px-4 py-2.5 font-medium">Schedule</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -287,6 +290,15 @@ export default function JourneyPipeline() {
                           ))}
                         </select>
                       </td>
+                      <td className="px-4 py-2.5">
+                        <button
+                          onClick={() => setScheduleFor(l)}
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                          title="Schedule a follow-up"
+                        >
+                          <CalendarClock className="w-3.5 h-3.5" /> Schedule
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -295,6 +307,15 @@ export default function JourneyPipeline() {
           )}
         </CardContent>
       </Card>
+
+      {scheduleFor && (
+        <ScheduleFollowupModal
+          workspaceId={workspaceId}
+          customerPhone={scheduleFor.customer_phone}
+          customerName={scheduleFor.customer_name}
+          onClose={() => setScheduleFor(null)}
+        />
+      )}
     </div>
   );
 }

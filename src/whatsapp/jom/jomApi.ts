@@ -103,6 +103,21 @@ export interface JomSheetSyncResult {
   config: JomSheetConfig;
 }
 
+export interface JomSchedule {
+  id: number;
+  customer_phone: string;
+  template_name: string;
+  variables: Record<string, string>;
+  scheduled_at: string | null;   // ISO UTC
+  status: "pending" | "sent" | "cancelled" | "failed";
+  assigned_agent_id: number | null;
+  created_by_kind: string | null;
+  note: string | null;
+  sent_at: string | null;
+  error: string | null;
+  created_at: string | null;
+}
+
 const wsq = (workspaceId: string) => `workspace_id=${encodeURIComponent(workspaceId)}`;
 
 export const jomApi = {
@@ -205,6 +220,29 @@ export const jomApi = {
       workspace_id: Number(workspaceId),
       ...body,
     }),
+
+  /** Agent/owner scheduled one-off follow-ups. */
+  listSchedules: (workspaceId: string, customerPhone: string) =>
+    apiClient.get<{ success: boolean; schedules: JomSchedule[] }>(
+      `/jom/leads/${encodeURIComponent(customerPhone)}/schedules`,
+      { workspace_id: workspaceId }
+    ),
+
+  createSchedule: (
+    workspaceId: string,
+    customerPhone: string,
+    body: { template_name: string; scheduled_at: string; variables?: Record<string, string>; note?: string }
+  ) =>
+    apiClient.post<{ success: boolean; schedule: JomSchedule; error?: string }>(
+      `/jom/leads/${encodeURIComponent(customerPhone)}/schedule`,
+      { workspace_id: Number(workspaceId), ...body }
+    ),
+
+  cancelSchedule: (workspaceId: string, scheduleId: number) =>
+    apiClient.post<{ success: boolean; schedule: JomSchedule; error?: string }>(
+      `/jom/schedules/${scheduleId}/cancel`,
+      { workspace_id: Number(workspaceId) }
+    ),
 
   listLeads: (workspaceId: string, status?: string) =>
     apiClient.get<{ success: boolean; leads: JomLead[]; counts: Record<string, number>; total: number }>(
