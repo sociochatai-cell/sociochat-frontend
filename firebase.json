@@ -6,6 +6,28 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "redirects": [
+      {
+        "source": "/login",
+        "destination": "https://app.sociochat.ai/login",
+        "type": 302
+      },
+      {
+        "source": "/signup",
+        "destination": "https://app.sociochat.ai/signup",
+        "type": 302
+      },
+      {
+        "source": "/agent-login",
+        "destination": "https://app.sociochat.ai/agent-login",
+        "type": 302
+      },
+      {
+        "source": "/dashboard{,/**}",
+        "destination": "https://app.sociochat.ai/dashboard",
+        "type": 302
+      }
+    ],
     "rewrites": [
       {
         "source": "**",
