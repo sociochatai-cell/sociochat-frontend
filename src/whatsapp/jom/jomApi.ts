@@ -56,7 +56,12 @@ export interface JomLead {
   last_outbound_at: string | null;
   reopen_count: number | null;
   meta_lead_id: string | null;
+  ctwa_clid: string | null;
   email: string | null;
+  capi_qualified_at: string | null;
+  capi_qualified_ok: boolean | null;
+  capi_converted_at: string | null;
+  capi_converted_ok: boolean | null;
   total_inbound: number | null;
   total_outbound: number | null;
   consecutive_no_reply: number | null;

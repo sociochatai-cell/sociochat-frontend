@@ -237,6 +237,7 @@ export default function JourneyPipeline() {
                     <th className="px-4 py-2.5 font-medium">Next follow-up</th>
                     <th className="px-4 py-2.5 font-medium">Last inbound</th>
                     <th className="px-4 py-2.5 font-medium">Msgs</th>
+                    <th className="px-4 py-2.5 font-medium" title="Meta ad attribution & CAPI signals">Meta</th>
                     <th className="px-4 py-2.5 font-medium">Set status</th>
                     <th className="px-4 py-2.5 font-medium">Schedule</th>
                   </tr>
@@ -274,6 +275,29 @@ export default function JourneyPipeline() {
                       <td className="px-4 py-2.5 text-muted-foreground">{fmt(l.last_inbound_at)}</td>
                       <td className="px-4 py-2.5 text-muted-foreground">
                         <span title="inbound / outbound">{l.total_inbound ?? 0}/{l.total_outbound ?? 0}</span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex flex-col gap-0.5 text-[10px] leading-tight">
+                          <span title={l.ctwa_clid || l.meta_lead_id || "no ad click id captured"}>
+                            {(l.ctwa_clid || l.meta_lead_id)
+                              ? <span className="text-emerald-600">● ad&nbsp;id ✓</span>
+                              : <span className="text-slate-300">○ ad&nbsp;id</span>}
+                          </span>
+                          <span title={l.capi_qualified_at ? `sent ${fmt(l.capi_qualified_at)}` : "not sent yet"}>
+                            {l.capi_qualified_ok
+                              ? <span className="text-emerald-600">● Qualified ✓</span>
+                              : l.capi_qualified_at
+                                ? <span className="text-amber-600">● Qualified ⚠</span>
+                                : <span className="text-slate-300">○ Qualified</span>}
+                          </span>
+                          {(l.capi_converted_ok || l.capi_converted_at) && (
+                            <span title={l.capi_converted_at ? `sent ${fmt(l.capi_converted_at)}` : ""}>
+                              {l.capi_converted_ok
+                                ? <span className="text-emerald-600">● Converted ✓</span>
+                                : <span className="text-amber-600">● Converted ⚠</span>}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-2.5">
                         <select
