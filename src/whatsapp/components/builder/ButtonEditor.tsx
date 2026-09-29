@@ -135,27 +135,58 @@ export function ButtonEditor({
 
     if (isDisabled) {
         // Meta REQUIRES a single OTP button on authentication templates (Copy Code,
-        // One-Tap, or Zero-Tap). The "One-Time Password" preset auto-adds a Copy Code
-        // button so the customer never has to configure it manually. Explain that here
-        // rather than pretending buttons are forbidden.
+        // One-Tap, or Zero-Tap). Give the customer both paths: use the preset, or
+        // add the Copy Code OTP button here in one click. Only OTP buttons are
+        // allowed on authentication templates — no URL / Quick Reply / etc.
         const otpBtn = buttons.find(b => ['copy_code', 'one_tap', 'zero_tap'].includes(b.type as string));
+        const addCopyCodeButton = () => {
+            // Keep any existing OTP-type button; strip any non-OTP buttons (Meta rejects them).
+            const otpOnly = buttons.filter(b => ['copy_code', 'one_tap', 'zero_tap'].includes(b.type as string));
+            if (otpOnly.length > 0) return;
+            onChange([
+                ...otpOnly,
+                { type: 'copy_code', text: 'Copy Code', copy_code: '123456' } as TemplateButton,
+            ]);
+        };
+        const removeOtpButton = () => {
+            onChange(buttons.filter(b => !['copy_code', 'one_tap', 'zero_tap'].includes(b.type as string)));
+        };
         return (
             <div className="space-y-3">
-                <Label className="text-sm font-medium text-muted-foreground">OTP Button (required)</Label>
+                <Label className="text-sm font-medium text-muted-foreground">OTP Button (required by Meta)</Label>
                 {otpBtn ? (
-                    <Alert className="bg-green-50 border-green-200">
-                        <AlertCircle className="w-4 h-4 text-green-600" />
-                        <AlertDescription className="text-sm text-green-800">
-                            <strong>Copy Code</strong> OTP button auto-added by the preset — Meta requires this on every authentication template so users can auto-fill the code with one tap. No action needed.
-                        </AlertDescription>
-                    </Alert>
+                    <div className="space-y-2">
+                        <Alert className="bg-green-50 border-green-200">
+                            <AlertCircle className="w-4 h-4 text-green-600" />
+                            <AlertDescription className="text-sm text-green-800">
+                                <strong>Copy Code</strong> OTP button added — Meta requires this on every authentication template so users can auto-fill the code with one tap.
+                            </AlertDescription>
+                        </Alert>
+                        <div className="flex items-center justify-between rounded border p-2 bg-white">
+                            <div className="flex items-center gap-2 text-sm">
+                                <Copy className="w-4 h-4 text-green-600" />
+                                <span className="font-medium">Copy Code</span>
+                                <span className="text-xs text-muted-foreground">— {otpBtn.text || 'Copy Code'}</span>
+                            </div>
+                            <Button type="button" variant="ghost" size="sm" onClick={removeOtpButton} className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8">
+                                <Trash2 className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    </div>
                 ) : (
-                    <Alert className="bg-amber-50 border-amber-200">
-                        <AlertCircle className="w-4 h-4 text-amber-600" />
-                        <AlertDescription className="text-sm text-amber-800">
-                            Authentication templates require an OTP button. Use the <strong>One-Time Password (OTP)</strong> quick-approval preset above to add one automatically.
-                        </AlertDescription>
-                    </Alert>
+                    <div className="space-y-2">
+                        <Alert className="bg-amber-50 border-amber-200">
+                            <AlertCircle className="w-4 h-4 text-amber-600" />
+                            <AlertDescription className="text-sm text-amber-800">
+                                Authentication templates require an OTP button so the recipient can auto-fill the code. Click below to add one, or use the <strong>One-Time Password (OTP)</strong> quick-approval preset above.
+                            </AlertDescription>
+                        </Alert>
+                        <Button type="button" variant="outline" size="sm" onClick={addCopyCodeButton} className="gap-2">
+                            <Plus className="w-4 h-4" />
+                            <Copy className="w-4 h-4" />
+                            Add Copy Code OTP Button
+                        </Button>
+                    </div>
                 )}
             </div>
         );
