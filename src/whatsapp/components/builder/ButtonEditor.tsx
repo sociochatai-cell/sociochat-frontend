@@ -134,15 +134,29 @@ export function ButtonEditor({
     };
 
     if (isDisabled) {
+        // Meta REQUIRES a single OTP button on authentication templates (Copy Code,
+        // One-Tap, or Zero-Tap). The "One-Time Password" preset auto-adds a Copy Code
+        // button so the customer never has to configure it manually. Explain that here
+        // rather than pretending buttons are forbidden.
+        const otpBtn = buttons.find(b => ['copy_code', 'one_tap', 'zero_tap'].includes(b.type as string));
         return (
             <div className="space-y-3">
-                <Label className="text-sm font-medium text-muted-foreground">Buttons (Optional)</Label>
-                <Alert className="bg-amber-50 border-amber-200">
-                    <AlertCircle className="w-4 h-4 text-amber-600" />
-                    <AlertDescription className="text-sm text-amber-800">
-                        Authentication templates cannot have buttons.
-                    </AlertDescription>
-                </Alert>
+                <Label className="text-sm font-medium text-muted-foreground">OTP Button (required)</Label>
+                {otpBtn ? (
+                    <Alert className="bg-green-50 border-green-200">
+                        <AlertCircle className="w-4 h-4 text-green-600" />
+                        <AlertDescription className="text-sm text-green-800">
+                            <strong>Copy Code</strong> OTP button auto-added by the preset — Meta requires this on every authentication template so users can auto-fill the code with one tap. No action needed.
+                        </AlertDescription>
+                    </Alert>
+                ) : (
+                    <Alert className="bg-amber-50 border-amber-200">
+                        <AlertCircle className="w-4 h-4 text-amber-600" />
+                        <AlertDescription className="text-sm text-amber-800">
+                            Authentication templates require an OTP button. Use the <strong>One-Time Password (OTP)</strong> quick-approval preset above to add one automatically.
+                        </AlertDescription>
+                    </Alert>
+                )}
             </div>
         );
     }

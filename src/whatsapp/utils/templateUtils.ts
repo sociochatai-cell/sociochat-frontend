@@ -78,13 +78,16 @@ export interface MetaComponent {
         header_url?: string;
     };
     buttons?: Array<{
-        type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'FLOW' | 'COPY_CODE' | 'VOICE_CALL' | 'CATALOG';
+        // 'OTP' is the Meta button type used ONLY on AUTHENTICATION templates
+        // (paired with otp_type = COPY_CODE / ONE_TAP / ZERO_TAP).
+        type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'FLOW' | 'COPY_CODE' | 'VOICE_CALL' | 'CATALOG' | 'OTP';
         text?: string;
         url?: string;
         phone_number?: string;
         flow_id?: string;
         flow_token?: string;
         example?: string;
+        otp_type?: 'COPY_CODE' | 'ONE_TAP' | 'ZERO_TAP';
     }>;
 }
 
@@ -371,8 +374,15 @@ export function validateTemplate(state: TemplateState): ValidationResult {
         if (bodyVars.length === 0) {
             errors.body = 'Authentication templates typically require a {{1}} variable for the OTP code.';
         }
-        if (state.buttons.length > 0) {
-            errors.buttons = 'Authentication templates should not have custom buttons. Meta provides automatic copy-code functionality.';
+        // Meta REQUIRES an OTP button (Copy Code / One-Tap / Zero-Tap) on authentication
+        // templates, and does NOT allow other button types (URL, QUICK_REPLY, PHONE_NUMBER,
+        // FLOW, CATALOG, VOICE_CALL). Enforce that, not the reverse.
+        const OTP_BUTTON_TYPES = new Set(['copy_code', 'one_tap', 'zero_tap']);
+        const nonOtp = state.buttons.filter(b => !OTP_BUTTON_TYPES.has(b.type as string));
+        if (nonOtp.length > 0) {
+            errors.buttons = 'Authentication templates only allow an OTP button (Copy Code / One-Tap). Remove URL / Quick Reply / Phone / Flow / Catalog buttons.';
+        } else if (state.buttons.length === 0) {
+            errors.buttons = 'Authentication templates require an OTP button (Copy Code recommended) so users can auto-fill the code.';
         }
     }
 
@@ -606,8 +616,32 @@ export function buildMetaTemplateComponents(state: TemplateState): MetaComponent
         });
     }
 
-    // Buttons component (only if NOT AUTHENTICATION and has buttons)
-    if (state.category !== 'AUTHENTICATION' && state.buttons.length > 0) {
+    // Buttons component.
+    //   - AUTHENTICATION: Meta REQUIRES the button component with a single OTP button
+    //     shaped as {type: "OTP", otp_type: "COPY_CODE" | "ONE_TAP" | "ZERO_TAP", text}.
+    //     Sending our internal "COPY_CODE" top-level type here is what triggered
+    //     Meta code 10 "does not have permission to create message template".
+    //   - Every other category: standard mapping (URL / QUICK_REPLY / …).
+    if (state.category === 'AUTHENTICATION' && state.buttons.length > 0) {
+        const otpBtn = state.buttons.find(b => ['copy_code', 'one_tap', 'zero_tap'].includes(b.type as string));
+        if (otpBtn) {
+            const otpTypeMap: Record<string, 'COPY_CODE' | 'ONE_TAP' | 'ZERO_TAP'> = {
+                copy_code: 'COPY_CODE',
+                one_tap: 'ONE_TAP',
+                zero_tap: 'ZERO_TAP',
+            };
+            components.push({
+                type: 'BUTTONS',
+                buttons: [
+                    {
+                        type: 'OTP',
+                        otp_type: otpTypeMap[otpBtn.type as string] || 'COPY_CODE',
+                        text: otpBtn.text || 'Copy Code',
+                    },
+                ],
+            });
+        }
+    } else if (state.category !== 'AUTHENTICATION' && state.buttons.length > 0) {
         components.push({
             type: 'BUTTONS',
             buttons: state.buttons.map(btn => {
