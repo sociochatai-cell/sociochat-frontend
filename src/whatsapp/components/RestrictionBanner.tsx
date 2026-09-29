@@ -20,8 +20,11 @@ export function RestrictionBanner({ accountId }: { accountId: number }) {
   if (!data) return null;
 
   const { maturity_state, actions_required, operational_mode, safe_mode_reason } = data;
-  const isRestricted = maturity_state === 'restricted' || operational_mode === 'restricted';
+  // A warmup account should never render the RED "Meta restrictions" banner — even
+  // if the backend still momentarily returns maturity_state='restricted' (stale
+  // cache), the presence of warming_up on either signal is authoritative.
   const isWarmingUp = maturity_state === 'warming_up' || operational_mode === 'warming_up';
+  const isRestricted = !isWarmingUp && (maturity_state === 'restricted' || operational_mode === 'restricted');
   const isAdvisorySafeMode = operational_mode === 'advisory_safe_mode';
   const isDegraded = operational_mode === 'degraded';
   const hasReconnectAction = actions_required?.find((a: any) => a.type === 'reconnect_meta');
