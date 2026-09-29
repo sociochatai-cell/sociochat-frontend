@@ -69,7 +69,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { isWaOpsQaNavVisible } from '../utils/waOpsNavVisible';
 import { cachedFetch } from '../utils/waPersistentCache';
 
-const WA_SETTINGS_TABS = ['general', 'verification', 'trust', 'operator', 'agents', 'payments'] as const;
+const WA_SETTINGS_TABS = ['general', 'verification', 'trust', 'operator', 'agents', 'departments', 'payments'] as const;
 type WaSettingsTab = (typeof WA_SETTINGS_TABS)[number];
 
 function normalizeWaTab(raw: string | null): WaSettingsTab {
