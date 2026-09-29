@@ -21,6 +21,8 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 // Local-testing tenant switch: /t/:code sets a tenant override + reloads.
 const TenantSwitch = lazy(() => import('./domain/TenantSwitch'));
 import LandingPage from './pages/LandingPage';
+// /offer — SocioChat launch offer landing (v1), iframes public/offer_v1/index.html
+const OfferPage = lazy(() => import('./pages/OfferPage'));
 
 // Admin
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
@@ -147,6 +149,7 @@ export default function App() {
       <Route path="/t/:code" element={<Suspense fallback={<PageLoader />}><TenantSwitch /></Suspense>} />
       <Route path="/verify-email" element={<Suspense fallback={<PageLoader />}><VerifyEmailPage /></Suspense>} />
       <Route path="/pricing" element={<Suspense fallback={<PageLoader />}><PricingPage /></Suspense>} />
+      <Route path="/offer" element={<Suspense fallback={<PageLoader />}><OfferPage /></Suspense>} />
       <Route path="/subscription" element={<Suspense fallback={<PageLoader />}><SubscriptionPage /></Suspense>} />
       <Route path="/payment/result" element={<Suspense fallback={<PageLoader />}><PaymentResult /></Suspense>} />
       <Route path="/forgot-password" element={<Suspense fallback={<PageLoader />}><ForgotPasswordPage /></Suspense>} />
