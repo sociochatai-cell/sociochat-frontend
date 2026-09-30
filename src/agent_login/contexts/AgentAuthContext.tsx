@@ -28,6 +28,7 @@ interface AgentAuthShape {
   loading: boolean;
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<AgentLoginResponse>;
+  loginWithSso: (token: string, workspaceId?: number | null) => Promise<AgentLoginResponse>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   selectWorkspace: (workspaceId: number) => void;
@@ -129,6 +130,36 @@ export const AgentAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [applySession]
   );
 
+  /**
+   * Cross-app SSO login: exchange a one-time token minted by the Sociovia monolith
+   * for a SocioChat agent session, then (if the handoff named an allowed workspace)
+   * select it. Mirrors login() so guards/RBAC behave identically.
+   */
+  const loginWithSso = useCallback(
+    async (token: string, workspaceId?: number | null): Promise<AgentLoginResponse> => {
+      setLoading(true);
+      try {
+        const res = await agentApi.exchangeSso(token);
+        if (res.success && res.agent) {
+          applySession(res.agent, res.workspaces || []);
+          if (workspaceId != null) {
+            const allowed = new Set(
+              (res.agent.workspace_ids || []).concat((res.workspaces || []).map((w) => w.id))
+            );
+            if (allowed.has(workspaceId)) {
+              setSelectedWorkspaceId(workspaceId);
+              syncWorkspaceStorage(workspaceId);
+            }
+          }
+        }
+        return res;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [applySession]
+  );
+
   const logout = useCallback(async () => {
     setLoading(true);
     try {
@@ -161,6 +192,7 @@ export const AgentAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         loading,
         isAuthenticated,
         login,
+        loginWithSso,
         logout,
         refreshProfile,
         selectWorkspace,

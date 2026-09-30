@@ -274,6 +274,14 @@ export default function App() {
         <Route path="interactive-automation/new" element={<InteractiveAutomation />} />
         <Route path="interactive-automation/:id" element={<InteractiveAutomation />} />
         <Route path="flows" element={<FlowsList />} />
+        <Route path="flows/new" element={<FlowBuilderV2 />} />
+        <Route path="flows/builder" element={<FlowBuilder />} />
+        <Route path="flows/builder/:id" element={<FlowBuilder />} />
+        <Route path="flows/:id" element={<FlowBuilder />} />
+        <Route path="flows/:id/edit" element={<FlowBuilderV2 />} />
+        <Route path="flows/v2/new" element={<FlowBuilderV2 />} />
+        <Route path="flows/v1/new" element={<FlowBuilder />} />
+        <Route path="flows/:flowId/submissions" element={<FlowSubmissions />} />
         <Route path="drip" element={<DripCampaignsSection accountId={0} />} />
         <Route path="analytics" element={<WhatsAppDashboard />} />
         <Route path="tracking" element={<TrackingAnalytics />} />
