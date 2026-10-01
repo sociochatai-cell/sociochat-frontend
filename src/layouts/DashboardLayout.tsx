@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { NavLink, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import AgentChatPanel from '@/agent_frontend/components/AgentChatPanel';
 import { useAgentStore } from '@/agent_frontend/agentStore';
+import { useCopilotArrival } from '@/agent_frontend/agentic/copilotArrival';
 import {
     MessageSquare, LayoutTemplate, Bot, BarChart3,
     Settings, Users, Database, Send, Workflow, Zap,
@@ -689,6 +690,11 @@ export default function DashboardLayout() {
     const navigate = useNavigate();
     const setNavigate = useAgentStore((s) => s.setNavigate);
     const { branding } = useBranding();
+
+    // Cross-app copilot arrival: when the AdOptimizer launchpad hands a WhatsApp/CRM
+    // flow off to SocioChat (?copilot_run=&copilot_flow=), resume the drive here —
+    // navigate to the builder and pre-fill it (prepare-only). No-op without params.
+    useCopilotArrival(navigate);
 
     useEffect(() => {
         const userId = localStorage.getItem('sv_user_id');
