@@ -206,6 +206,25 @@ export const FLOW_REGISTRY: Record<string, FlowDef> = {
     ],
   },
 
+  // ── WhatsApp account connection (Meta embedded signup + technical ids) ──────
+  whatsapp_account_setup: {
+    key: "whatsapp_account_setup",
+    route: "/dashboard/whatsapp/setup",
+    title: "WhatsApp Account Connection",
+    area: "whatsapp",
+    multiStep: false,
+    steps: [],
+    submitButtons: ["Connect", "Save", "Continue"],
+    finalSubmitButtons: ["Connect", "Save"],
+    navigable: true,
+    fields: [
+      { semantic: "whatsapp_business_account_id", selector: "Business Account", selectorKind: "label", type: "input", aliases: ["waba_id", "business_account_id"] },
+      { semantic: "whatsapp_phone_number_id", selector: "Phone Number", selectorKind: "label", type: "input", aliases: ["phone_number_id"] },
+      { semantic: "permanent_access_token", selector: "Access Token", selectorKind: "label", type: "input", aliases: ["access_token", "token"] },
+    ],
+    handoff: "Opened WhatsApp setup. Connecting an account normally runs through Meta's embedded signup (the “Connect” button) rather than typing ids by hand — use that unless you're pasting known credentials.",
+  },
+
   // ── Canvas builders → navigate-only handoff (drag-node, AI-generate dialog) ──
   whatsapp_interactive_automation: {
     key: "whatsapp_interactive_automation",
