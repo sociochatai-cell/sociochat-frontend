@@ -153,6 +153,37 @@ export const FLOW_REGISTRY: Record<string, FlowDef> = {
     ],
   },
 
+  // ── CTWA Campaign (embedded) — multi-step; needs a connected FB Page first ──
+  ctwa_embedded_signup_flow: {
+    key: "ctwa_embedded_signup_flow",
+    route: "/dashboard/campaign/create",
+    title: "CTWA Campaign Creation",
+    area: "ctwa",
+    multiStep: true,
+    steps: ["account", "campaign", "audience", "creative", "message", "review"],
+    submitButtons: ["Next", "Continue", "Publish", "Launch"],
+    finalSubmitButtons: ["Publish", "Launch Campaign"],
+    interactive: "sequential",
+    navigable: true,
+    handoff: "Opened CTWA campaign creation. Connect/select a Facebook Page first (the Next button unlocks after that); then I can fill the campaign, budget, creative and click-to-WhatsApp message.",
+    fields: [
+      { semantic: "campaign_name", selector: "Campaign Name", selectorKind: "label", type: "input", aliases: ["name"] },
+      { semantic: "campaign_objective", selector: "Objective", selectorKind: "label", type: "combobox", aliases: ["objective"] },
+      { semantic: "daily_budget", selector: "Daily Budget", selectorKind: "label", type: "input", aliases: ["budget", "daily_budget_inr"] },
+      { semantic: "creative_primary_text", selector: "Primary Text", selectorKind: "label", type: "textarea", aliases: ["primary_text", "ad_copy"] },
+      { semantic: "creative_headline", selector: "Headline", selectorKind: "label", type: "input", aliases: ["headline"] },
+      { semantic: "ctwa_prefilled_message", selector: "Prefilled Message", selectorKind: "label", type: "textarea", aliases: ["prefilled_message", "welcome_message"] },
+    ],
+    stepRoutes: [
+      { route: "/dashboard/campaign/create", fields: [], advanceButtonText: ["Next", "Continue"] },
+      { route: "/dashboard/campaign/create", fields: ["campaign_name", "campaign_objective"], advanceButtonText: ["Next", "Continue"] },
+      { route: "/dashboard/campaign/create", fields: ["daily_budget"], advanceButtonText: ["Next", "Continue"] },
+      { route: "/dashboard/campaign/create", fields: ["creative_primary_text", "creative_headline"], advanceButtonText: ["Next", "Continue"] },
+      { route: "/dashboard/campaign/create", fields: ["ctwa_prefilled_message"], advanceButtonText: ["Next", "Continue"] },
+      { route: "/dashboard/campaign/create", fields: [], terminal: true },
+    ],
+  },
+
   // ── CRM Lead / Deal / Contact (modal dialogs, stable ids) ──────────────────
   crm_lead_create: {
     key: "crm_lead_create",
