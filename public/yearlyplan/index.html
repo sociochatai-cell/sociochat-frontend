@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-    <!-- Custom Tailwind Configuration in Pabbly Design Language -->
+    <!-- Custom Tailwind Configuration -->
     <script>
         tailwind.config = {
             theme: {
@@ -29,14 +29,13 @@
                             orange: '#f97316',
                             yellow: '#f59e0b',
                             bgLight: '#f8fafc',
-                            cardBorder: '#e2e8f0'
+                            cardBorder: '#cbd5e1'
                         }
                     },
                     boxShadow: {
                         'pabbly': '0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04)',
                         'pabbly-hover': '0 20px 35px -10px rgba(15, 23, 42, 0.15)',
-                        'glow-orange': '0 8px 20px -4px rgba(249, 115, 22, 0.4)',
-                        'glow-emerald': '0 8px 20px -4px rgba(5, 150, 105, 0.4)'
+                        'glow-emerald': '0 8px 25px -4px rgba(5, 150, 105, 0.35)'
                     }
                 }
             }
@@ -50,7 +49,6 @@
             color: #0f172a;
         }
 
-        /* Pabbly-style crisp card containers */
         .pabbly-card {
             background: #ffffff;
             border: 1px solid #cbd5e1;
@@ -61,11 +59,10 @@
         .pabbly-card-featured {
             background: #ffffff;
             border: 2px solid #059669;
-            box-shadow: 0 12px 30px rgba(5, 150, 105, 0.15);
+            box-shadow: 0 12px 30px rgba(5, 150, 105, 0.18);
             border-radius: 16px;
         }
 
-        /* Custom Scrollbar */
         .custom-scrollbar::-webkit-scrollbar {
             width: 5px;
         }
@@ -81,7 +78,7 @@
 <body class="antialiased overflow-x-hidden text-slate-800 bg-[#f8fafc]">
 
     <!-- Header / Navigation -->
-    <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+    <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
             <!-- Brand Logo -->
             <a href="#" class="flex items-center space-x-3 group">
@@ -95,99 +92,153 @@
             </a>
 
             <!-- Primary Header Action -->
-            <div class="flex items-center space-x-3 sm:space-x-4">
-                <a href="#pricing" class="px-4 sm:px-6 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs sm:text-sm shadow-pabbly shadow-orange-500/20 transition-all transform hover:-translate-y-0.5 uppercase tracking-wide">
-                    Get Sociochat Now <i class="fa-solid fa-arrow-right ml-1"></i>
+            <div class="flex items-center space-x-3">
+                <a href="#pricing" class="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-orange-500/20 transition-all transform hover:-translate-y-0.5 uppercase tracking-wide flex items-center gap-2">
+                    <span>Get Sociochat Now</span>
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
                 </a>
             </div>
         </div>
     </header>
 
-    <!-- Hero Section (Pabbly High-Impact Style) -->
-    <section class="relative pt-12 pb-16 md:pt-16 md:pb-24 bg-gradient-to-b from-slate-100 via-emerald-50/30 to-[#f8fafc] border-b border-slate-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-            
-            <!-- Ratings & Social Proof Badge -->
-            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-slate-300 text-slate-800 text-xs font-bold shadow-sm mb-6">
-                <div class="flex text-amber-500 text-xs gap-0.5">
-                    <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+    <!-- Hero Section with Demo Video & Lead Capture Form -->
+    <section class="relative pt-8 pb-12 md:pt-12 md:pb-16 bg-gradient-to-b from-emerald-50/50 via-slate-50 to-[#f8fafc] border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+
+            <!-- Hero Heading -->
+            <div class="text-center max-w-4xl mx-auto mb-8 space-y-3">
+                <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold shadow-2xs">
+                    <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                    <span>Official Meta WhatsApp Cloud API Platform</span>
                 </div>
-                <span>Rated <strong>4.9/5</strong> by 500+ Indian Businesses</span>
-                <span class="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-md font-bold">Official Cloud API</span>
+                <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+                    Convert your leads to sales using our <span class="bg-emerald-600 text-white px-3 py-0.5 rounded-lg inline-block">WhatsApp Automation System</span>
+                </h1>
+                <p class="text-slate-600 text-sm sm:text-base lg:text-lg font-medium max-w-2xl mx-auto">
+                    Broadcast campaigns, AI sales agent responses, lead follow-ups, and multi-user chat inbox — all in one powerful solution.
+                </p>
             </div>
 
-            <!-- Headline -->
-            <h1 class="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight max-w-4xl mx-auto">
-                Automate Your WhatsApp Marketing, Customer Support & Sales on <span class="bg-emerald-600 text-white px-3 py-1 rounded-lg inline-block my-1">Autopilot</span>
-            </h1>
+            <!-- Hero Grid: Video Player + Lead Form -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center max-w-6xl mx-auto">
 
-            <!-- Subheading -->
-            <p class="text-slate-600 text-base sm:text-lg lg:text-xl font-medium max-w-3xl mx-auto mt-6 leading-relaxed">
-                Connect your business to Sociochat: Send broadcast campaigns, trigger automated AI chatbot replies, follow up with leads, and manage multi-agent chats in one unified platform.
-            </p>
+                <!-- Demo Video Column (7 Cols) -->
+                <div class="lg:col-span-7 flex flex-col justify-center">
+                    <div class="mb-3 text-center sm:text-left">
+                        <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs sm:text-sm font-bold shadow-2xs">
+                            <i class="fa-solid fa-circle-play text-amber-600 animate-pulse text-sm sm:text-base"></i>
+                            Watch the whole demo before booking the call
+                        </span>
+                    </div>
+                    <div class="relative rounded-2xl overflow-hidden border-2 border-slate-300 shadow-2xl bg-slate-900 group">
+                        <div class="aspect-video w-full flex items-center justify-center bg-slate-900 relative">
+                            <!-- Embedded Video Player -->
+                            <iframe
+                                src="https://drive.google.com/file/d/1YfBoZsOQrvMpwRp3wPYKDizVeE1j3RGl/preview"
+                                class="w-full h-full border-0"
+                                allow="autoplay"
+                                title="Sociochat Demo Video">
+                            </iframe>
+                        </div>
+                    </div>
 
-            <!-- Action CTA Group -->
-            <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <a href="#pricing" class="w-full sm:w-auto px-8 py-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-base sm:text-lg shadow-pabbly shadow-orange-500/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2 uppercase tracking-wide">
-                    <span>Choose Your Plan Below</span>
-                    <i class="fa-solid fa-arrow-down"></i>
-                </a>
-            </div>
+                    <!-- Quick Trust Indicators -->
+                    <div class="mt-4 grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-slate-600">
+                        <div class="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-bolt text-amber-500"></i> Instant Setup
+                        </div>
+                        <div class="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-emerald-600"></i> Meta Approved
+                        </div>
+                        <div class="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-headset text-blue-600"></i> 1-on-1 Support
+                        </div>
+                    </div>
+                </div>
 
-            <!-- Trust Features Bar -->
-            <div class="mt-10 pt-8 border-t border-slate-200/80 max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold text-slate-700">
-                <div class="flex items-center justify-center gap-2 bg-white py-2.5 px-3 rounded-lg border border-slate-200 shadow-2xs">
-                    <i class="fa-solid fa-bolt text-amber-500 text-sm"></i>
-                    <span>Instant Setup</span>
+                <!-- Lead Form Column (5 Cols) -->
+                <div class="lg:col-span-5">
+                    <div class="pabbly-card p-6 sm:p-7 border-2 border-emerald-500/80 shadow-pabbly bg-white">
+                        <div class="text-center mb-5 space-y-1">
+                            <span class="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+                                Request Access & Demo
+                            </span>
+                            <h3 class="text-xl sm:text-2xl font-black text-slate-900">Get Started with Sociochat</h3>
+                            <p class="text-xs text-slate-500 font-medium">Fill in your details for instant demo access & onboarding.</p>
+                        </div>
+
+                        <form id="heroLeadForm" onsubmit="handleHeroLeadSubmit(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Full Name *</label>
+                                <div class="relative">
+                                    <i class="fa-solid fa-user absolute left-3.5 top-3.5 text-slate-400 text-xs"></i>
+                                    <input id="hero-name" type="text" required placeholder="e.g. Rahul Sharma" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">WhatsApp Phone Number *</label>
+                                <div class="relative">
+                                    <i class="fa-brands fa-whatsapp absolute left-3.5 top-3.5 text-emerald-600 text-sm"></i>
+                                    <input id="hero-phone" type="tel" required placeholder="+91 98765 43210" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Work Email *</label>
+                                <div class="relative">
+                                    <i class="fa-solid fa-envelope absolute left-3.5 top-3.5 text-slate-400 text-xs"></i>
+                                    <input id="hero-email" type="email" required placeholder="name@company.com" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors">
+                                </div>
+                            </div>
+
+                            <button id="heroSubmitBtn" type="submit" class="w-full py-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm shadow-md shadow-orange-500/30 transition-all uppercase tracking-wide transform hover:scale-[1.01]">
+                                Book a one on one consultation now <i class="fa-solid fa-arrow-right ml-1"></i>
+                            </button>
+
+                            <p class="text-[10px] text-center text-slate-500 font-medium">
+                                <i class="fa-solid fa-lock text-slate-400 mr-1"></i> Your information is 100% secure. No spam.
+                            </p>
+                        </form>
+                    </div>
                 </div>
-                <div class="flex items-center justify-center gap-2 bg-white py-2.5 px-3 rounded-lg border border-slate-200 shadow-2xs">
-                    <i class="fa-solid fa-shield-halved text-emerald-600 text-sm"></i>
-                    <span>100% Meta Compliant</span>
-                </div>
-                <div class="flex items-center justify-center gap-2 bg-white py-2.5 px-3 rounded-lg border border-slate-200 shadow-2xs">
-                    <i class="fa-solid fa-headset text-blue-600 text-sm"></i>
-                    <span>Direct Tech Support</span>
-                </div>
-                <div class="flex items-center justify-center gap-2 bg-white py-2.5 px-3 rounded-lg border border-slate-200 shadow-2xs">
-                    <i class="fa-solid fa-lock text-slate-600 text-sm"></i>
-                    <span>No Hidden Fees</span>
-                </div>
+
             </div>
 
         </div>
     </section>
 
-    <!-- PRICING SECTION (Pabbly Connect Signature Cards Style) -->
-    <section id="pricing" class="py-16 md:py-24 bg-[#f8fafc] relative">
+    <!-- PRICING PLANS SECTION -->
+    <section id="pricing" class="py-12 md:py-16 bg-[#f8fafc] relative">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            
-            <div class="text-center max-w-3xl mx-auto mb-14 space-y-3">
+
+            <div class="text-center max-w-3xl mx-auto mb-10 space-y-2">
                 <span class="bg-emerald-100 text-emerald-800 text-xs font-black uppercase px-3 py-1 rounded-full border border-emerald-300">
                     Transparent Yearly Plans
                 </span>
-                <h2 class="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">
+                <h2 class="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
                     Select Your Sociochat License
                 </h2>
-                <p class="text-slate-600 text-base font-medium">
-                    Choose between our essential Starter Plan or unlock full AI automation & CRM with the Pro Growth Plan.
+                <p class="text-slate-600 text-sm sm:text-base font-medium">
+                    Choose between our essential Starter Plan or unlock full AI automation & CRM with the Pro Growth AI Plan.
                 </p>
             </div>
 
-            <!-- PABBLY STYLE PRICING CARDS -->
+            <!-- Pricing Cards Grid -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto items-stretch">
-                
-                <!-- CARD 1: Starter Plan (Rs 7,999 + GST / year) -->
+
+                <!-- CARD 1: Starter Plan (₹7,999 + GST / year) -->
                 <div class="pabbly-card flex flex-col justify-between overflow-hidden relative transition-all duration-200 hover:shadow-pabbly-hover">
-                    <!-- Colored Pabbly Header Bar -->
+                    <!-- Colored Header Bar -->
                     <div class="bg-slate-900 text-white p-6 border-b border-slate-800">
                         <div class="flex justify-between items-center">
                             <div>
-                                <span class="bg-slate-700 text-slate-200 text-[11px] font-bold uppercase px-2.5 py-1 rounded tracking-wider">ANNUAL PLAN</span>
-                                <h3 class="text-2xl font-black text-white mt-2">Starter Plan</h3>
+                                <span class="bg-slate-700 text-slate-200 text-[10px] font-bold uppercase px-2.5 py-0.5 rounded tracking-wider">ANNUAL PLAN</span>
+                                <h3 class="text-2xl font-black text-white mt-1">Starter Plan</h3>
                             </div>
                             <div class="text-right">
-                                <span class="text-slate-400 line-through text-sm font-semibold">₹12,000</span>
-                                <div class="bg-emerald-500 text-slate-950 font-black text-xs px-2 py-0.5 rounded mt-1">SAVE 33%</div>
+                                <span class="text-slate-400 line-through text-xs font-semibold">₹12,000</span>
+                                <div class="bg-emerald-500 text-slate-950 font-black text-[11px] px-2 py-0.5 rounded mt-0.5">SAVE 33%</div>
                             </div>
                         </div>
                         <p class="text-xs text-slate-300 mt-2">Essential automation for businesses getting started with WhatsApp.</p>
@@ -196,16 +247,16 @@
                     <!-- Price Display -->
                     <div class="p-6 bg-slate-50 border-b border-slate-200">
                         <div class="flex items-baseline gap-2">
-                            <span class="text-4xl sm:text-5xl font-black text-slate-900">₹7,999</span>
-                            <span class="text-slate-600 font-bold text-base">+ GST / yearly</span>
+                            <span class="text-4xl font-black text-slate-900">₹7,999</span>
+                            <span class="text-slate-600 font-bold text-sm">+ GST / yearly</span>
                         </div>
                         <p class="text-xs text-slate-500 font-semibold mt-1">Approx. ₹666/month + GST (Billed Yearly)</p>
                     </div>
 
                     <!-- Feature List -->
-                    <div class="p-6 space-y-3 text-sm flex-1 bg-white">
-                        <div class="font-bold text-slate-900 uppercase text-xs tracking-wider mb-2 text-slate-500">Plan Inclusions:</div>
-                        
+                    <div class="p-6 space-y-3 text-xs sm:text-sm flex-1 bg-white">
+                        <div class="font-bold uppercase text-[11px] tracking-wider mb-2 text-slate-500">Plan Inclusions:</div>
+
                         <div class="flex items-start gap-3 py-1">
                             <i class="fa-solid fa-circle-xmark text-red-500 text-base mt-0.5"></i>
                             <span class="text-slate-500"><strong>No AI sales agent</strong></span>
@@ -246,7 +297,7 @@
 
                     <!-- Action CTA -->
                     <div class="p-6 bg-slate-50 border-t border-slate-200 text-center">
-                        <button onclick="openLeadModal('Starter Plan (₹7,999 + GST/yr)')" class="w-full py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-base shadow-md transition-all uppercase tracking-wide">
+                        <button onclick="openLeadModal('Starter Plan (₹7,999 + GST/yr)')" class="w-full py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm shadow-md transition-all uppercase tracking-wide">
                             Buy Starter Plan - ₹7,999 + GST/yr
                         </button>
                         <p class="text-[11px] text-slate-500 font-semibold mt-2 flex items-center justify-center gap-1">
@@ -255,7 +306,7 @@
                     </div>
                 </div>
 
-                <!-- CARD 2: Pro Growth AI Plan (Rs 9,999 + GST / year) - FEATURED PABBLY STYLE -->
+                <!-- CARD 2: Pro Growth AI Plan (₹9,999 + GST / year) - FEATURED -->
                 <div class="pabbly-card-featured flex flex-col justify-between overflow-hidden relative transition-all duration-200 hover:shadow-pabbly-hover bg-white">
                     <!-- Ribbon Badge -->
                     <div class="bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-center font-black text-xs uppercase py-1.5 tracking-wider shadow-sm">
@@ -266,33 +317,33 @@
                     <div class="bg-emerald-700 text-white p-6 border-b border-emerald-800">
                         <div class="flex justify-between items-center">
                             <div>
-                                <span class="bg-emerald-900 text-emerald-200 text-[11px] font-bold uppercase px-2.5 py-1 rounded tracking-wider">ANNUAL AI PLAN</span>
-                                <h3 class="text-2xl font-black text-white mt-2 flex items-center gap-2">
+                                <span class="bg-emerald-900 text-emerald-200 text-[10px] font-bold uppercase px-2.5 py-0.5 rounded tracking-wider">ANNUAL AI PLAN</span>
+                                <h3 class="text-2xl font-black text-white mt-1 flex items-center gap-2">
                                     Pro Growth AI
                                     <i class="fa-solid fa-wand-magic-sparkles text-amber-300 text-lg"></i>
                                 </h3>
                             </div>
                             <div class="text-right">
-                                <span class="text-emerald-200 line-through text-sm font-semibold">₹18,000</span>
-                                <div class="bg-amber-400 text-slate-950 font-black text-xs px-2 py-0.5 rounded mt-1">SAVE 44%</div>
+                                <span class="text-emerald-200 line-through text-xs font-semibold">₹18,000</span>
+                                <div class="bg-amber-400 text-slate-950 font-black text-[11px] px-2 py-0.5 rounded mt-0.5">SAVE 44%</div>
                             </div>
                         </div>
-                        <p class="text-xs text-emerald-100 mt-2">Full power automation with AI Chatbot, CRM, and Unlimited Flows.</p>
+                        <p class="text-xs text-emerald-100 mt-2">Full power automation with AI Sales Agent, CRM, and Unlimited Flows.</p>
                     </div>
 
                     <!-- Price Display -->
                     <div class="p-6 bg-emerald-50/60 border-b border-emerald-200">
                         <div class="flex items-baseline gap-2">
-                            <span class="text-4xl sm:text-5xl font-black text-slate-900">₹9,999</span>
-                            <span class="text-slate-700 font-bold text-base">+ GST / yearly</span>
+                            <span class="text-4xl font-black text-slate-900">₹9,999</span>
+                            <span class="text-slate-700 font-bold text-sm">+ GST / yearly</span>
                         </div>
                         <p class="text-xs text-emerald-800 font-bold mt-1">Best Value: Only ₹833/month + GST (Billed Yearly)</p>
                     </div>
 
                     <!-- Feature List -->
-                    <div class="p-6 space-y-3 text-sm flex-1 bg-white">
-                        <div class="font-bold text-emerald-800 uppercase text-xs tracking-wider mb-2">Everything in Starter + AI & CRM:</div>
-                        
+                    <div class="p-6 space-y-3 text-xs sm:text-sm flex-1 bg-white">
+                        <div class="font-bold text-emerald-800 uppercase text-[11px] tracking-wider mb-2">Everything in Starter + AI & CRM:</div>
+
                         <div class="flex items-start gap-3 py-1">
                             <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
                             <span class="text-slate-900 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-emerald-900">AI sales agent will be there</span>
@@ -311,7 +362,7 @@
                         </div>
                         <div class="flex items-start gap-3 py-1">
                             <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
-                            <span class="text-slate-800"><strong>Able to send 10000 messages per month</strong></span>
+                            <span class="text-slate-800"><strong>10000 messages per month</strong></span>
                         </div>
                         <div class="flex items-start gap-3 py-1">
                             <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
@@ -333,7 +384,7 @@
 
                     <!-- Action CTA -->
                     <div class="p-6 bg-emerald-50/50 border-t border-emerald-200 text-center">
-                        <button onclick="openLeadModal('Pro Growth AI Plan (₹9,999 + GST/yr)')" class="w-full py-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-base shadow-pabbly shadow-orange-500/30 transition-all uppercase tracking-wide transform hover:scale-[1.01]">
+                        <button onclick="openLeadModal('Pro Growth AI Plan (₹9,999 + GST/yr)')" class="w-full py-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm shadow-md shadow-orange-500/30 transition-all uppercase tracking-wide transform hover:scale-[1.01]">
                             Buy Pro Growth AI Plan - ₹9,999 + GST/yr
                         </button>
                         <p class="text-[11px] text-emerald-800 font-bold mt-2 flex items-center justify-center gap-1">
@@ -346,536 +397,52 @@
         </div>
     </section>
 
-    <!-- Detailed Feature Comparison Table (Side-By-Side Feature Matrix) -->
-    <section class="py-20 bg-gradient-to-b from-slate-50 via-slate-100 to-slate-50 border-y border-slate-200/80 relative overflow-hidden">
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none"></div>
-
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-            <div class="text-center max-w-3xl mx-auto mb-14 space-y-3">
-                <span class="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 text-xs font-black uppercase px-3.5 py-1.5 rounded-full border border-emerald-300/80 shadow-xs">
-                    <i class="fa-solid fa-layer-group text-emerald-600"></i> Feature Breakdown
-                </span>
-                <h3 class="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-                    Side-By-Side Feature Matrix
-                </h3>
-                <p class="text-slate-600 text-sm sm:text-base font-medium">
-                    Compare features side-by-side and choose the plan that best fits your business goals.
-                </p>
-            </div>
-
-            <!-- Matrix Container -->
-            <div class="pabbly-card overflow-hidden shadow-2xl border border-slate-200/90 rounded-2xl bg-white/95 backdrop-blur-sm">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse min-w-[700px]">
-                        <thead>
-                            <tr class="border-b border-slate-200/80">
-                                <th class="p-6 bg-slate-900 text-white w-2/5 font-black text-sm sm:text-base rounded-tl-xl">
-                                    <div class="flex items-center gap-2">
-                                        <i class="fa-solid fa-sliders text-emerald-400"></i>
-                                        <span>FEATURE COMPARISON</span>
-                                    </div>
-                                </th>
-                                <th class="p-6 text-center w-3/12 bg-slate-800 text-white border-r border-slate-700/50">
-                                    <span class="bg-slate-700 text-slate-300 text-[10px] font-bold uppercase px-2.5 py-0.5 rounded tracking-wider">BASIC</span>
-                                    <h4 class="font-black text-base mt-1 text-white">STARTER PLAN</h4>
-                                    <div class="text-emerald-400 font-black text-lg mt-0.5">₹7,999 <span class="text-slate-400 text-xs font-normal">/ year</span></div>
-                                </th>
-                                <th class="p-6 text-center w-4/12 bg-gradient-to-b from-emerald-900 to-emerald-800 text-white relative rounded-tr-xl overflow-hidden shadow-lg">
-                                    <div class="absolute top-0 right-0 bg-amber-400 text-slate-950 font-black text-[10px] uppercase px-3 py-0.5 rounded-bl-lg tracking-wider shadow-sm">
-                                        BEST VALUE
-                                    </div>
-                                    <span class="bg-emerald-700/80 text-emerald-100 text-[10px] font-bold uppercase px-2.5 py-0.5 rounded tracking-wider border border-emerald-500/30">RECOMMENDED</span>
-                                    <h4 class="font-black text-lg mt-1 text-white flex items-center justify-center gap-1.5">
-                                        PRO GROWTH AI PLAN
-                                        <i class="fa-solid fa-wand-magic-sparkles text-amber-300 text-sm"></i>
-                                    </h4>
-                                    <div class="text-amber-300 font-black text-xl mt-0.5">₹9,999 <span class="text-emerald-200 text-xs font-normal">/ year</span></div>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-200/70 text-xs sm:text-sm font-medium">
-                            <tr class="hover:bg-slate-50/80 transition-colors">
-                                <td class="p-4 sm:p-5 font-bold text-slate-900 flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 text-sm">
-                                        <i class="fa-solid fa-robot"></i>
-                                    </div>
-                                    <span>AI Sales Agent</span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-slate-50/50 border-r border-slate-200/50">
-                                    <span class="inline-flex items-center gap-1.5 text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded-full font-bold text-xs">
-                                        <i class="fa-solid fa-circle-xmark"></i> No AI sales agent
-                                    </span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-emerald-50/40 font-extrabold text-emerald-900">
-                                    <span class="inline-flex items-center gap-1.5 text-emerald-800 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-full font-bold text-xs shadow-2xs">
-                                        <i class="fa-solid fa-circle-check text-emerald-600"></i> AI sales agent will be there
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-slate-50/80 transition-colors">
-                                <td class="p-4 sm:p-5 font-bold text-slate-900 flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 text-sm">
-                                        <i class="fa-solid fa-diagram-project"></i>
-                                    </div>
-                                    <span>Conversational Flows</span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center text-slate-700 bg-slate-50/50 border-r border-slate-200/50 font-semibold">
-                                    5 Conversational flow
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-emerald-50/40 text-emerald-900 font-extrabold">
-                                    <span class="inline-flex items-center gap-1.5 text-emerald-900 bg-white border border-emerald-300 px-3 py-1 rounded-lg shadow-2xs">
-                                        <i class="fa-solid fa-infinity text-emerald-600"></i> Unlimited interactive flow
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-slate-50/80 transition-colors">
-                                <td class="p-4 sm:p-5 font-bold text-slate-900 flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 text-sm">
-                                        <i class="fa-solid fa-users"></i>
-                                    </div>
-                                    <span>Allowed User Access</span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center text-slate-700 bg-slate-50/50 border-r border-slate-200/50 font-semibold">
-                                    1 user allowed
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-emerald-50/40 text-emerald-900 font-extrabold">
-                                    <span class="inline-flex items-center gap-1 text-emerald-900 bg-white border border-emerald-300 px-3 py-1 rounded-lg shadow-2xs">
-                                        <i class="fa-solid fa-user-group text-emerald-600 mr-1"></i> 10 users allowed
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-slate-50/80 transition-colors">
-                                <td class="p-4 sm:p-5 font-bold text-slate-900 flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 text-sm">
-                                        <i class="fa-solid fa-clock-rotate-left"></i>
-                                    </div>
-                                    <span>Followup Messages</span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center text-slate-700 bg-slate-50/50 border-r border-slate-200/50 font-semibold">
-                                    10 followup messages
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-emerald-50/40 text-emerald-900 font-extrabold">
-                                    <span class="inline-flex items-center gap-1.5 text-emerald-900 bg-white border border-emerald-300 px-3 py-1 rounded-lg shadow-2xs">
-                                        <i class="fa-solid fa-infinity text-emerald-600"></i> Unlimited followup messages
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-slate-50/80 transition-colors">
-                                <td class="p-4 sm:p-5 font-bold text-slate-900 flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 text-sm">
-                                        <i class="fa-solid fa-envelope-open-text"></i>
-                                    </div>
-                                    <span>Monthly Message Capacity</span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center text-slate-700 bg-slate-50/50 border-r border-slate-200/50 font-semibold">
-                                    2000 messages per month
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-emerald-50/40 text-emerald-900 font-extrabold">
-                                    <span class="inline-flex items-center gap-1.5 text-emerald-900 bg-white border border-emerald-300 px-3 py-1 rounded-lg shadow-2xs">
-                                        <i class="fa-solid fa-bolt text-amber-500"></i> 10000 messages per month
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-slate-50/80 transition-colors">
-                                <td class="p-4 sm:p-5 font-bold text-slate-900 flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 text-sm">
-                                        <i class="fa-solid fa-paper-plane"></i>
-                                    </div>
-                                    <span>Bulk Broadcasting</span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center text-slate-700 bg-slate-50/50 border-r border-slate-200/50 font-semibold">
-                                    500 bulk messages
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-emerald-50/40 text-emerald-900 font-extrabold">
-                                    <span class="inline-flex items-center gap-1.5 text-emerald-900 bg-white border border-emerald-300 px-3 py-1 rounded-lg shadow-2xs">
-                                        <i class="fa-solid fa-infinity text-emerald-600"></i> Unlimited bulk messages
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-slate-50/80 transition-colors">
-                                <td class="p-4 sm:p-5 font-bold text-slate-900 flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 text-sm">
-                                        <i class="fa-solid fa-address-book"></i>
-                                    </div>
-                                    <span>Built-in CRM</span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-slate-50/50 border-r border-slate-200/50">
-                                    <span class="inline-flex items-center gap-1.5 text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded-full font-bold text-xs">
-                                        <i class="fa-solid fa-circle-xmark"></i> No crm
-                                    </span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-emerald-50/40 font-extrabold text-emerald-900">
-                                    <span class="inline-flex items-center gap-1.5 text-emerald-800 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-full font-bold text-xs shadow-2xs">
-                                        <i class="fa-solid fa-circle-check text-emerald-600"></i> CRM is there
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-slate-50/80 transition-colors">
-                                <td class="p-4 sm:p-5 font-bold text-slate-900 flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 text-sm">
-                                        <i class="fa-brands fa-whatsapp"></i>
-                                    </div>
-                                    <span>Number Connection Type</span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center text-slate-700 bg-slate-50/50 border-r border-slate-200/50 font-semibold">
-                                    Connect as a new number
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-emerald-50/40 text-emerald-900 font-extrabold">
-                                    <span class="inline-flex items-center gap-1.5 text-emerald-900 bg-white border border-emerald-300 px-3 py-1 rounded-lg shadow-2xs">
-                                        <i class="fa-solid fa-circle-check text-emerald-600"></i> WhatsApp Co-existence
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-slate-50/80 transition-colors">
-                                <td class="p-4 sm:p-5 font-bold text-slate-900 flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center shrink-0 text-sm">
-                                        <i class="fa-solid fa-plug"></i>
-                                    </div>
-                                    <span>External Tools Integration</span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-slate-50/50 border-r border-slate-200/50">
-                                    <span class="inline-flex items-center gap-1.5 text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded-full font-bold text-xs text-left">
-                                        <i class="fa-solid fa-circle-xmark shrink-0"></i> No External tools and webhook connection
-                                    </span>
-                                </td>
-                                <td class="p-4 sm:p-5 text-center bg-emerald-50/40 font-extrabold text-emerald-900">
-                                    <span class="inline-flex items-center gap-1.5 text-emerald-800 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-full font-bold text-xs shadow-2xs">
-                                        <i class="fa-solid fa-circle-check text-emerald-600"></i> Connect external tools
-                                    </span>
-                                </td>
-                            </tr>
-                        </tbody>
-                        <tfoot>
-                            <tr class="border-t border-slate-200 bg-slate-50">
-                                <td class="p-4 sm:p-6 font-bold text-slate-700 text-xs uppercase tracking-wider">
-                                    Ready to get started?
-                                </td>
-                                <td class="p-4 text-center bg-slate-100/80 border-r border-slate-200/50">
-                                    <button onclick="openLeadModal('Starter Plan (₹7,999 + GST/yr)')" class="px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-black text-xs transition-all uppercase tracking-wide shadow-sm hover:shadow">
-                                        Buy Starter
-                                    </button>
-                                </td>
-                                <td class="p-4 text-center bg-emerald-100/50">
-                                    <button onclick="openLeadModal('Pro Growth AI Plan (₹9,999 + GST/yr)')" class="px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs sm:text-sm shadow-md shadow-orange-500/20 transition-all uppercase tracking-wide transform hover:scale-105">
-                                        Get Pro Growth AI <i class="fa-solid fa-arrow-right ml-1"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Feature Highlights Grid -->
-    <section id="features" class="py-20 bg-white">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center max-w-3xl mx-auto mb-16 space-y-3">
-                <span class="bg-emerald-100 text-emerald-800 text-xs font-bold uppercase px-3 py-1 rounded-full border border-emerald-300">Why Sociochat</span>
-                <h2 class="text-3xl sm:text-4xl font-black text-slate-900">Powerful WhatsApp Automation Capabilities</h2>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <div class="pabbly-card p-6 border border-slate-200 hover:border-emerald-500 transition-all">
-                    <div class="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 text-xl font-bold mb-4">
-                        <i class="fa-solid fa-brain"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-slate-900 mb-2">Smart AI Sales Agent Assistant</h3>
-                    <p class="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                        Answer customer queries 24/7, present products, and qualify leads automatically with human-like AI (Included in Pro Growth Plan).
-                    </p>
-                </div>
-
-                <div class="pabbly-card p-6 border border-slate-200 hover:border-emerald-500 transition-all">
-                    <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-700 text-xl font-bold mb-4">
-                        <i class="fa-solid fa-diagram-project"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-slate-900 mb-2">Interactive Drag & Drop Flows</h3>
-                    <p class="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                        Design seamless conversational journeys with quick buttons, list menus, and customized automated branching logic.
-                    </p>
-                </div>
-
-                <div class="pabbly-card p-6 border border-slate-200 hover:border-emerald-500 transition-all">
-                    <div class="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 text-xl font-bold mb-4">
-                        <i class="fa-solid fa-users-gear"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-slate-900 mb-2">Shared Team Inbox & Built-in CRM</h3>
-                    <p class="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                        Allow up to 10 team members to collaborate on a single WhatsApp number with agent tags and customer lead management.
-                    </p>
-                </div>
-
-                <div class="pabbly-card p-6 border border-slate-200 hover:border-emerald-500 transition-all">
-                    <div class="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-purple-700 text-xl font-bold mb-4">
-                        <i class="fa-solid fa-paper-plane"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-slate-900 mb-2">Bulk Broadcast Campaigns</h3>
-                    <p class="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                        Send promotional offers, rich media attachments, and catalog updates to your opted-in contacts with high deliverability.
-                    </p>
-                </div>
-
-                <div class="pabbly-card p-6 border border-slate-200 hover:border-emerald-500 transition-all">
-                    <div class="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-700 text-xl font-bold mb-4">
-                        <i class="fa-solid fa-clock-rotate-left"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-slate-900 mb-2">Automated Follow-up Sequences</h3>
-                    <p class="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                        Automatically trigger reminder messages and abandoned cart follow-ups to maximize conversion rates.
-                    </p>
-                </div>
-
-                <div class="pabbly-card p-6 border border-slate-200 hover:border-emerald-500 transition-all">
-                    <div class="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center text-teal-700 text-xl font-bold mb-4">
-                        <i class="fa-solid fa-plug"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-slate-900 mb-2">Connect External Tools & Webhooks</h3>
-                    <p class="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                        Connect with CRMs, payment gateways, e-commerce stores, and custom APIs smoothly using webhooks (Pro Growth AI Plan).
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ROI Calculator Section -->
-    <section id="calculator" class="py-16 bg-slate-100 border-t border-slate-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center max-w-2xl mx-auto mb-10">
-                <span class="bg-slate-200 text-slate-800 text-xs font-bold uppercase px-3 py-1 rounded-full">ROI Estimator</span>
-                <h2 class="text-3xl font-black text-slate-900 mt-2">Calculate Your Revenue Uplift</h2>
-            </div>
-
-            <div class="max-w-4xl mx-auto bg-white p-8 rounded-2xl border border-slate-300 shadow-pabbly grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                <!-- Sliders -->
-                <div class="space-y-6">
-                    <div>
-                        <div class="flex justify-between text-sm mb-2 font-bold text-slate-800">
-                            <span>Monthly WhatsApp Inquiries</span>
-                            <span id="leadsVal" class="text-emerald-700 font-black">1,500</span>
-                        </div>
-                        <input type="range" id="leadsSlider" min="200" max="10000" step="100" value="1500" 
-                               class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600">
-                    </div>
-
-                    <div>
-                        <div class="flex justify-between text-sm mb-2 font-bold text-slate-800">
-                            <span>Average Sale Value (₹)</span>
-                            <span id="dealVal" class="text-emerald-700 font-black">₹2,500</span>
-                        </div>
-                        <input type="range" id="dealSlider" min="500" max="20000" step="500" value="2500" 
-                               class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600">
-                    </div>
-
-                    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2">
-                        <div class="flex items-center gap-2 font-semibold">
-                            <i class="fa-solid fa-chart-line text-emerald-600"></i>
-                            <span>Instant automated replies increase conversions by up to +18%.</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Result Box -->
-                <div class="bg-slate-900 p-6 rounded-xl border border-slate-800 text-center space-y-4 text-white shadow-md">
-                    <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Estimated Monthly Growth</span>
-                    
-                    <div>
-                        <div class="text-3xl sm:text-4xl font-black text-emerald-400" id="additionalRevenue">₹67,500</div>
-                        <span class="text-xs text-slate-300 font-medium">Extra Monthly Revenue</span>
-                    </div>
-
-                    <div class="pt-4 border-t border-slate-800 flex justify-around text-center">
-                        <div>
-                            <span class="block text-xl font-black text-white" id="extraDeals">27</span>
-                            <span class="text-[10px] uppercase text-slate-400">Extra Deals / Mo</span>
-                        </div>
-                        <div class="border-r border-slate-800"></div>
-                        <div>
-                            <span class="block text-xl font-black text-amber-400" id="roiMultiplier">8.1x</span>
-                            <span class="text-[10px] uppercase text-slate-400">Estimated Annual ROI</span>
-                        </div>
-                    </div>
-
-                    <button onclick="openLeadModal('ROI Calculated Request')" class="w-full py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs uppercase tracking-wider transition-colors shadow-sm">
-                        Get Started - ₹9,999 + GST/yr
-                    </button>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Testimonials Section -->
-    <section class="py-16 bg-white border-t border-slate-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center max-w-2xl mx-auto mb-12">
-                <span class="bg-emerald-100 text-emerald-800 text-xs font-bold uppercase px-3 py-1 rounded-full">Customer Reviews</span>
-                <h2 class="text-3xl font-black text-slate-900 mt-2">Trusted By Fast-Growing Businesses</h2>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="pabbly-card p-6 border border-slate-200 flex flex-col justify-between">
-                    <div class="space-y-3">
-                        <div class="flex text-amber-500 text-xs gap-1">
-                            <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
-                        </div>
-                        <p class="text-slate-600 text-xs sm:text-sm italic leading-relaxed">
-                            "The ₹9,999 AI plan paid for itself in our first week. The AI bot captures leads directly from our Facebook ads and schedules orders on WhatsApp automatically!"
-                        </p>
-                    </div>
-                    <div class="mt-6 pt-4 border-t border-slate-100 flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-full bg-slate-900 text-white font-black text-xs flex items-center justify-center">RP</div>
-                        <div>
-                            <h4 class="text-xs font-bold text-slate-900">Rajesh Patel</h4>
-                            <p class="text-[11px] text-slate-500">Founder, EcommHub India</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="pabbly-card p-6 border border-slate-200 flex flex-col justify-between">
-                    <div class="space-y-3">
-                        <div class="flex text-amber-500 text-xs gap-1">
-                            <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
-                        </div>
-                        <p class="text-slate-600 text-xs sm:text-sm italic leading-relaxed">
-                            "Having 10 team members share one WhatsApp number with CRM status tags transformed our support desk. Customer response times dropped dramatically."
-                        </p>
-                    </div>
-                    <div class="mt-6 pt-4 border-t border-slate-100 flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center">AS</div>
-                        <div>
-                            <h4 class="text-xs font-bold text-slate-900">Ananya Sharma</h4>
-                            <p class="text-[11px] text-slate-500">Operations Head, EduTech Academy</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="pabbly-card p-6 border border-slate-200 flex flex-col justify-between">
-                    <div class="space-y-3">
-                        <div class="flex text-amber-500 text-xs gap-1">
-                            <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
-                        </div>
-                        <p class="text-slate-600 text-xs sm:text-sm italic leading-relaxed">
-                            "WhatsApp Co-existence feature is a total lifesaver! We didn't lose our existing phone app chats while running automated campaigns."
-                        </p>
-                    </div>
-                    <div class="mt-6 pt-4 border-t border-slate-100 flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-full bg-orange-500 text-white font-black text-xs flex items-center justify-center">VK</div>
-                        <div>
-                            <h4 class="text-xs font-bold text-slate-900">Vikram Kulkarni</h4>
-                            <p class="text-[11px] text-slate-500">Marketing Lead, RealEstate Pro</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- FAQ Section -->
-    <section id="faq" class="py-16 bg-slate-100 border-t border-slate-200">
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center mb-10 space-y-2">
-                <span class="bg-slate-200 text-slate-800 text-xs font-bold uppercase px-3 py-1 rounded-full">Got Questions?</span>
-                <h2 class="text-3xl font-black text-slate-900">Frequently Asked Questions</h2>
-            </div>
-
-            <div class="space-y-3">
-                <div class="pabbly-card overflow-hidden">
-                    <button onclick="toggleFaq(this)" class="w-full p-5 text-left font-bold text-slate-900 flex justify-between items-center hover:text-emerald-700 transition-colors">
-                        <span>What is the exact difference between the ₹7,999 and ₹9,999 yearly plans?</span>
-                        <i class="fa-solid fa-chevron-down text-slate-500 transition-transform duration-200"></i>
-                    </button>
-                    <div class="faq-answer hidden p-5 pt-0 text-xs sm:text-sm text-slate-600 leading-relaxed border-t border-slate-100 mt-2">
-                        The ₹9,999 Pro Growth Plan (+ GST) includes our AI Sales Agent, 10 user seats (vs 1 user), unlimited interactive flows, unlimited follow-ups, 10,000 monthly messages, unlimited bulk broadcasting, built-in CRM, and external tools/webhook connectivity. The ₹7,999 Starter plan (+ GST) provides standard messaging with 2,000 monthly messages and 5 flows.
-                    </div>
-                </div>
-
-                <div class="pabbly-card overflow-hidden">
-                    <button onclick="toggleFaq(this)" class="w-full p-5 text-left font-bold text-slate-900 flex justify-between items-center hover:text-emerald-700 transition-colors">
-                        <span>Can I integrate external CRMs and webhooks with my plan?</span>
-                        <i class="fa-solid fa-chevron-down text-slate-500 transition-transform duration-200"></i>
-                    </button>
-                    <div class="faq-answer hidden p-5 pt-0 text-xs sm:text-sm text-slate-600 leading-relaxed border-t border-slate-100 mt-2">
-                        External tool connections and Webhooks are available exclusively on the <strong>Pro Growth AI Plan (₹9,999 + GST/yr)</strong>. You can trigger automated messages, sync lead data, and connect custom software webhooks seamlessly.
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Bottom CTA Banner (Pabbly High Impact Banner) -->
-    <section class="py-16 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white text-center">
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-            <span class="bg-amber-400 text-slate-950 font-black text-xs uppercase px-3 py-1 rounded-full tracking-wider">
-                100% Satisfaction Guaranteed
-            </span>
-            <h2 class="text-3xl sm:text-4xl font-black">Supercharge Your WhatsApp Marketing Today</h2>
-            <p class="text-slate-300 text-sm sm:text-base max-w-2xl mx-auto">
-                Join hundreds of businesses converting WhatsApp chats into high-value revenue streams with Sociochat.
-            </p>
-            <div class="pt-2">
-                <a href="#pricing" class="inline-block px-10 py-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-base shadow-pabbly shadow-orange-500/30 uppercase tracking-wide transition-all transform hover:scale-105">
-                    Select Plan & Get Started <i class="fa-solid fa-arrow-right ml-2"></i>
-                </a>
-            </div>
-        </div>
-    </section>
-
     <!-- Footer -->
-    <footer class="bg-slate-950 border-t border-slate-800 py-10 text-slate-400 text-xs">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
+    <footer class="bg-slate-950 border-t border-slate-800 py-8 text-slate-400 text-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center space-x-3">
-                <img src="https://lh3.googleusercontent.com/d/1ljpl1BzrcJa3zDqGfD5xs43KeKkNSt_O" alt="Sociochat Logo" class="w-9 h-9 object-contain" />
-                <span class="text-lg font-black text-white">Socio<span class="text-emerald-500">chat</span></span>
+                <img src="https://lh3.googleusercontent.com/d/1ljpl1BzrcJa3zDqGfD5xs43KeKkNSt_O" alt="Sociochat Logo" class="w-8 h-8 object-contain" />
+                <span class="text-base font-black text-white">Socio<span class="text-emerald-500">chat</span></span>
             </div>
 
-            <div class="text-slate-500 font-medium">
-                &copy; <span id="year"></span> Sociochat. All rights reserved.
+            <div class="text-slate-500 font-medium text-[11px]">
+                &copy; <span id="year"></span> Sociochat. All rights reserved. Meta Official WhatsApp Cloud API Partner.
             </div>
         </div>
     </footer>
 
     <!-- Lead Capture Modal -->
     <div id="leadModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-md p-6 sm:p-8 rounded-2xl border border-slate-300 relative shadow-2xl">
+        <div class="bg-white w-full max-w-md p-6 rounded-2xl border border-slate-300 relative shadow-2xl">
             <button onclick="closeLeadModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-xl">
                 <i class="fa-solid fa-xmark"></i>
             </button>
 
-            <div class="text-center mb-6">
-                <div class="w-12 h-12 bg-emerald-100 border border-emerald-300 rounded-full flex items-center justify-center text-emerald-700 text-xl mx-auto mb-3 font-bold">
+            <div class="text-center mb-5">
+                <div class="w-10 h-10 bg-emerald-100 border border-emerald-300 rounded-full flex items-center justify-center text-emerald-700 text-lg mx-auto mb-2 font-bold">
                     <i class="fa-brands fa-whatsapp"></i>
                 </div>
-                <h3 class="text-xl font-black text-slate-900">Activate Sociochat Account</h3>
-                <p id="modalPlanTitle" class="text-xs text-emerald-700 font-bold mt-1">Pro Growth AI Plan Selected</p>
+                <h3 class="text-lg font-black text-slate-900">Activate Sociochat Account</h3>
+                <p id="modalPlanTitle" class="text-xs text-emerald-700 font-bold mt-0.5">Pro Growth AI Plan Selected</p>
             </div>
 
-            <form onsubmit="handleLeadSubmit(event)" class="space-y-4">
+            <form id="modalLeadForm" onsubmit="handleLeadSubmit(event)" class="space-y-3.5">
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
-                    <input type="text" required placeholder="e.g. Rahul Sharma" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600">
+                    <input id="modal-name" type="text" required placeholder="e.g. Rahul Sharma" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600">
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">WhatsApp Mobile Number</label>
-                    <input type="tel" required placeholder="+91 98765 43210" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600">
+                    <input id="modal-phone" type="tel" required placeholder="+91 98765 43210" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">Business Name</label>
-                    <input type="text" placeholder="e.g. Acme Enterprises" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600">
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Work Email</label>
+                    <input id="modal-email" type="email" required placeholder="name@company.com" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600">
                 </div>
 
-                <button type="submit" class="w-full py-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm shadow-pabbly shadow-orange-500/20 transition-all uppercase tracking-wide">
+                <button id="modalSubmitBtn" type="submit" class="w-full py-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs sm:text-sm shadow-md transition-all uppercase tracking-wide">
                     Request Instant Setup
                 </button>
             </form>
@@ -883,71 +450,39 @@
     </div>
 
     <!-- Notification Toast -->
-    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-4 rounded-xl border border-slate-700 shadow-2xl flex items-center gap-3 hidden">
-        <i class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
-        <span id="toastMsg" class="text-xs sm:text-sm font-bold">Action completed successfully!</span>
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-xl border border-slate-700 shadow-2xl flex items-center gap-3 hidden">
+        <i class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+        <span id="toastMsg" class="text-xs font-bold">Action completed successfully!</span>
     </div>
 
     <script>
-        // Update copyright year safely
+        // Google Apps Script Web App — appends each lead as a row to the connected sheet.
+        // Columns: Timestamp | Source | Plan Selected | Full Name | WhatsApp Number | Work Email | Page URL | User Agent
+        const SHEET_URL = 'https://script.google.com/macros/s/AKfycbxyc6zO1qI4IgghpAUSvJHyKFK4Sv9DiGtJhbCDLeQJHMmIBHC-dVtEj8hW2mvdIJcT/exec';
+
+        // Fire-and-forget POST. Uses no-cors because Apps Script Web Apps don't send
+        // CORS headers — the browser can't read the response, but Apps Script still
+        // receives the request and appends the row.
+        async function postToSheet(payload) {
+            try {
+                await fetch(SHEET_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(payload)
+                });
+            } catch (err) {
+                // Silent — don't block the thank-you message. Log for debugging.
+                console.error('[sheet] POST failed:', err);
+            }
+        }
+
+        // Update Copyright Year safely
         const yearEl = document.getElementById('year');
         if (yearEl) {
             yearEl.textContent = new Date().getFullYear();
         }
 
-        // ROI Calculator Logic
-        const leadsSlider = document.getElementById('leadsSlider');
-        const dealSlider = document.getElementById('dealSlider');
-        const leadsVal = document.getElementById('leadsVal');
-        const dealVal = document.getElementById('dealVal');
-        const additionalRevenue = document.getElementById('additionalRevenue');
-        const extraDeals = document.getElementById('extraDeals');
-        const roiMultiplier = document.getElementById('roiMultiplier');
-
-        function updateRoi() {
-            if (!leadsSlider || !dealSlider) return;
-
-            const leads = parseInt(leadsSlider.value) || 0;
-            const deal = parseInt(dealSlider.value) || 0;
-
-            if (leadsVal) leadsVal.textContent = leads.toLocaleString();
-            if (dealVal) dealVal.textContent = '₹' + deal.toLocaleString();
-
-            const additionalClosed = Math.round(leads * 0.018);
-            const revenue = additionalClosed * deal;
-            const yearlyRevenue = revenue * 12;
-            const roi = (yearlyRevenue / 9999).toFixed(1);
-
-            if (extraDeals) extraDeals.textContent = additionalClosed;
-            if (additionalRevenue) additionalRevenue.textContent = '₹' + revenue.toLocaleString();
-            if (roiMultiplier) roiMultiplier.textContent = roi + 'x';
-        }
-
-        if (leadsSlider && dealSlider) {
-            leadsSlider.addEventListener('input', updateRoi);
-            dealSlider.addEventListener('input', updateRoi);
-            updateRoi();
-        }
-
-        // FAQ Toggle Logic
-        function toggleFaq(button) {
-            if (!button) return;
-            const answer = button.nextElementSibling;
-            const icon = button.querySelector('i');
-            if (!answer) return;
-
-            const isHidden = answer.classList.contains('hidden');
-
-            document.querySelectorAll('.faq-answer').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('#faq button i').forEach(el => el.classList.remove('rotate-180'));
-
-            if (isHidden) {
-                answer.classList.remove('hidden');
-                if (icon) icon.classList.add('rotate-180');
-            }
-        }
-
-        // Lead Modal Logic
+        // Lead Modal Handler
         function openLeadModal(planName) {
             const planTitleEl = document.getElementById('modalPlanTitle');
             const leadModalEl = document.getElementById('leadModal');
@@ -960,7 +495,7 @@
             if (leadModalEl) leadModalEl.classList.add('hidden');
         }
 
-        // Toast Message Logic
+        // Toast Handler
         function showToast(msg) {
             const toast = document.getElementById('toast');
             const toastMsg = document.getElementById('toastMsg');
@@ -970,13 +505,62 @@
             toast.classList.remove('hidden');
             setTimeout(() => {
                 toast.classList.add('hidden');
-            }, 4000);
+            }, 5000);
         }
 
-        function handleLeadSubmit(e) {
+        // Form Submit Handlers — both POST to the Google Sheet, then show thank-you toast.
+        async function handleHeroLeadSubmit(e) {
             e.preventDefault();
-            closeLeadModal();
+            const btn = document.getElementById('heroSubmitBtn');
+            if (btn) { btn.disabled = true; btn.style.opacity = '0.7'; }
+
+            const payload = {
+                source: 'Hero Form',
+                plan: '',
+                name: (document.getElementById('hero-name') || {}).value || '',
+                phone: (document.getElementById('hero-phone') || {}).value || '',
+                email: (document.getElementById('hero-email') || {}).value || '',
+                pageUrl: window.location.href,
+                userAgent: navigator.userAgent
+            };
+
+            await postToSheet(payload);
+
             showToast('Thank you! Our WhatsApp Automation Team will contact you shortly.');
+            e.target.reset();
+            if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+
+            const pricingSec = document.getElementById('pricing');
+            if (pricingSec) {
+                setTimeout(() => pricingSec.scrollIntoView({ behavior: 'smooth' }), 800);
+            }
+        }
+
+        async function handleLeadSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('modalSubmitBtn');
+            if (btn) { btn.disabled = true; btn.style.opacity = '0.7'; }
+
+            // Pull plan name out of the modal header (strip trailing " Selected")
+            const planTitleEl = document.getElementById('modalPlanTitle');
+            const planText = planTitleEl ? planTitleEl.textContent.replace(/\s+Selected\s*$/, '') : '';
+
+            const payload = {
+                source: 'Pricing Modal',
+                plan: planText,
+                name: (document.getElementById('modal-name') || {}).value || '',
+                phone: (document.getElementById('modal-phone') || {}).value || '',
+                email: (document.getElementById('modal-email') || {}).value || '',
+                pageUrl: window.location.href,
+                userAgent: navigator.userAgent
+            };
+
+            await postToSheet(payload);
+
+            showToast('Thank you! Our WhatsApp Automation Team will contact you shortly.');
+            e.target.reset();
+            if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+            closeLeadModal();
         }
     </script>
 </body>
