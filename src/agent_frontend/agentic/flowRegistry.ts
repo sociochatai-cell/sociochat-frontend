@@ -153,6 +153,37 @@ export const FLOW_REGISTRY: Record<string, FlowDef> = {
     ],
   },
 
+  // ── CTWA Campaign (embedded) — multi-step; needs a connected FB Page first ──
+  ctwa_embedded_signup_flow: {
+    key: "ctwa_embedded_signup_flow",
+    route: "/dashboard/campaign/create",
+    title: "CTWA Campaign Creation",
+    area: "ctwa",
+    multiStep: true,
+    steps: ["account", "campaign", "audience", "creative", "message", "review"],
+    submitButtons: ["Next", "Continue", "Publish", "Launch"],
+    finalSubmitButtons: ["Publish", "Launch Campaign"],
+    interactive: "sequential",
+    navigable: true,
+    handoff: "Opened CTWA campaign creation. Connect/select a Facebook Page first (the Next button unlocks after that); then I can fill the campaign, budget, creative and click-to-WhatsApp message.",
+    fields: [
+      { semantic: "campaign_name", selector: "Campaign Name", selectorKind: "label", type: "input", aliases: ["name"] },
+      { semantic: "campaign_objective", selector: "Objective", selectorKind: "label", type: "combobox", aliases: ["objective"] },
+      { semantic: "daily_budget", selector: "Daily Budget", selectorKind: "label", type: "input", aliases: ["budget", "daily_budget_inr"] },
+      { semantic: "creative_primary_text", selector: "Primary Text", selectorKind: "label", type: "textarea", aliases: ["primary_text", "ad_copy"] },
+      { semantic: "creative_headline", selector: "Headline", selectorKind: "label", type: "input", aliases: ["headline"] },
+      { semantic: "ctwa_prefilled_message", selector: "Prefilled Message", selectorKind: "label", type: "textarea", aliases: ["prefilled_message", "welcome_message"] },
+    ],
+    stepRoutes: [
+      { route: "/dashboard/campaign/create", fields: [], advanceButtonText: ["Next", "Continue"] },
+      { route: "/dashboard/campaign/create", fields: ["campaign_name", "campaign_objective"], advanceButtonText: ["Next", "Continue"] },
+      { route: "/dashboard/campaign/create", fields: ["daily_budget"], advanceButtonText: ["Next", "Continue"] },
+      { route: "/dashboard/campaign/create", fields: ["creative_primary_text", "creative_headline"], advanceButtonText: ["Next", "Continue"] },
+      { route: "/dashboard/campaign/create", fields: ["ctwa_prefilled_message"], advanceButtonText: ["Next", "Continue"] },
+      { route: "/dashboard/campaign/create", fields: [], terminal: true },
+    ],
+  },
+
   // ── CRM Lead / Deal / Contact (modal dialogs, stable ids) ──────────────────
   crm_lead_create: {
     key: "crm_lead_create",
@@ -204,6 +235,67 @@ export const FLOW_REGISTRY: Record<string, FlowDef> = {
       { semantic: "email", selector: "c-email", selectorKind: "id", type: "input" },
       { semantic: "company", selector: "c-company", selectorKind: "id", type: "input" },
     ],
+  },
+
+  // ── CRM mutations → navigate + record-pick handoff. The edit/status/stage
+  //    form only materializes AFTER the user selects a record (backend
+  //    playbooks.py: these "navigate + hand off"; a fresh page has no record to
+  //    autofill — executing with no record fails "lead_id required"), so these
+  //    are navigable handoffs, not openTrigger fill flows. ──────────────────────
+  crm_lead_edit: {
+    key: "crm_lead_edit",
+    route: "/dashboard/crm/leads",
+    title: "Edit Lead",
+    area: "crm",
+    multiStep: false,
+    steps: [],
+    submitButtons: [],
+    fields: [],
+    navigable: true,
+    handoff: "Opened CRM Leads. Pick the lead you want to edit from the list to open its record, then update its fields and save.",
+  },
+  crm_lead_status_update: {
+    key: "crm_lead_status_update",
+    route: "/dashboard/crm/leads",
+    title: "Update Lead Status",
+    area: "crm",
+    multiStep: false,
+    steps: [],
+    submitButtons: [],
+    fields: [],
+    navigable: true,
+    handoff: "Opened CRM Leads. Pick the lead whose status you want to change, open it, then set the Status field.",
+  },
+  crm_deal_stage_change: {
+    key: "crm_deal_stage_change",
+    route: "/dashboard/crm/deals",
+    title: "Change Deal Stage",
+    area: "crm",
+    multiStep: false,
+    steps: [],
+    submitButtons: [],
+    fields: [],
+    navigable: true,
+    handoff: "Opened CRM Deals. Drag a deal card to a new stage column, or open the deal and change its Stage, then save.",
+  },
+
+  // ── WhatsApp account connection (Meta embedded signup + technical ids) ──────
+  whatsapp_account_setup: {
+    key: "whatsapp_account_setup",
+    route: "/dashboard/whatsapp/setup",
+    title: "WhatsApp Account Connection",
+    area: "whatsapp",
+    multiStep: false,
+    steps: [],
+    submitButtons: ["Connect", "Save", "Continue"],
+    finalSubmitButtons: ["Connect", "Save"],
+    navigable: true,
+    fields: [
+      { semantic: "whatsapp_business_account_id", selector: "Business Account", selectorKind: "label", type: "input", aliases: ["waba_id", "business_account_id"] },
+      { semantic: "whatsapp_phone_number_id", selector: "Phone Number", selectorKind: "label", type: "input", aliases: ["phone_number_id"] },
+      { semantic: "permanent_access_token", selector: "Access Token", selectorKind: "label", type: "input", aliases: ["access_token", "token"] },
+    ],
+    handoff: "Opened WhatsApp setup. Connecting an account normally runs through Meta's embedded signup (the “Connect” button) rather than typing ids by hand — use that unless you're pasting known credentials.",
   },
 
   // ── Canvas builders → navigate-only handoff (drag-node, AI-generate dialog) ──
