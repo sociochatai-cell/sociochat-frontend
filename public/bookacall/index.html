@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sociochat - WhatsApp Automation & AI Growth Platform</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Custom Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        pabbly: {
+                            blue: '#0b2545',
+                            accent: '#1e3a8a',
+                            emerald: '#059669',
+                            orange: '#f97316',
+                            yellow: '#f59e0b',
+                            bgLight: '#f8fafc',
+                            cardBorder: '#cbd5e1'
+                        }
+                    },
+                    boxShadow: {
+                        'pabbly': '0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04)',
+                        'pabbly-hover': '0 20px 35px -10px rgba(15, 23, 42, 0.15)',
+                        'glow-emerald': '0 8px 25px -4px rgba(5, 150, 105, 0.35)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+
+        .pabbly-card {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            border-radius: 16px;
+        }
+
+        .pabbly-card-featured {
+            background: #ffffff;
+            border: 2px solid #059669;
+            box-shadow: 0 12px 30px rgba(5, 150, 105, 0.18);
+            border-radius: 16px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(5, 150, 105, 0.3);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="antialiased overflow-x-hidden text-slate-800 bg-[#f8fafc]">
+
+    <!-- Header / Navigation -->
+    <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <!-- Brand Logo -->
+            <a href="#" class="flex items-center space-x-3 group">
+                <img src="https://lh3.googleusercontent.com/d/1ljpl1BzrcJa3zDqGfD5xs43KeKkNSt_O" alt="Sociochat Logo" class="w-11 h-11 object-contain group-hover:scale-105 transition-transform drop-shadow-sm" />
+                <div class="flex flex-col">
+                    <span class="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-1">
+                        Socio<span class="text-emerald-600">chat</span>
+                    </span>
+                    <span class="text-[10px] tracking-widest text-emerald-700 font-bold uppercase -mt-1">WhatsApp Automation</span>
+                </div>
+            </a>
+
+            <!-- Primary Header Action -->
+            <div class="flex items-center space-x-3">
+                <a href="#pricing" class="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-orange-500/20 transition-all transform hover:-translate-y-0.5 uppercase tracking-wide flex items-center gap-2">
+                    <span>Get Sociochat Now</span>
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section with Demo Video & Lead Capture Form -->
+    <section class="relative pt-8 pb-12 md:pt-12 md:pb-16 bg-gradient-to-b from-emerald-50/50 via-slate-50 to-[#f8fafc] border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+
+            <!-- Hero Heading -->
+            <div class="text-center max-w-4xl mx-auto mb-8 space-y-3">
+                <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold shadow-2xs">
+                    <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                    <span>Official Meta WhatsApp Cloud API Platform</span>
+                </div>
+                <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+                    Convert your leads to sales using our <span class="bg-emerald-600 text-white px-3 py-0.5 rounded-lg inline-block">WhatsApp Automation System</span>
+                </h1>
+                <p class="text-slate-600 text-sm sm:text-base lg:text-lg font-medium max-w-2xl mx-auto">
+                    Broadcast campaigns, AI sales agent responses, lead follow-ups, and multi-user chat inbox — all in one powerful solution.
+                </p>
+            </div>
+
+            <!-- Hero Grid: Video Player + Lead Form -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center max-w-6xl mx-auto">
+
+                <!-- Demo Video Column (7 Cols) -->
+                <div class="lg:col-span-7 flex flex-col justify-center">
+                    <div class="mb-3 text-center sm:text-left">
+                        <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs sm:text-sm font-bold shadow-2xs">
+                            <i class="fa-solid fa-circle-play text-amber-600 animate-pulse text-sm sm:text-base"></i>
+                            Watch the whole demo before booking the call
+                        </span>
+                    </div>
+                    <div class="relative rounded-2xl overflow-hidden border-2 border-slate-300 shadow-2xl bg-slate-900 group">
+                        <div class="aspect-video w-full flex items-center justify-center bg-slate-900 relative">
+                            <!-- Embedded Video Player -->
+                            <iframe
+                                src="https://drive.google.com/file/d/1YfBoZsOQrvMpwRp3wPYKDizVeE1j3RGl/preview"
+                                class="w-full h-full border-0"
+                                allow="autoplay"
+                                title="Sociochat Demo Video">
+                            </iframe>
+                        </div>
+                    </div>
+
+                    <!-- Quick Trust Indicators -->
+                    <div class="mt-4 grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-slate-600">
+                        <div class="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-bolt text-amber-500"></i> Instant Setup
+                        </div>
+                        <div class="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-emerald-600"></i> Meta Approved
+                        </div>
+                        <div class="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-headset text-blue-600"></i> 1-on-1 Support
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lead Form Column (5 Cols) -->
+                <div class="lg:col-span-5">
+                    <div class="pabbly-card p-6 sm:p-7 border-2 border-emerald-500/80 shadow-pabbly bg-white">
+                        <div class="text-center mb-5 space-y-1">
+                            <span class="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+                                Request Access & Demo
+                            </span>
+                            <h3 class="text-xl sm:text-2xl font-black text-slate-900">Get Started with Sociochat</h3>
+                            <p class="text-xs text-slate-500 font-medium">Fill in your details for instant demo access & onboarding.</p>
+                        </div>
+
+                        <form id="heroLeadForm" onsubmit="handleHeroLeadSubmit(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Full Name *</label>
+                                <div class="relative">
+                                    <i class="fa-solid fa-user absolute left-3.5 top-3.5 text-slate-400 text-xs"></i>
+                                    <input id="hero-name" type="text" required placeholder="e.g. Rahul Sharma" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">WhatsApp Phone Number *</label>
+                                <div class="relative">
+                                    <i class="fa-brands fa-whatsapp absolute left-3.5 top-3.5 text-emerald-600 text-sm"></i>
+                                    <input id="hero-phone" type="tel" required placeholder="+91 98765 43210" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Work Email *</label>
+                                <div class="relative">
+                                    <i class="fa-solid fa-envelope absolute left-3.5 top-3.5 text-slate-400 text-xs"></i>
+                                    <input id="hero-email" type="email" required placeholder="name@company.com" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors">
+                                </div>
+                            </div>
+
+                            <button id="heroSubmitBtn" type="submit" class="w-full py-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm shadow-md shadow-orange-500/30 transition-all uppercase tracking-wide transform hover:scale-[1.01]">
+                                Book a one on one consultation now <i class="fa-solid fa-arrow-right ml-1"></i>
+                            </button>
+
+                            <p class="text-[10px] text-center text-slate-500 font-medium">
+                                <i class="fa-solid fa-lock text-slate-400 mr-1"></i> Your information is 100% secure. No spam.
+                            </p>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+    <!-- PRICING PLANS SECTION -->
+    <section id="pricing" class="py-12 md:py-16 bg-[#f8fafc] relative">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+            <div class="text-center max-w-3xl mx-auto mb-10 space-y-2">
+                <span class="bg-emerald-100 text-emerald-800 text-xs font-black uppercase px-3 py-1 rounded-full border border-emerald-300">
+                    Transparent Yearly Plans
+                </span>
+                <h2 class="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                    Select Your Sociochat License
+                </h2>
+                <p class="text-slate-600 text-sm sm:text-base font-medium">
+                    Choose between our essential Starter Plan or unlock full AI automation & CRM with the Pro Growth AI Plan.
+                </p>
+            </div>
+
+            <!-- Pricing Cards Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto items-stretch">
+
+                <!-- CARD 1: Starter Plan (₹7,999 + GST / year) -->
+                <div class="pabbly-card flex flex-col justify-between overflow-hidden relative transition-all duration-200 hover:shadow-pabbly-hover">
+                    <!-- Colored Header Bar -->
+                    <div class="bg-slate-900 text-white p-6 border-b border-slate-800">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <span class="bg-slate-700 text-slate-200 text-[10px] font-bold uppercase px-2.5 py-0.5 rounded tracking-wider">ANNUAL PLAN</span>
+                                <h3 class="text-2xl font-black text-white mt-1">Starter Plan</h3>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-slate-400 line-through text-xs font-semibold">₹12,000</span>
+                                <div class="bg-emerald-500 text-slate-950 font-black text-[11px] px-2 py-0.5 rounded mt-0.5">SAVE 33%</div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-300 mt-2">Essential automation for businesses getting started with WhatsApp.</p>
+                    </div>
+
+                    <!-- Price Display -->
+                    <div class="p-6 bg-slate-50 border-b border-slate-200">
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-4xl font-black text-slate-900">₹7,999</span>
+                            <span class="text-slate-600 font-bold text-sm">+ GST / yearly</span>
+                        </div>
+                        <p class="text-xs text-slate-500 font-semibold mt-1">Approx. ₹666/month + GST (Billed Yearly)</p>
+                    </div>
+
+                    <!-- Feature List -->
+                    <div class="p-6 space-y-3 text-xs sm:text-sm flex-1 bg-white">
+                        <div class="font-bold uppercase text-[11px] tracking-wider mb-2 text-slate-500">Plan Inclusions:</div>
+
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-xmark text-red-500 text-base mt-0.5"></i>
+                            <span class="text-slate-500"><strong>No AI sales agent</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>5 Conversational flow</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>1 user allowed</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>10 followup messages</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>2000 messages per month</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>500 bulk messages</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-xmark text-red-500 text-base mt-0.5"></i>
+                            <span class="text-slate-500"><strong>No crm</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>Connect as a new number</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-xmark text-red-500 text-base mt-0.5"></i>
+                            <span class="text-slate-500"><strong>No External tools and webhook connection</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Action CTA -->
+                    <div class="p-6 bg-slate-50 border-t border-slate-200 text-center">
+                        <button onclick="openLeadModal('Starter Plan (₹7,999 + GST/yr)')" class="w-full py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm shadow-md transition-all uppercase tracking-wide">
+                            Buy Starter Plan - ₹7,999 + GST/yr
+                        </button>
+                        <p class="text-[11px] text-slate-500 font-semibold mt-2 flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-bolt text-amber-500"></i> Instant Account Activation
+                        </p>
+                    </div>
+                </div>
+
+                <!-- CARD 2: Pro Growth AI Plan (₹9,999 + GST / year) - FEATURED -->
+                <div class="pabbly-card-featured flex flex-col justify-between overflow-hidden relative transition-all duration-200 hover:shadow-pabbly-hover bg-white">
+                    <!-- Ribbon Badge -->
+                    <div class="bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-center font-black text-xs uppercase py-1.5 tracking-wider shadow-sm">
+                        ⭐ MOST POPULAR • MAXIMUM VALUE PLAN
+                    </div>
+
+                    <!-- Colored Header Bar -->
+                    <div class="bg-emerald-700 text-white p-6 border-b border-emerald-800">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <span class="bg-emerald-900 text-emerald-200 text-[10px] font-bold uppercase px-2.5 py-0.5 rounded tracking-wider">ANNUAL AI PLAN</span>
+                                <h3 class="text-2xl font-black text-white mt-1 flex items-center gap-2">
+                                    Pro Growth AI
+                                    <i class="fa-solid fa-wand-magic-sparkles text-amber-300 text-lg"></i>
+                                </h3>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-emerald-200 line-through text-xs font-semibold">₹18,000</span>
+                                <div class="bg-amber-400 text-slate-950 font-black text-[11px] px-2 py-0.5 rounded mt-0.5">SAVE 44%</div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-emerald-100 mt-2">Full power automation with AI Sales Agent, CRM, and Unlimited Flows.</p>
+                    </div>
+
+                    <!-- Price Display -->
+                    <div class="p-6 bg-emerald-50/60 border-b border-emerald-200">
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-4xl font-black text-slate-900">₹9,999</span>
+                            <span class="text-slate-700 font-bold text-sm">+ GST / yearly</span>
+                        </div>
+                        <p class="text-xs text-emerald-800 font-bold mt-1">Best Value: Only ₹833/month + GST (Billed Yearly)</p>
+                    </div>
+
+                    <!-- Feature List -->
+                    <div class="p-6 space-y-3 text-xs sm:text-sm flex-1 bg-white">
+                        <div class="font-bold text-emerald-800 uppercase text-[11px] tracking-wider mb-2">Everything in Starter + AI & CRM:</div>
+
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-900 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-emerald-900">AI sales agent will be there</span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>Unlimited interactive flow</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>10 users allowed</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>Unlimited followup messages</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>10000 messages per month</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>Unlimited bulk messages</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>CRM will be given</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800"><strong>WhatsApp Co-existence</strong></span>
+                        </div>
+                        <div class="flex items-start gap-3 py-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+                            <span class="text-slate-800 font-bold text-emerald-700">Connect external tools</span>
+                        </div>
+                    </div>
+
+                    <!-- Action CTA -->
+                    <div class="p-6 bg-emerald-50/50 border-t border-emerald-200 text-center">
+                        <button onclick="openLeadModal('Pro Growth AI Plan (₹9,999 + GST/yr)')" class="w-full py-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm shadow-md shadow-orange-500/30 transition-all uppercase tracking-wide transform hover:scale-[1.01]">
+                            Buy Pro Growth AI Plan - ₹9,999 + GST/yr
+                        </button>
+                        <p class="text-[11px] text-emerald-800 font-bold mt-2 flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-circle-check text-emerald-600"></i> Includes Full AI Setup & Onboarding
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 border-t border-slate-800 py-8 text-slate-400 text-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <img src="https://lh3.googleusercontent.com/d/1ljpl1BzrcJa3zDqGfD5xs43KeKkNSt_O" alt="Sociochat Logo" class="w-8 h-8 object-contain" />
+                <span class="text-base font-black text-white">Socio<span class="text-emerald-500">chat</span></span>
+            </div>
+
+            <div class="text-slate-500 font-medium text-[11px]">
+                &copy; <span id="year"></span> Sociochat. All rights reserved. Meta Official WhatsApp Cloud API Partner.
+            </div>
+        </div>
+    </footer>
+
+    <!-- Lead Capture Modal -->
+    <div id="leadModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md p-6 rounded-2xl border border-slate-300 relative shadow-2xl">
+            <button onclick="closeLeadModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <div class="text-center mb-5">
+                <div class="w-10 h-10 bg-emerald-100 border border-emerald-300 rounded-full flex items-center justify-center text-emerald-700 text-lg mx-auto mb-2 font-bold">
+                    <i class="fa-brands fa-whatsapp"></i>
+                </div>
+                <h3 class="text-lg font-black text-slate-900">Activate Sociochat Account</h3>
+                <p id="modalPlanTitle" class="text-xs text-emerald-700 font-bold mt-0.5">Pro Growth AI Plan Selected</p>
+            </div>
+
+            <form id="modalLeadForm" onsubmit="handleLeadSubmit(event)" class="space-y-3.5">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
+                    <input id="modal-name" type="text" required placeholder="e.g. Rahul Sharma" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">WhatsApp Mobile Number</label>
+                    <input id="modal-phone" type="tel" required placeholder="+91 98765 43210" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Work Email</label>
+                    <input id="modal-email" type="email" required placeholder="name@company.com" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-emerald-600">
+                </div>
+
+                <button id="modalSubmitBtn" type="submit" class="w-full py-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs sm:text-sm shadow-md transition-all uppercase tracking-wide">
+                    Request Instant Setup
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-xl border border-slate-700 shadow-2xl flex items-center gap-3 hidden">
+        <i class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+        <span id="toastMsg" class="text-xs font-bold">Action completed successfully!</span>
+    </div>
+
+    <script>
+        // Google Apps Script Web App — appends each lead as a row to the connected sheet.
+        // Columns: Timestamp | Source | Plan Selected | Full Name | WhatsApp Number | Work Email | Page URL | User Agent
+        const SHEET_URL = 'https://script.google.com/macros/s/AKfycbxyc6zO1qI4IgghpAUSvJHyKFK4Sv9DiGtJhbCDLeQJHMmIBHC-dVtEj8hW2mvdIJcT/exec';
+
+        // Fire-and-forget POST. Uses no-cors because Apps Script Web Apps don't send
+        // CORS headers — the browser can't read the response, but Apps Script still
+        // receives the request and appends the row.
+        async function postToSheet(payload) {
+            try {
+                await fetch(SHEET_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(payload)
+                });
+            } catch (err) {
+                // Silent — don't block the thank-you message. Log for debugging.
+                console.error('[sheet] POST failed:', err);
+            }
+        }
+
+        // Update Copyright Year safely
+        const yearEl = document.getElementById('year');
+        if (yearEl) {
+            yearEl.textContent = new Date().getFullYear();
+        }
+
+        // Lead Modal Handler
+        function openLeadModal(planName) {
+            const planTitleEl = document.getElementById('modalPlanTitle');
+            const leadModalEl = document.getElementById('leadModal');
+            if (planTitleEl) planTitleEl.textContent = (planName || 'Plan') + ' Selected';
+            if (leadModalEl) leadModalEl.classList.remove('hidden');
+        }
+
+        function closeLeadModal() {
+            const leadModalEl = document.getElementById('leadModal');
+            if (leadModalEl) leadModalEl.classList.add('hidden');
+        }
+
+        // Toast Handler
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            if (!toast || !toastMsg) return;
+
+            toastMsg.textContent = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Form Submit Handlers — both POST to the Google Sheet, then show thank-you toast.
+        async function handleHeroLeadSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('heroSubmitBtn');
+            if (btn) { btn.disabled = true; btn.style.opacity = '0.7'; }
+
+            const payload = {
+                source: 'Hero Form',
+                plan: '',
+                name: (document.getElementById('hero-name') || {}).value || '',
+                phone: (document.getElementById('hero-phone') || {}).value || '',
+                email: (document.getElementById('hero-email') || {}).value || '',
+                pageUrl: window.location.href,
+                userAgent: navigator.userAgent
+            };
+
+            await postToSheet(payload);
+
+            showToast('Thank you! Our WhatsApp Automation Team will contact you shortly.');
+            e.target.reset();
+            if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+
+            const pricingSec = document.getElementById('pricing');
+            if (pricingSec) {
+                setTimeout(() => pricingSec.scrollIntoView({ behavior: 'smooth' }), 800);
+            }
+        }
+
+        async function handleLeadSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('modalSubmitBtn');
+            if (btn) { btn.disabled = true; btn.style.opacity = '0.7'; }
+
+            // Pull plan name out of the modal header (strip trailing " Selected")
+            const planTitleEl = document.getElementById('modalPlanTitle');
+            const planText = planTitleEl ? planTitleEl.textContent.replace(/\s+Selected\s*$/, '') : '';
+
+            const payload = {
+                source: 'Pricing Modal',
+                plan: planText,
+                name: (document.getElementById('modal-name') || {}).value || '',
+                phone: (document.getElementById('modal-phone') || {}).value || '',
+                email: (document.getElementById('modal-email') || {}).value || '',
+                pageUrl: window.location.href,
+                userAgent: navigator.userAgent
+            };
+
+            await postToSheet(payload);
+
+            showToast('Thank you! Our WhatsApp Automation Team will contact you shortly.');
+            e.target.reset();
+            if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+            closeLeadModal();
+        }
+    </script>
+</body>
+</html>
