@@ -79,10 +79,14 @@ export const FLOW_REGISTRY: Record<string, FlowDef> = {
     submitButtons: ["Next", "Continue", "Launch", "Schedule"],
     finalSubmitButtons: ["Launch Campaign", "Schedule Campaign", "Launch"],
     interactive: "sequential",
+    // The 4-step wizard only renders after clicking "New Campaign" (default view is the
+    // campaign list). driveSequential applies preClicks before walking the steps.
+    preClicks: [{ text: "New Campaign" }],
     fields: [
       { semantic: "campaign_name", selector: "Campaign Name", selectorKind: "label", type: "input", aliases: ["name", "campaignName"] },
       { semantic: "campaign_description", selector: "Description", selectorKind: "label", type: "textarea", aliases: ["description", "campaignDescription"] },
-      { semantic: "template", selector: "Template", selectorKind: "label", type: "combobox", aliases: ["selectedTemplate", "template_name"] },
+      // Template is a searchable CARD GRID (not a Radix Select) — click the card by name.
+      { semantic: "template", selector: "Template", selectorKind: "label", type: "radio", aliases: ["selectedTemplate", "template_name"] },
     ],
     stepRoutes: [
       { route: "/dashboard/bulk", fields: ["campaign_name", "campaign_description", "template"],
@@ -106,9 +110,18 @@ export const FLOW_REGISTRY: Record<string, FlowDef> = {
     openTrigger: "New Campaign",
     fields: [
       { semantic: "name", selector: "Campaign Name", selectorKind: "label", type: "input", aliases: ["campaign_name"] },
-      { semantic: "description", selector: "Description", selectorKind: "label", type: "textarea" },
-      { semantic: "trigger_type", selector: "Trigger", selectorKind: "label", type: "combobox",
-        aliases: ["trigger"] },
+      // The trigger is a clickable CARD GRID (not a Radix Select) and there is no
+      // Description field in the dialog — so model trigger as a radio/card click with a
+      // canonical-key → card-title map, and drop the phantom description field.
+      { semantic: "trigger_type", selector: "Trigger", selectorKind: "label", type: "radio",
+        aliases: ["trigger"],
+        valueMap: {
+          drip_manual: "Manual Enrollment",
+          new_message: "New WhatsApp Message",
+          new_lead: "New CRM Lead",
+          new_contact: "New CRM Contact",
+          google_sheet_row: "Google Sheet Row",
+        } },
     ],
   },
 
@@ -122,6 +135,10 @@ export const FLOW_REGISTRY: Record<string, FlowDef> = {
     steps: [],
     submitButtons: ["Save", "Save Changes"],
     finalSubmitButtons: ["Save", "Save Changes"],
+    // welcome-msg / away-msg live on the non-default "Inbound" tab (Radix unmounts
+    // inactive tabs), so switch to it before filling. (away_message is additionally
+    // plan-gated to Growth+, so it only fills on those plans.)
+    preClicks: [{ text: "Inbound" }],
     fields: [
       { semantic: "welcome_message", selector: "welcome-msg", selectorKind: "id", type: "textarea", aliases: ["welcome", "greeting"] },
       { semantic: "away_message", selector: "away-msg", selectorKind: "id", type: "textarea", aliases: ["away"] },
@@ -144,11 +161,18 @@ export const FLOW_REGISTRY: Record<string, FlowDef> = {
       { semantic: "daily_budget", selector: "Daily Budget", selectorKind: "label", type: "input", aliases: ["budget", "daily_budget_inr"] },
       { semantic: "primary_text", selector: "Primary Text", selectorKind: "label", type: "textarea", aliases: ["message", "ad_copy"] },
     ],
+    // Steps are type → budget → creative → message → review. Campaign Name lives on
+    // the BUDGET step (not type), and primary_text on the CREATIVE step — the old
+    // mapping was shifted one step early, so Campaign Name never filled and the wizard
+    // stalled on budget with the required name empty. nextStepProbe verifies each
+    // transition so the driver doesn't falsely report "All set".
     stepRoutes: [
-      { route: "/ctwa/status/create", fields: ["name"], advanceButtonText: ["Next", "Continue"] },
-      { route: "/ctwa/status/create", fields: ["daily_budget"], advanceButtonText: ["Next", "Continue"] },
-      { route: "/ctwa/status/create", fields: [], advanceButtonText: ["Next", "Continue"] },
+      { route: "/ctwa/status/create", fields: [],
+        nextStepProbe: { selector: "name", selectorKind: "id" }, advanceButtonText: ["Next", "Continue"] },
+      { route: "/ctwa/status/create", fields: ["name", "daily_budget"],
+        nextStepProbe: { selector: "primary_text", selectorKind: "id" }, advanceButtonText: ["Next", "Continue"] },
       { route: "/ctwa/status/create", fields: ["primary_text"], advanceButtonText: ["Next", "Continue"] },
+      { route: "/ctwa/status/create", fields: [], advanceButtonText: ["Next", "Continue"] },
       { route: "/ctwa/status/create", fields: [], terminal: true },
     ],
   },
@@ -159,29 +183,19 @@ export const FLOW_REGISTRY: Record<string, FlowDef> = {
     route: "/dashboard/campaign/create",
     title: "CTWA Campaign Creation",
     area: "ctwa",
-    multiStep: true,
-    steps: ["account", "campaign", "audience", "creative", "message", "review"],
+    // Navigate-only handoff. The campaign/budget/creative fields do NOT render until
+    // the user connects a Facebook Page and clicks Next, and the arrival drive fires
+    // only once (copilotArrival strips the params) — so a sequential autofill can't run
+    // here. driveFill's `handoff` branch returns right after navigating, which made the
+    // former `interactive:"sequential"` + stepRoutes dead code that promised a fill that
+    // never happened. Keep the navigate + accurate guidance only.
+    multiStep: false,
+    steps: [],
     submitButtons: ["Next", "Continue", "Publish", "Launch"],
     finalSubmitButtons: ["Publish", "Launch Campaign"],
-    interactive: "sequential",
     navigable: true,
-    handoff: "Opened CTWA campaign creation. Connect/select a Facebook Page first (the Next button unlocks after that); then I can fill the campaign, budget, creative and click-to-WhatsApp message.",
-    fields: [
-      { semantic: "campaign_name", selector: "Campaign Name", selectorKind: "label", type: "input", aliases: ["name"] },
-      { semantic: "campaign_objective", selector: "Objective", selectorKind: "label", type: "combobox", aliases: ["objective"] },
-      { semantic: "daily_budget", selector: "Daily Budget", selectorKind: "label", type: "input", aliases: ["budget", "daily_budget_inr"] },
-      { semantic: "creative_primary_text", selector: "Primary Text", selectorKind: "label", type: "textarea", aliases: ["primary_text", "ad_copy"] },
-      { semantic: "creative_headline", selector: "Headline", selectorKind: "label", type: "input", aliases: ["headline"] },
-      { semantic: "ctwa_prefilled_message", selector: "Prefilled Message", selectorKind: "label", type: "textarea", aliases: ["prefilled_message", "welcome_message"] },
-    ],
-    stepRoutes: [
-      { route: "/dashboard/campaign/create", fields: [], advanceButtonText: ["Next", "Continue"] },
-      { route: "/dashboard/campaign/create", fields: ["campaign_name", "campaign_objective"], advanceButtonText: ["Next", "Continue"] },
-      { route: "/dashboard/campaign/create", fields: ["daily_budget"], advanceButtonText: ["Next", "Continue"] },
-      { route: "/dashboard/campaign/create", fields: ["creative_primary_text", "creative_headline"], advanceButtonText: ["Next", "Continue"] },
-      { route: "/dashboard/campaign/create", fields: ["ctwa_prefilled_message"], advanceButtonText: ["Next", "Continue"] },
-      { route: "/dashboard/campaign/create", fields: [], terminal: true },
-    ],
+    fields: [],
+    handoff: "Opened CTWA campaign creation. Connect or select a Facebook Page first — the Next button unlocks after that — then fill the campaign name, budget, creative and click-to-WhatsApp message, and launch.",
   },
 
   // ── CRM Lead / Deal / Contact (modal dialogs, stable ids) ──────────────────

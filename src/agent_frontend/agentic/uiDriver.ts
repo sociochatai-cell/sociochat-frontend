@@ -584,6 +584,35 @@ async function driveSequential(
     navigate(directive.route);
   }
   const steps = directive.steps || [];
+  // Reveal the wizard before walking steps. Some sequential flows render their first
+  // step only AFTER a trigger (e.g. bulk's "New Campaign" button → the 4-step wizard)
+  // or a preClick (a tab/section). The non-sequential path already does this; mirror it
+  // here, else fillGroup times out on step 0 because no field has mounted yet.
+  if (directive.openTrigger || directive.preClicks?.length) {
+    await waitForPageSettle();
+    if (directive.openTrigger) {
+      const firstField = (steps[0]?.fields || [])[0];
+      let opened = false;
+      for (let attempt = 0; attempt < 4 && !opened; attempt++) {
+        const btn = await waitForButton(directive.openTrigger, attempt === 0 ? 20000 : 6000);
+        if (!btn) break;
+        btn.scrollIntoView({ behavior: "smooth", block: "center" });
+        clickIfEnabled(btn);
+        opened = firstField ? await waitFor(() => !!resolveEl(firstField), attempt === 0 ? 6000 : 5000, 200) : true;
+        if (!opened) await sleep(800);
+      }
+      if (!opened) onEvent?.({ status: "field-missing", field: `trigger:${directive.openTrigger}` });
+    }
+    if (directive.preClicks?.length) {
+      for (const [pcIndex, pc] of directive.preClicks.entries()) {
+        for (let n = 0; n < (pc.count ?? 1); n++) {
+          onEvent?.({ status: "navigating", message: `add: ${pc.text}` });
+          await clickAnyAdvance(pc.text, pcIndex === 0 ? 20000 : 9000);
+          await sleep(delay);
+        }
+      }
+    }
+  }
   let reachedReview = true;   // assume ok unless the final hop to review is blocked
   let imageMissing = false;   // a waitForImage postFill that never produced an image
   for (let i = 0; i < steps.length; i++) {
