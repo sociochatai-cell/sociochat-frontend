@@ -67,7 +67,19 @@ function consumeSsoWorkspaceParam(): void {
                 localStorage.setItem(WS_KEY, String(ws));
                 sessionStorage.setItem(WS_KEY, String(ws));
             }
-            const clean = window.location.pathname + window.location.hash;
+            // Strip the SSO params (sso/ws) but PRESERVE the cross-app copilot
+            // hand-off params: this import-time code runs BEFORE React mounts, so if
+            // we dropped the whole query here, useCopilotArrival (DashboardLayout,
+            // deferred) would never see copilot_run/copilot_flow and the handed-off
+            // flow (e.g. whatsapp_template_builder) would dead-end on the dashboard.
+            // copilotArrival consumes + strips these itself once it has driven.
+            const keep = new URLSearchParams();
+            const cr = p.get('copilot_run');
+            const cf = p.get('copilot_flow');
+            if (cr) keep.set('copilot_run', cr);
+            if (cf) keep.set('copilot_flow', cf);
+            const qs = keep.toString();
+            const clean = window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash;
             window.history.replaceState({}, '', clean);
         }
     } catch {
