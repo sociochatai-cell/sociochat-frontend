@@ -142,64 +142,29 @@
                  the preview on the left and form on the right via lg:order-*. -->
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch max-w-6xl mx-auto">
 
-                <!-- What-you-get preview (7 cols on desktop, SECOND on mobile) -->
+                <!-- Demo video (7 cols on desktop, SECOND on mobile) -->
                 <div class="lg:col-span-7 lg:order-1 order-2 flex flex-col justify-center">
                     <div class="mb-3 text-center sm:text-left">
                         <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs sm:text-sm font-bold shadow-2xs">
-                            <i class="fa-solid fa-sparkles text-amber-600 text-sm sm:text-base"></i>
-                            What you get on the call
+                            <i class="fa-solid fa-circle-play text-amber-600 animate-pulse text-sm sm:text-base"></i>
+                            Watch the whole demo before booking the call
                         </span>
                     </div>
 
-                    <!-- Branded highlight card — replaces the embedded video that
-                         some mobile browsers can't play. Shows 4 concrete things
-                         the prospect gets so the hero still looks substantive. -->
-                    <div class="relative rounded-2xl overflow-hidden border-2 border-emerald-200 shadow-2xl bg-gradient-to-br from-emerald-700 via-emerald-800 to-slate-900 text-white p-6 sm:p-8">
-                        <!-- Decorative glow -->
-                        <div class="absolute -top-10 -right-10 w-40 h-40 bg-amber-400/20 rounded-full blur-3xl pointer-events-none"></div>
-                        <div class="absolute -bottom-16 -left-10 w-56 h-56 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"></div>
-
-                        <div class="relative">
-                            <div class="flex items-center gap-2 mb-5">
-                                <i class="fa-brands fa-whatsapp text-emerald-300 text-2xl"></i>
-                                <span class="text-xs font-black uppercase tracking-wider text-emerald-200">30-minute live walkthrough</span>
-                            </div>
-
-                            <h3 class="text-xl sm:text-2xl font-black tracking-tight leading-snug mb-5">
-                                A live demo of how to automate your WhatsApp — tailored to your business.
-                            </h3>
-
-                            <ul class="space-y-3 text-sm">
-                                <li class="flex items-start gap-3">
-                                    <span class="shrink-0 w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-300/30 flex items-center justify-center">
-                                        <i class="fa-solid fa-robot text-emerald-300 text-xs"></i>
-                                    </span>
-                                    <span class="font-medium"><strong class="font-black text-white">AI sales agent</strong> that replies to leads 24/7 in your tone.</span>
-                                </li>
-                                <li class="flex items-start gap-3">
-                                    <span class="shrink-0 w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-300/30 flex items-center justify-center">
-                                        <i class="fa-solid fa-paper-plane text-emerald-300 text-xs"></i>
-                                    </span>
-                                    <span class="font-medium"><strong class="font-black text-white">Broadcast campaigns</strong> &amp; drip follow-ups on autopilot.</span>
-                                </li>
-                                <li class="flex items-start gap-3">
-                                    <span class="shrink-0 w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-300/30 flex items-center justify-center">
-                                        <i class="fa-solid fa-users text-emerald-300 text-xs"></i>
-                                    </span>
-                                    <span class="font-medium"><strong class="font-black text-white">Shared team inbox</strong> + built-in CRM for your sales team.</span>
-                                </li>
-                                <li class="flex items-start gap-3">
-                                    <span class="shrink-0 w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-300/30 flex items-center justify-center">
-                                        <i class="fa-solid fa-bolt text-amber-300 text-xs"></i>
-                                    </span>
-                                    <span class="font-medium"><strong class="font-black text-white">Instant onboarding</strong> — your account live during the call.</span>
-                                </li>
-                            </ul>
-
-                            <div class="mt-5 pt-4 border-t border-white/10 flex items-center gap-3 text-[11px] text-emerald-100 font-semibold">
-                                <i class="fa-solid fa-circle-check text-emerald-300"></i>
-                                <span>Official Meta WhatsApp Cloud API Partner · 500+ Indian businesses</span>
-                            </div>
+                    <!-- YouTube embed (unlisted — plays reliably on every device
+                         incl. iOS Safari. nocookie domain = fewer trackers, no
+                         CMP preflight; rel=0 removes "watch next" at end). -->
+                    <div class="relative rounded-2xl overflow-hidden border-2 border-slate-300 shadow-2xl bg-slate-900">
+                        <div class="aspect-video w-full">
+                            <iframe
+                                src="https://www.youtube-nocookie.com/embed/lg_LgoK3CQg?rel=0&modestbranding=1&playsinline=1"
+                                class="w-full h-full border-0"
+                                title="Sociochat demo"
+                                frameborder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                referrerpolicy="strict-origin-when-cross-origin"
+                                allowfullscreen>
+                            </iframe>
                         </div>
                     </div>
 
