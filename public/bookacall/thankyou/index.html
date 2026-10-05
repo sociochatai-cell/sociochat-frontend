@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thank You — Sociochat</title>
+
+    <!-- Sociovia Tracking: Meta Pixel + Conversions API -->
+    <script>
+      // --- 1. Meta Pixel Base Code ---
+      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+      n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+      document,'script','https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '1853591498682960');
+
+      // --- 2. Sociovia CAPI Tracker ---
+      (function() {
+        var SOCIOVIA_CONFIG = {
+          apiEndpoint: 'https://api.sociovia.com/api/capi/track',
+          workspaceId: '214',
+          pixelId: '1853591498682960'
+        };
+        function getCookie(name) {
+          var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+          return match ? decodeURIComponent(match[2]) : null;
+        }
+        function getUrlParam(name) {
+          var params = new URLSearchParams(window.location.search);
+          return params.get(name);
+        }
+        function generateEventId() {
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+          });
+        }
+        function sendCapiEvent(eventName, customData, userData) {
+          var fbclid = getUrlParam('fbclid');
+          var fbc = getCookie('_fbc') || (fbclid ? 'fb.1.' + Date.now() + '.' + fbclid : null);
+          var fbp = getCookie('_fbp');
+          var eventId = generateEventId();
+          var mergedUser = Object.assign({}, window._socioviaUserData || {}, userData || {}, {
+            fbc: fbc, fbp: fbp
+          });
+          if (typeof fbq === 'function') {
+            fbq('track', eventName, customData || {}, { eventID: eventId });
+          }
+          var payload = {
+            event_name: eventName,
+            workspace_id: SOCIOVIA_CONFIG.workspaceId,
+            event_source_url: window.location.href,
+            event_id: eventId,
+            user_data: mergedUser,
+            custom_data: customData || {}
+          };
+          var body = JSON.stringify(payload);
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(SOCIOVIA_CONFIG.apiEndpoint,
+              new Blob([body], { type: 'text/plain' }));
+          } else {
+            fetch(SOCIOVIA_CONFIG.apiEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: body,
+              keepalive: true
+            });
+          }
+        }
+        sendCapiEvent('PageView');
+        window.SocioviaTracker = {
+          track: function(eventName, customData, userData) {
+            sendCapiEvent(eventName, customData, userData);
+          },
+          identify: function(userData) {
+            window._socioviaUserData = userData;
+          }
+        };
+      })();
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=1853591498682960&ev=PageView&noscript=1" /></noscript>
+    <!-- End Sociovia Tracking -->
+
+    <!-- Fire CompleteRegistration conversion as soon as the page loads, with
+         the lead's user_data (name/email/phone) so CAPI can match + dedupe
+         against the pixel's browser event. We read the lead data the form
+         page stashed in sessionStorage; if nothing's there (direct visit),
+         we still fire CompleteRegistration without PII — the pixel will still
+         record a thank-you landing. -->
+    <script>
+      (function() {
+        var leadRaw = null;
+        try { leadRaw = sessionStorage.getItem('bookacall_lead'); } catch (e) {}
+        var lead = {};
+        try { lead = leadRaw ? JSON.parse(leadRaw) : {}; } catch (e) { lead = {}; }
+
+        // Build the user_data block Meta Pixel/CAPI will hash server-side.
+        var userData = {};
+        if (lead && lead.email)  userData.em = String(lead.email).trim().toLowerCase();
+        if (lead && lead.phone)  userData.ph = String(lead.phone).replace(/[^0-9]/g, '');
+        if (lead && lead.name) {
+          var parts = String(lead.name).trim().split(/\s+/);
+          userData.fn = (parts[0] || '').toLowerCase();
+          if (parts.length > 1) userData.ln = parts.slice(1).join(' ').toLowerCase();
+        }
+
+        // customData extras — plan + source so CAPI reporting shows which
+        // form the lead came from.
+        var customData = { value: 0 };
+        if (lead && lead.plan)   customData.plan = lead.plan;
+        if (lead && lead.source) customData.source = lead.source;
+
+        function fire() {
+          try {
+            if (window.SocioviaTracker && typeof window.SocioviaTracker.identify === 'function') {
+              window.SocioviaTracker.identify(userData);
+            }
+            if (window.SocioviaTracker && typeof window.SocioviaTracker.track === 'function') {
+              window.SocioviaTracker.track('CompleteRegistration', customData, userData);
+            }
+          } catch (err) { console.error('[sociovia] CompleteRegistration fire failed:', err); }
+        }
+
+        // The tracker is initialized in the IIFE above (same file, loaded
+        // first), so SocioviaTracker is almost always ready by the time this
+        // script runs. Fire now, and once more after DOMContentLoaded in case
+        // something delayed init.
+        fire();
+        if (document.readyState !== 'complete') {
+          window.addEventListener('load', fire, { once: true });
+        }
+      })();
+    </script>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: #f8fafc;
+        color: #0f172a;
+      }
+    </style>
+</head>
+<body class="antialiased bg-gradient-to-b from-emerald-50 via-slate-50 to-white min-h-screen flex items-center justify-center p-6">
+
+    <main class="max-w-2xl w-full">
+        <!-- Logo -->
+        <div class="flex items-center justify-center space-x-3 mb-10">
+            <img src="https://lh3.googleusercontent.com/d/1ljpl1BzrcJa3zDqGfD5xs43KeKkNSt_O" alt="Sociochat Logo" class="w-12 h-12 object-contain drop-shadow-sm" />
+            <div class="flex flex-col">
+                <span class="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-1">
+                    Socio<span class="text-emerald-600">chat</span>
+                </span>
+                <span class="text-[10px] tracking-widest text-emerald-700 font-bold uppercase -mt-1">WhatsApp Automation</span>
+            </div>
+        </div>
+
+        <!-- Success card -->
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-xl p-8 sm:p-12 text-center">
+            <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-emerald-100 border-4 border-emerald-200 flex items-center justify-center">
+                <i class="fa-solid fa-circle-check text-emerald-600 text-4xl"></i>
+            </div>
+
+            <span class="inline-block bg-emerald-100 text-emerald-800 text-xs font-black uppercase px-3 py-1 rounded-full border border-emerald-300 mb-4">
+                Submission Received
+            </span>
+
+            <h1 class="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                Thank you<span id="leadNameSalutation"></span>!
+            </h1>
+
+            <p class="text-slate-600 text-sm sm:text-base font-medium mt-4 leading-relaxed max-w-md mx-auto">
+                Your request has been received. Our WhatsApp Automation Team will reach out to you shortly on your provided number to walk you through the next steps.
+            </p>
+
+            <!-- Expectation Bullets -->
+            <div class="mt-8 pt-6 border-t border-slate-100 grid sm:grid-cols-3 gap-4 text-xs font-semibold text-slate-700">
+                <div class="flex flex-col items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <i class="fa-solid fa-headset text-blue-600 text-lg"></i>
+                    <span>Response within 24 hours</span>
+                </div>
+                <div class="flex flex-col items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <i class="fa-solid fa-bolt text-amber-500 text-lg"></i>
+                    <span>Instant Account Setup</span>
+                </div>
+                <div class="flex flex-col items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <i class="fa-brands fa-whatsapp text-emerald-600 text-lg"></i>
+                    <span>Dedicated Onboarding</span>
+                </div>
+            </div>
+
+            <!-- Secondary action -->
+            <div class="mt-8">
+                <a href="/bookacall" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-wide transition-all">
+                    <i class="fa-solid fa-arrow-left text-xs"></i> Back to plans
+                </a>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <p class="text-center text-[11px] text-slate-500 font-medium mt-8">
+            &copy; <span id="year"></span> Sociochat. All rights reserved. Meta Official WhatsApp Cloud API Partner.
+        </p>
+    </main>
+
+    <script>
+      // Personalized greeting from the lead's name, if we have it.
+      (function() {
+        try {
+          var raw = sessionStorage.getItem('bookacall_lead');
+          if (!raw) return;
+          var lead = JSON.parse(raw);
+          if (lead && lead.name) {
+            var first = String(lead.name).trim().split(/\s+/)[0];
+            if (first) {
+              var el = document.getElementById('leadNameSalutation');
+              if (el) el.textContent = ', ' + first;
+            }
+          }
+        } catch (e) {}
+      })();
+
+      var yearEl = document.getElementById('year');
+      if (yearEl) yearEl.textContent = new Date().getFullYear();
+    </script>
+</body>
+</html>

@@ -25,6 +25,9 @@ import LandingPage from './pages/LandingPage';
 const OfferPage = lazy(() => import('./pages/OfferPage'));
 // /bookacall — SocioChat book-a-call landing, iframes public/bookacall/index.html
 const BookACallPage = lazy(() => import('./pages/BookACallPage'));
+// /bookacall/thankyou — thank-you page shown after form submit (fires Meta
+// Pixel + Sociovia CAPI CompleteRegistration with the lead's user_data).
+const BookACallThankYouPage = lazy(() => import('./pages/BookACallThankYouPage'));
 
 // Admin
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
@@ -153,6 +156,7 @@ export default function App() {
       <Route path="/pricing" element={<Suspense fallback={<PageLoader />}><PricingPage /></Suspense>} />
       <Route path="/offer" element={<Suspense fallback={<PageLoader />}><OfferPage /></Suspense>} />
       <Route path="/bookacall" element={<Suspense fallback={<PageLoader />}><BookACallPage /></Suspense>} />
+      <Route path="/bookacall/thankyou" element={<Suspense fallback={<PageLoader />}><BookACallThankYouPage /></Suspense>} />
       <Route path="/subscription" element={<Suspense fallback={<PageLoader />}><SubscriptionPage /></Suspense>} />
       <Route path="/payment/result" element={<Suspense fallback={<PageLoader />}><PaymentResult /></Suspense>} />
       <Route path="/forgot-password" element={<Suspense fallback={<PageLoader />}><ForgotPasswordPage /></Suspense>} />
