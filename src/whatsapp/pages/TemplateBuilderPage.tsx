@@ -19,7 +19,7 @@ import {
 } from '../utils/templateUtils';
 import { setStoredAccountId } from '../utils/accountContext';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Edit3, Eye } from 'lucide-react';
 import logo from '@/assets/sociovia_logo.png';
 import { Button } from '@/components/ui/button';
 import { API_BASE_URL, WHATSAPP_REST_API_PREFIX } from "@/config";
@@ -53,6 +53,9 @@ export function TemplateBuilderPage() {
     const [voiceCallCapability, setVoiceCallCapability] = useState<VoiceCallCapability | null>(null);
     const [loadingVoiceCallCapability, setLoadingVoiceCallCapability] = useState(false);
     const [showRiskModal, setShowRiskModal] = useState(false);
+    // Mobile-only tab switcher between editor + preview. On lg+ both panels
+    // show side-by-side and this state is ignored.
+    const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form');
 
     // Fetch the active account on mount
     // Always fetch fresh from API to ensure we use the correct account
@@ -288,44 +291,82 @@ export function TemplateBuilderPage() {
 
     return (
         <div className="h-screen flex flex-col bg-background">
-            {/* Page Header */}
-            <header className="border-b bg-card px-6 py-3 flex items-center gap-4">
+            {/* Page Header — compact padding on mobile, keep original on sm+ */}
+            <header className="border-b bg-card px-3 sm:px-6 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-4 shrink-0">
                 <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => navigate(-1)}
-                    className="gap-2"
+                    className="gap-1 sm:gap-2 shrink-0 px-2 sm:px-3"
                 >
                     <ArrowLeft className="w-4 h-4" />
-                    Back
+                    <span className="hidden sm:inline">Back</span>
                 </Button>
-                <div className="h-6 w-px bg-border" />
-                <h1 className="text-lg font-semibold flex items-center gap-2">
-                    <img src={logo} alt="Sociovia" className="w-5 h-5" />
-                    {id ? 'Edit Template' : suggestionId ? 'Create from Suggestion' : 'Create Template'}
+                <div className="h-6 w-px bg-border hidden sm:block" />
+                <h1 className="text-sm sm:text-lg font-semibold flex items-center gap-2 min-w-0 flex-1">
+                    <img src={logo} alt="Sociovia" className="w-5 h-5 shrink-0" />
+                    <span className="truncate">
+                        {id ? 'Edit Template' : suggestionId ? 'From Suggestion' : 'Create Template'}
+                    </span>
                 </h1>
             </header>
 
-            {/* Two-panel layout */}
+            {/* Mobile-only tab switcher — hidden on lg+ where both panels show side-by-side */}
+            <div className="lg:hidden border-b bg-muted/40 px-3 py-2 flex gap-2 shrink-0">
+                <button
+                    type="button"
+                    onClick={() => setMobileTab('form')}
+                    className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                        mobileTab === 'form'
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'bg-background text-muted-foreground hover:text-foreground border border-border'
+                    }`}
+                >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    Editor
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setMobileTab('preview')}
+                    className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                        mobileTab === 'preview'
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'bg-background text-muted-foreground hover:text-foreground border border-border'
+                    }`}
+                >
+                    <Eye className="w-3.5 h-3.5" />
+                    Preview
+                </button>
+            </div>
+
+            {/* Two-panel layout: side-by-side on lg+, single-panel (tabbed) on mobile */}
             <div className="flex-1 flex overflow-hidden">
-                {/* Left Panel - Form */}
-                <div className="w-1/2 border-r overflow-hidden">
-                    <TemplateForm
-                        state={state}
-                        onChange={handleChange}
-                        validation={validation}
-                        onSubmit={handleSubmit}
-                        onCancel={handleCancel}
-                        isSubmitting={isSubmitting}
-                        accountId={accountId || undefined}
-                        voiceCallCapability={voiceCallCapability}
-                        loadingVoiceCallCapability={loadingVoiceCallCapability}
-                    />
+                {/* Form Panel */}
+                <div
+                    className={`${mobileTab === 'form' ? 'flex' : 'hidden'} lg:flex w-full lg:w-1/2 lg:border-r overflow-hidden`}
+                >
+                    <div className="w-full h-full overflow-hidden">
+                        <TemplateForm
+                            state={state}
+                            onChange={handleChange}
+                            validation={validation}
+                            onSubmit={handleSubmit}
+                            onCancel={handleCancel}
+                            isSubmitting={isSubmitting}
+                            accountId={accountId || undefined}
+                            voiceCallCapability={voiceCallCapability}
+                            loadingVoiceCallCapability={loadingVoiceCallCapability}
+                        />
+                    </div>
                 </div>
 
-                {/* Right Panel - Preview */}
-                <div className="w-1/2 bg-muted/30 overflow-hidden">
-                    <TemplateLivePreview state={state} />
+                {/* Preview Panel */}
+                <div
+                    className={`${mobileTab === 'preview' ? 'flex' : 'hidden'} lg:flex w-full lg:w-1/2 bg-muted/30 overflow-hidden`}
+                >
+                    <div className="w-full h-full overflow-hidden">
+                        <TemplateLivePreview state={state} />
+                    </div>
                 </div>
             </div>
 
