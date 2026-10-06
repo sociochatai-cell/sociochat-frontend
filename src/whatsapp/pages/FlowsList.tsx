@@ -518,7 +518,7 @@ export function FlowsList() {
                                     )}
                                 </div>
 
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
                                     {flow.status === 'DRAFT' && (
                                         <>
                                             <Button
@@ -599,8 +599,8 @@ export function FlowsList() {
                                                 <Archive className="w-4 h-4 mr-1" />
                                                 Deprecate
                                             </Button>
-                                            <Badge variant="outline" className="border-emerald-200 text-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 ml-auto">
-                                                ✓ Ready to use in templates
+                                            <Badge variant="outline" className="border-emerald-200 text-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 text-[10px]">
+                                                ✓ Ready in templates
                                             </Badge>
                                         </>
                                     )}
@@ -647,7 +647,7 @@ export function FlowsList() {
                                             Your business number: <span className="font-mono">{notifySettings.business_phone_number}</span>
                                         </p>
                                     )}
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-wrap gap-2">
                                         <div className="relative flex-1">
                                             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                             <input
