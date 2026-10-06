@@ -29,8 +29,10 @@ import {
   Plus,
   Loader2,
   AlertTriangle,
+  AlertCircle,
   CheckCircle,
-  Pencil
+  Pencil,
+  Copy
 } from 'lucide-react';
 import { WHATSAPP_API_BASE_URL } from '@/config';
 import { getWorkspaceId } from '../../utils/workspaceContext';
@@ -722,6 +724,40 @@ export function FlowBuilderV2() {
           </Button>
         </div>
       </header>
+
+      {state.status === 'published' && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <div className="flex-1 text-sm text-amber-900">
+            <strong>Published forms are locked by Meta and can't be edited.</strong>{' '}
+            This view is read-only. To make changes, create a new version — your current published form stays live until you publish the new one.
+          </div>
+          <Button
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white flex-shrink-0"
+            onClick={async () => {
+              const flowIdToClone = id || searchParams.get('edit');
+              if (!flowIdToClone) return;
+              if (!confirm('Create a new editable version (draft) of this published form?')) return;
+              try {
+                const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flowIdToClone}/clone`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success && data.flow?.id) {
+                  toast({ title: 'New version created', description: 'Opening the new draft for editing.' });
+                  navigate(`/dashboard/whatsapp/flows/${data.flow.id}/edit`);
+                } else {
+                  toast({ title: 'Error', description: data.error || data.message || 'Failed to create new version', variant: 'destructive' });
+                }
+              } catch (err) {
+                toast({ title: 'Error', description: 'Failed to create new version', variant: 'destructive' });
+              }
+            }}
+          >
+            <Copy className="w-4 h-4 mr-1" />
+            Create New Version
+          </Button>
+        </div>
+      )}
 
       {/* ================================================================== */}
       {/* MAIN CONTENT */}

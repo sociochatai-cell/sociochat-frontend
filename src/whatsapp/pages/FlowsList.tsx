@@ -162,6 +162,23 @@ export function FlowsList() {
         }
     };
 
+    const cloneFlow = async (flowId: number) => {
+        if (!confirm('Published forms are locked by Meta. Create a new editable version (draft) of this form?')) return;
+        try {
+            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flowId}/clone`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success && data.flow?.id) {
+                toast({ title: 'New version created', description: 'Opening the new draft for editing.' });
+                refreshFlows();
+                navigate(`/dashboard/whatsapp/flows/${data.flow.id}/edit`);
+            } else {
+                toast({ title: 'Error', description: data.error || data.message || 'Failed to create new version', variant: 'destructive' });
+            }
+        } catch (err) {
+            toast({ title: 'Error', description: 'Failed to create new version', variant: 'destructive' });
+        }
+    };
+
     const deprecateFlow = async (flowId: number) => {
         if (!confirm('Deprecate this published form? It will no longer be sendable.')) return;
 
@@ -525,9 +542,19 @@ export function FlowsList() {
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() => navigate(`/dashboard/whatsapp/flows/${flow.id}/edit`)}
+                                                title="Open form in read-only view (published forms cannot be edited)"
                                             >
                                                 <Eye className="w-4 h-4 mr-1" />
                                                 View
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                onClick={() => cloneFlow(flow.id)}
+                                                title="Create an editable new version (Meta locks published forms)"
+                                            >
+                                                <Copy className="w-4 h-4 mr-1" />
+                                                New Version
                                             </Button>
                                             <Button
                                                 size="sm"
