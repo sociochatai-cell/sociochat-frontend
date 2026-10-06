@@ -162,6 +162,23 @@ export function FlowsList() {
         }
     };
 
+    const duplicateFlow = async (flowId: number) => {
+        if (!confirm('Duplicate this form as a new draft?')) return;
+        try {
+            const res = await cachedFetch(`${API_BASE}/api/whatsapp/flows/${flowId}/duplicate`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success && data.flow?.id) {
+                toast({ title: 'Duplicated', description: `Opening '${data.flow.name}' for editing.` });
+                refreshFlows();
+                navigate(`/dashboard/whatsapp/flows/${data.flow.id}/edit`);
+            } else {
+                toast({ title: 'Error', description: data.error || data.message || 'Failed to duplicate form', variant: 'destructive' });
+            }
+        } catch (err) {
+            toast({ title: 'Error', description: 'Failed to duplicate form', variant: 'destructive' });
+        }
+    };
+
     const cloneFlow = async (flowId: number) => {
         if (!confirm('Published forms are locked by Meta. Create a new editable version (draft) of this form?')) return;
         try {
@@ -527,6 +544,15 @@ export function FlowsList() {
                                             </Button>
                                             <Button
                                                 size="sm"
+                                                variant="outline"
+                                                onClick={() => duplicateFlow(flow.id)}
+                                                title="Duplicate as a new draft"
+                                            >
+                                                <Copy className="w-4 h-4 mr-1" />
+                                                Duplicate
+                                            </Button>
+                                            <Button
+                                                size="sm"
                                                 variant="ghost"
                                                 className="text-destructive"
                                                 onClick={() => deleteFlow(flow.id)}
@@ -555,6 +581,15 @@ export function FlowsList() {
                                             >
                                                 <Copy className="w-4 h-4 mr-1" />
                                                 New Version
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => duplicateFlow(flow.id)}
+                                                title="Duplicate as a new draft (keeps this one published)"
+                                            >
+                                                <Copy className="w-4 h-4 mr-1" />
+                                                Duplicate
                                             </Button>
                                             <Button
                                                 size="sm"
