@@ -639,7 +639,7 @@
     <script>
         // Google Sheets Web App endpoint — Apps Script bound to the free-training
         // sheet. form=optin → Sheet "Optin_Leads"; form=booking → Sheet "Call_Bookings".
-        const SHEET_WEBAPP_URL = "REPLACE_WITH_YOUR_APPS_SCRIPT_URL";
+        const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbx7F-JywT2DaIr7E0vYNsUL_cyt0ilBS00eLE74Y_1FQn40yCJuF2foxH8-GqYmvlWvWA/exec";
 
         function postToSheet(formType, payload) {
             if (!SHEET_WEBAPP_URL || SHEET_WEBAPP_URL.indexOf("REPLACE_") === 0) return;
