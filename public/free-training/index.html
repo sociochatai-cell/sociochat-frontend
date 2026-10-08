@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SocioChat - Convert Leads into Sales via WhatsApp Automation</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            200: '#bbf7d0',
+                            500: '#25D366', // Official WhatsApp Green
+                            600: '#1da851',
+                            700: '#128C7E',
+                            800: '#075E54',
+                            900: '#0b4039',
+                        },
+                        lightBg: '#f2faf5',
+                        lightCard: '#ffffff',
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'float': 'float 4s ease-in-out infinite',
+                        'pulse-subtle': 'pulseSubtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-8px)' },
+                        },
+                        pulseSubtle: {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0.8' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f2faf5;
+            color: #0f172a;
+        }
+        .whatsapp-gradient {
+            background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+        }
+        .text-gradient {
+            background: linear-gradient(135deg, #128C7E 0%, #25D366 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .glass-panel-light {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(37, 211, 102, 0.2);
+        }
+        /* Custom Video Player Aspect Ratio */
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 ratio */
+            height: 0;
+            overflow: hidden;
+        }
+        .video-container iframe, .video-container video, .video-container .custom-player {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+
+    <!-- Sociovia Tracking: Meta Pixel + Conversions API -->
+    <script>
+      // --- 1. Meta Pixel Base Code ---
+      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+      n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+      document,'script','https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '929594486327098');
+
+      // --- 2. Sociovia CAPI Tracker ---
+      (function() {
+        var SOCIOVIA_CONFIG = {
+          apiEndpoint: 'https://api.sociovia.com/api/capi/track',
+          workspaceId: '225',
+          pixelId: '929594486327098'
+        };
+
+        function getCookie(name) {
+          var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+          return match ? decodeURIComponent(match[2]) : null;
+        }
+
+        function getUrlParam(name) {
+          var params = new URLSearchParams(window.location.search);
+          return params.get(name);
+        }
+
+        function generateEventId() {
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+          });
+        }
+
+        function sendCapiEvent(eventName, customData, userData) {
+          var fbclid = getUrlParam('fbclid');
+          var fbc = getCookie('_fbc') || (fbclid ? 'fb.1.' + Date.now() + '.' + fbclid : null);
+          var fbp = getCookie('_fbp');
+          var eventId = generateEventId();
+          var mergedUser = Object.assign({}, window._socioviaUserData || {}, userData || {}, {
+            fbc: fbc,
+            fbp: fbp
+          });
+
+          // Fire browser pixel with event_id for dedup
+          if (typeof fbq === 'function') {
+            fbq('track', eventName, customData || {}, { eventID: eventId });
+          }
+
+          // Fire server-side CAPI
+          var payload = {
+            event_name: eventName,
+            workspace_id: SOCIOVIA_CONFIG.workspaceId,
+            event_source_url: window.location.href,
+            event_id: eventId,
+            user_data: mergedUser,
+            custom_data: customData || {}
+          };
+
+          var body = JSON.stringify(payload);
+          // text/plain avoids CORS preflight issues with sendBeacon on third-party sites
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(SOCIOVIA_CONFIG.apiEndpoint,
+              new Blob([body], { type: 'text/plain' }));
+          } else {
+            fetch(SOCIOVIA_CONFIG.apiEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: body,
+              keepalive: true
+            });
+          }
+        }
+
+        // Auto-fire PageView on load
+        sendCapiEvent('PageView');
+
+        // Expose global tracker for custom events
+        window.SocioviaTracker = {
+          track: function(eventName, customData, userData) {
+            sendCapiEvent(eventName, customData, userData);
+          },
+          identify: function(userData) {
+            window._socioviaUserData = userData;
+          }
+        };
+      })();
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=929594486327098&ev=PageView&noscript=1" /></noscript>
+    <!-- End Sociovia Tracking -->
+</head>
+<body class="antialiased text-slate-900 min-h-screen flex flex-col justify-between selection:bg-brand-500 selection:text-white">
+
+    <!-- Top Announcement Bar -->
+    <div id="announcementBar" class="bg-gradient-to-r from-brand-700 via-brand-600 to-brand-700 text-white text-xs sm:text-sm font-semibold py-2.5 px-4 text-center tracking-wide flex items-center justify-center gap-2 shadow-sm">
+        <span class="bg-white text-brand-800 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full tracking-wider">Free Training</span>
+        <span id="barText">⚡ 98% Open Rate Blueprint: Convert Leads on WhatsApp in 20 Minutes</span>
+    </div>
+
+    <!-- Header Logo Only (No Menu Links) -->
+    <header class="py-5 px-4 sm:px-8 border-b border-brand-200/60 bg-white/70 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 flex items-center justify-center">
+                    <svg class="w-10 h-10 drop-shadow-md" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="logoBubbleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#bef264"/>
+                                <stop offset="45%" stop-color="#65a30d"/>
+                                <stop offset="100%" stop-color="#15803d"/>
+                            </linearGradient>
+                            <linearGradient id="logoGlossGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.4"/>
+                                <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+                            </linearGradient>
+                        </defs>
+                        <!-- Sparkles & Accents -->
+                        <path d="M 20 10 Q 20 17 13 17 Q 20 17 20 24 Q 20 17 27 17 Q 20 17 20 10 Z" fill="#FACC15"/>
+                        <circle cx="82" cy="10" r="4.5" fill="#a3e635"/>
+                        <circle cx="92" cy="18" r="2.5" fill="#bef264"/>
+                        <circle cx="8" cy="28" r="3" fill="#bef264"/>
+                        <circle cx="90" cy="85" r="5" fill="#FACC15"/>
+                        <circle cx="76" cy="89" r="2.5" fill="#a3e635"/>
+                        <!-- Tail -->
+                        <path d="M 33 78 L 33 95 C 33 97 40 93 52 82 Z" fill="#15803d"/>
+                        <!-- Bubble Body -->
+                        <rect x="11" y="16" width="78" height="66" rx="26" fill="url(#logoBubbleGrad)"/>
+                        <!-- Gloss Overlay -->
+                        <path d="M 11 42 C 11 28 23 16 37 16 L 63 16 C 77 16 89 28 89 42 C 60 52 38 45 11 42 Z" fill="url(#logoGlossGrad)"/>
+                        <!-- 3 Dots -->
+                        <circle cx="34" cy="49" r="6.5" fill="#FFFFFF"/>
+                        <circle cx="50" cy="49" r="6.5" fill="#FFFFFF"/>
+                        <circle cx="66" cy="49" r="6.5" fill="#FFFFFF"/>
+                    </svg>
+                </div>
+                <span class="font-extrabold text-2xl tracking-tight text-slate-900">Socio<span class="text-brand-600">Chat</span></span>
+            </div>
+            
+            <!-- Video page status badge (Hidden by default) -->
+            <div id="headerStatusBadge" class="hidden items-center gap-2 bg-brand-100 text-brand-800 text-xs font-bold px-3 py-1.5 rounded-full border border-brand-300">
+                <span class="w-2 h-2 rounded-full bg-brand-500 animate-ping"></span>
+                <span>Training Session Active</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- VIEW 1: LEAD CAPTURE / OPT-IN PAGE -->
+    <div id="optinView" class="relative py-10 sm:py-16 overflow-hidden flex-1 flex items-center">
+        <!-- Background Ambient Glow FX -->
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-200/50 rounded-full blur-[140px] pointer-events-none"></div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full">
+            
+            <!-- Headline Hook Badge -->
+            <div class="flex justify-center mb-6">
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-100 border border-brand-300/80 text-brand-800 text-xs sm:text-sm font-bold tracking-wide shadow-sm">
+                    <i class="fa-solid fa-circle-play text-brand-600 animate-pulse"></i>
+                    <span>Free 20-Minute Blueprint Video Included</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+                
+                <!-- Hero Content Column (7 cols) -->
+                <div class="lg:col-span-7 space-y-6 text-left">
+                    <!-- MAIN REQUIRED HOOK -->
+                    <h1 class="text-3xl sm:text-5xl lg:text-5xl font-black text-slate-900 leading-tight tracking-tight">
+                        <span class="bg-brand-200/90 text-brand-900 px-3.5 py-1 rounded-2xl border border-brand-300/80 inline-block shadow-sm mr-1">Free Training:</span> How to convert your leads into sales using <span class="text-gradient">sociochat whatsapp automation</span> in 20 min
+                    </h1>
+
+                    <p class="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl font-medium">
+                        Stop losing leads to unread emails. Trigger automated instant WhatsApp messages, engage prospects with AI chat flows, and double your sales conversions on autopilot.
+                    </p>
+
+                    <!-- Key Bullet Points -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                        <div class="flex items-start gap-3">
+                            <div class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs mt-0.5 font-bold">
+                                <i class="fa-solid fa-check"></i>
+                            </div>
+                            <span class="text-sm font-semibold text-slate-700">98% Open Rates vs 20% Email</span>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <div class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs mt-0.5 font-bold">
+                                <i class="fa-solid fa-check"></i>
+                            </div>
+                            <span class="text-sm font-semibold text-slate-700">Zero-Code Visual Builder</span>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <div class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs mt-0.5 font-bold">
+                                <i class="fa-solid fa-check"></i>
+                            </div>
+                            <span class="text-sm font-semibold text-slate-700">Automated Payment & Reminders</span>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <div class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs mt-0.5 font-bold">
+                                <i class="fa-solid fa-check"></i>
+                            </div>
+                            <span class="text-sm font-semibold text-slate-700">Official WhatsApp Cloud API</span>
+                        </div>
+                    </div>
+
+                    <!-- Social Proof Micro Badge -->
+                    <div class="pt-4 flex items-center gap-4 text-xs text-slate-500">
+                        <div class="flex -space-x-2">
+                            <img class="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover shadow-sm" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="User Avatar" onerror="this.src='https://placehold.co/100x100/222/fff?text=User'">
+                            <img class="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover shadow-sm" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80" alt="User Avatar" onerror="this.src='https://placehold.co/100x100/222/fff?text=User'">
+                            <img class="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover shadow-sm" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80" alt="User Avatar" onerror="this.src='https://placehold.co/100x100/222/fff?text=User'">
+                        </div>
+                        <div>
+                            <div class="flex text-amber-500 text-xs">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <span class="text-slate-800 font-bold">1,420+</span> business owners watched this week
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Opt-In Lead Capture Form Column (5 cols) -->
+                <div class="lg:col-span-5" id="optin-form">
+                    <div class="glass-panel-light p-6 sm:p-8 rounded-3xl shadow-xl border border-brand-300 relative">
+                        
+                        <!-- Top Form Ribbon -->
+                        <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs font-black uppercase px-4 py-1 rounded-full shadow-md tracking-wider">
+                            Instant Access • 100% Free
+                        </div>
+
+                        <div class="text-center mb-6 pt-2">
+                            <h3 class="text-xl font-extrabold text-slate-900">Get The 20-Min Masterclass</h3>
+                            <p class="text-xs text-slate-500 mt-1 font-medium">Enter your details below to watch the step-by-step blueprint instantly.</p>
+                        </div>
+
+                        <!-- Lead Capture Form -->
+                        <form id="leadCaptureForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+                            <!-- Name Field -->
+                            <div>
+                                <label for="fullName" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Full Name *</label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-sm">
+                                        <i class="fa-regular fa-user"></i>
+                                    </div>
+                                    <input type="text" id="fullName" required placeholder="e.g. Alex Morgan" class="w-full pl-10 pr-4 py-3 bg-white border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all shadow-sm">
+                                </div>
+                            </div>
+
+                            <!-- Email Field -->
+                            <div>
+                                <label for="emailAddress" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Business Email *</label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-sm">
+                                        <i class="fa-regular fa-envelope"></i>
+                                    </div>
+                                    <input type="email" id="emailAddress" required placeholder="alex@yourcompany.com" class="w-full pl-10 pr-4 py-3 bg-white border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all shadow-sm">
+                                </div>
+                            </div>
+
+                            <!-- Phone Number Field -->
+                            <div>
+                                <label for="phoneNumber" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">WhatsApp Phone Number *</label>
+                                <div class="flex gap-2">
+                                    <!-- Country Code Selector -->
+                                    <select id="countryCode" class="bg-white border border-slate-300 rounded-xl text-slate-800 text-xs px-2.5 font-semibold focus:outline-none focus:border-brand-500 shadow-sm">
+                                        <option value="+1">🇺🇸 +1</option>
+                                        <option value="+44">🇬🇧 +44</option>
+                                        <option value="+91" selected>🇮🇳 +91</option>
+                                        <option value="+61">🇦🇺 +61</option>
+                                        <option value="+971">🇦🇪 +971</option>
+                                        <option value="+49">🇩🇪 +49</option>
+                                    </select>
+                                    <div class="relative flex-1">
+                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-sm">
+                                            <i class="fa-brands fa-whatsapp text-brand-600 font-bold"></i>
+                                        </div>
+                                        <input type="tel" id="phoneNumber" required pattern="[0-9]{8,15}" placeholder="9876543210" class="w-full pl-9 pr-4 py-3 bg-white border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all shadow-sm">
+                                    </div>
+                                </div>
+                                <p class="text-[11px] text-slate-500 mt-1 font-medium">We will send your instant video access & backup link directly via WhatsApp.</p>
+                            </div>
+
+                            <!-- Checkbox Consent -->
+                            <div class="flex items-start gap-2 pt-1">
+                                <input type="checkbox" id="whatsappConsent" checked required class="mt-1 rounded bg-white border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4">
+                                <label for="whatsappConsent" class="text-xs text-slate-600 leading-tight">
+                                    Yes! Send me the 20-min video lesson and SocioChat trial access code via WhatsApp.
+                                </label>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <button type="submit" id="submitBtn" class="w-full mt-2 py-3.5 px-6 whatsapp-gradient text-white font-extrabold text-base rounded-xl hover:opacity-95 transition-all transform active:scale-95 shadow-lg shadow-brand-500/30 flex items-center justify-center gap-2">
+                                <span>Watch Free 20-Min Training Now</span>
+                                <i class="fa-solid fa-arrow-right text-xs"></i>
+                            </button>
+                        </form>
+
+                        <!-- Trust Icons -->
+                        <div class="mt-5 pt-4 border-t border-slate-200 flex items-center justify-center gap-4 text-[11px] text-slate-500 font-medium">
+                            <span><i class="fa-solid fa-lock text-slate-400 mr-1"></i> 256-Bit Encrypted</span>
+                            <span>•</span>
+                            <span><i class="fa-solid fa-shield-halved text-slate-400 mr-1"></i> No Spam Guarantee</span>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 2: TRAINING VIDEO WATCH PAGE (Hidden until form submit) -->
+    <div id="trainingView" class="hidden py-8 sm:py-12 relative flex-1">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            
+            <!-- Personal Welcome Toast Banner -->
+            <div class="bg-brand-100 border border-brand-300 rounded-2xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-brand-500 text-white flex items-center justify-center font-bold text-lg flex-shrink-0">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-extrabold text-slate-900 text-sm sm:text-base">
+                            Welcome, <span id="displayLeadName" class="text-brand-700">Leader</span>! Your Video Training Is Unlocked.
+                        </h4>
+                        <p class="text-xs text-slate-600 mt-0.5">
+                            We've also dispatched a direct backup link to your WhatsApp: <span id="displayLeadPhone" class="font-mono font-bold text-slate-800">+1 0000000000</span>
+                        </p>
+                    </div>
+                </div>
+                <button onclick="resetToOptin()" class="text-xs text-slate-500 hover:text-slate-800 underline flex items-center gap-1 self-end sm:self-center">
+                    <i class="fa-solid fa-rotate-left"></i> Change Info
+                </button>
+            </div>
+
+            <!-- Video Title & Headline -->
+            <div class="text-center mb-6">
+                <span class="inline-block bg-brand-200/80 text-brand-900 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+                    SocioChat Masterclass • 20 Min Blueprint
+                </span>
+                <h2 class="text-2xl sm:text-4xl font-extrabold text-slate-900 leading-tight">
+                    How To Convert Leads Into Sales Using WhatsApp Automation
+                </h2>
+                <p class="text-slate-600 text-sm mt-2 font-medium max-w-2xl mx-auto">
+                    Watch this step-by-step masterclass to learn how to capture, nurture, and close deals automatically on WhatsApp in under 20 minutes.
+                </p>
+            </div>
+
+            <!-- Main Video Container -->
+            <div class="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 relative mb-8">
+                
+                <!-- Google Drive Embedded Video Container -->
+                <div id="videoMockup" class="relative video-container bg-slate-950">
+                    <iframe 
+                        src="https://drive.google.com/file/d/1g8YYjzRZK-WAoeA5di2R9s9SyLMMGR28/preview" 
+                        class="absolute top-0 left-0 w-full h-full border-0 rounded-3xl" 
+                        allow="autoplay; encrypted-media; picture-in-picture" 
+                        allowfullscreen>
+                    </iframe>
+                </div>
+
+                <!-- Fallback Notice & Direct Link (If Google Drive processing is pending) -->
+                <div class="bg-slate-800/90 text-slate-300 text-xs py-2.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-slate-700/60">
+                    <span class="flex items-center gap-2 text-slate-300 font-medium">
+                        <i class="fa-solid fa-circle-info text-amber-400"></i>
+                        <span>Is the video still processing in Google Drive?</span>
+                    </span>
+                    <a href="https://drive.google.com/file/d/1g8YYjzRZK-WAoeA5di2R9s9SyLMMGR28/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-brand-400 hover:text-brand-300 font-bold hover:underline">
+                        <span>Watch directly on Google Drive</span>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                    </a>
+                </div>
+
+            </div>
+
+            <!-- Dynamic Call to Action (Visible from start) -->
+            <div id="ctaContainer" class="text-center max-w-xl mx-auto mb-8">
+                <div id="bookCallCTA" class="transition-all duration-700 transform scale-100 opacity-100">
+                    <button type="button" onclick="openBookCallModal()" class="w-full sm:w-auto py-4 px-8 whatsapp-gradient text-white font-extrabold text-lg sm:text-xl rounded-2xl hover:opacity-95 transition-all shadow-xl shadow-brand-500/30 inline-flex items-center justify-center gap-3 animate-pulse">
+                        <i class="fa-solid fa-calendar-check text-xl"></i>
+                        <span>Book A Call Now</span>
+                        <i class="fa-solid fa-arrow-right text-sm"></i>
+                    </button>
+                    <p class="text-xs text-slate-600 mt-2.5 font-semibold flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-shield-halved text-brand-600"></i>
+                        <span>Speak 1-on-1 with a WhatsApp Automation Specialist</span>
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- VIEW 3: THANK YOU PAGE (Displayed after booking a call) -->
+    <div id="thankYouView" class="hidden py-10 sm:py-16 relative flex-1">
+        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="glass-panel-light p-8 sm:p-12 rounded-3xl shadow-2xl border border-brand-300 text-center space-y-6 relative overflow-hidden">
+                <!-- Top Glow Icon -->
+                <div class="w-20 h-20 whatsapp-gradient rounded-full flex items-center justify-center text-white text-4xl mx-auto shadow-xl shadow-brand-500/30">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+
+                <span class="inline-block bg-brand-100 text-brand-800 text-xs font-black uppercase px-4 py-1.5 rounded-full tracking-wider border border-brand-300">
+                    🎉 Strategy Call Reserved
+                </span>
+
+                <h2 class="text-3xl sm:text-4xl font-black text-slate-900 leading-tight">
+                    Thank You! Your Call Has Been Scheduled.
+                </h2>
+
+                <p class="text-slate-600 text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
+                    We've received your booking details and locked in your 1-on-1 strategy session with our SocioChat WhatsApp automation team.
+                </p>
+
+                <!-- Appointment Summary Card -->
+                <div class="bg-white/90 border border-brand-200 rounded-2xl p-6 text-left max-w-lg mx-auto shadow-sm space-y-3">
+                    <h4 class="text-xs font-extrabold uppercase text-slate-400 tracking-wider border-b border-slate-100 pb-2">Appointment Details</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <span class="text-slate-500 block">Name:</span>
+                            <span id="confirmName" class="font-bold text-slate-800 text-sm">-</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Email:</span>
+                            <span id="confirmEmail" class="font-bold text-slate-800 text-sm truncate block">-</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Preferred Date:</span>
+                            <span id="confirmDate" class="font-bold text-slate-800 text-sm">-</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Time Slot:</span>
+                            <span id="confirmTime" class="font-bold text-slate-800 text-sm">-</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Website:</span>
+                            <span id="confirmWebsite" class="font-bold text-brand-700 text-sm truncate block">-</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Social Media:</span>
+                            <span id="confirmSocial" class="font-bold text-brand-700 text-sm truncate block">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Steps Instructions -->
+                <div class="bg-brand-50 border border-brand-200 rounded-2xl p-5 max-w-lg mx-auto text-left">
+                    <h5 class="text-xs font-bold text-brand-900 uppercase tracking-wider mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-brand-600"></i> What Happens Next?
+                    </h5>
+                    <ul class="text-xs text-slate-700 space-y-2 list-disc list-inside font-medium">
+                        <li>A WhatsApp confirmation message with your calendar link has been sent.</li>
+                        <li>Our specialist will analyze your website & social channels prior to the call.</li>
+                        <li>Please be ready 5 minutes before your scheduled time slot.</li>
+                    </ul>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <button type="button" onclick="returnToTraining()" class="w-full sm:w-auto py-3 px-6 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-circle-play text-brand-600"></i>
+                        <span>Back To Video Training</span>
+                    </button>
+                    <a href="https://whatsapp.com" target="_blank" rel="noopener noreferrer" class="w-full sm:w-auto py-3 px-6 whatsapp-gradient text-white font-bold text-xs rounded-xl shadow-md hover:opacity-95 transition-all flex items-center justify-center gap-2">
+                        <i class="fa-brands fa-whatsapp text-sm"></i>
+                        <span>Open WhatsApp Direct</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simple Footer -->
+    <footer class="py-6 bg-white/80 border-t border-brand-200/60 text-xs text-slate-500 text-center mt-auto">
+        <div class="max-w-7xl mx-auto px-4 space-y-2">
+            <p>© 2026 SocioChat Automation Inc. All rights reserved.</p>
+            <p class="max-w-2xl mx-auto text-[11px] text-slate-400">
+                Disclaimer: WhatsApp is a registered trademark of Meta Platforms, Inc. SocioChat is an independent WhatsApp API integration software solution and is not directly affiliated with Meta.
+            </p>
+        </div>
+    </footer>
+
+    <!-- Book a Call Interactive Modal -->
+    <div id="bookCallModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white p-6 sm:p-8 rounded-3xl max-w-lg w-full border border-brand-300 text-center space-y-5 relative shadow-2xl my-8">
+            <button type="button" onclick="closeBookCallModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            
+            <div class="w-14 h-14 whatsapp-gradient rounded-full flex items-center justify-center text-white text-2xl mx-auto shadow-lg shadow-brand-500/30">
+                <i class="fa-solid fa-calendar-days"></i>
+            </div>
+
+            <div>
+                <h3 class="text-2xl font-extrabold text-slate-900">Schedule Strategy Call</h3>
+                <p class="text-xs text-slate-600 mt-1">
+                    Fill in your details below to reserve your 1-on-1 WhatsApp automation consultation.
+                </p>
+            </div>
+
+            <form id="bookCallForm" onsubmit="handleBookCallSubmit(event)" class="space-y-3.5 text-left">
+                <!-- Name Field -->
+                <div>
+                    <label for="modalName" class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Full Name *</label>
+                    <input type="text" id="modalName" required placeholder="Alex Morgan" class="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-brand-500 shadow-sm">
+                </div>
+
+                <!-- Email Field -->
+                <div>
+                    <label for="modalEmail" class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Business Email *</label>
+                    <input type="email" id="modalEmail" required placeholder="alex@yourcompany.com" class="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-brand-500 shadow-sm">
+                </div>
+
+                <!-- Social Media Link Field -->
+                <div>
+                    <label for="modalSocial" class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Social Media Link *</label>
+                    <input type="url" id="modalSocial" required placeholder="https://instagram.com/yourbrand or linkedin.com/in/profile" class="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-brand-500 shadow-sm">
+                </div>
+
+                <!-- Website Link Field -->
+                <div>
+                    <label for="modalWebsite" class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Website Link *</label>
+                    <input type="url" id="modalWebsite" required placeholder="https://yourcompany.com" class="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-brand-500 shadow-sm">
+                </div>
+
+                <!-- Date & Time Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="modalDate" class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Preferred Date *</label>
+                        <input type="date" id="modalDate" required class="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-brand-500 shadow-sm">
+                    </div>
+                    <div>
+                        <label for="modalTime" class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Preferred Time Slot *</label>
+                        <select id="modalTime" required class="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-brand-500 shadow-sm">
+                            <option value="10:00 AM">10:00 AM - 10:30 AM</option>
+                            <option value="02:00 PM">02:00 PM - 02:30 PM</option>
+                            <option value="04:00 PM">04:00 PM - 04:30 PM</option>
+                            <option value="07:00 PM">07:00 PM - 07:30 PM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full py-3.5 mt-2 whatsapp-gradient text-white font-extrabold text-sm rounded-xl hover:opacity-95 transition-all shadow-md shadow-brand-500/20 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-check"></i>
+                    <span>Confirm Strategy Call Booking</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Google Sheets Web App endpoint — Apps Script bound to the free-training
+        // sheet. form=optin → Sheet "Optin_Leads"; form=booking → Sheet "Call_Bookings".
+        const SHEET_WEBAPP_URL = "REPLACE_WITH_YOUR_APPS_SCRIPT_URL";
+
+        function postToSheet(formType, payload) {
+            if (!SHEET_WEBAPP_URL || SHEET_WEBAPP_URL.indexOf("REPLACE_") === 0) return;
+            const body = JSON.stringify(Object.assign({ form: formType, page: window.location.href }, payload));
+            try {
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon(SHEET_WEBAPP_URL, new Blob([body], { type: "text/plain" }));
+                } else {
+                    fetch(SHEET_WEBAPP_URL, { method: "POST", body: body, keepalive: true, mode: "no-cors" });
+                }
+            } catch (e) { console.warn("Sheet post failed:", e); }
+        }
+
+        function getFbclid() {
+            const p = new URLSearchParams(window.location.search);
+            return p.get("fbclid") || "";
+        }
+
+        // Global State
+        let leadName = "";
+        let leadEmail = "";
+        let leadPhone = "";
+        let leadCountryCode = "";
+        let leadPhoneRaw = "";
+        let leadConsent = false;
+
+        // --- Lead Form Capture Handler ---
+        function handleFormSubmit(event) {
+            event.preventDefault();
+
+            leadName = document.getElementById('fullName')?.value.trim() || "";
+            leadEmail = document.getElementById('emailAddress')?.value.trim() || "";
+            const countryCode = document.getElementById('countryCode')?.value || "+1";
+            const phone = document.getElementById('phoneNumber')?.value.trim() || "";
+            leadPhone = countryCode + " " + phone;
+            leadCountryCode = countryCode;
+            leadPhoneRaw = phone;
+            leadConsent = document.getElementById('whatsappConsent')?.checked ? true : false;
+
+            if (!leadName || !leadEmail || !phone) {
+                return;
+            }
+
+            // Push to Google Sheet (Sheet: Optin_Leads)
+            postToSheet('optin', {
+                full_name: leadName,
+                email: leadEmail,
+                country_code: countryCode,
+                phone: phone,
+                full_phone: leadPhone,
+                whatsapp_consent: leadConsent,
+                fbclid: getFbclid()
+            });
+
+            // Save lead to localStorage
+            const leadData = { name: leadName, email: leadEmail, phone: leadPhone, date: new Date().toISOString() };
+            try {
+                localStorage.setItem('sociochat_lead', JSON.stringify(leadData));
+            } catch (e) {
+                console.warn('LocalStorage save failed:', e);
+            }
+
+            // Track Lead event with Sociovia CAPI & Meta Pixel
+            if (window.SocioviaTracker) {
+                window.SocioviaTracker.identify({
+                    fn: leadName,
+                    em: leadEmail,
+                    ph: leadPhone
+                });
+                window.SocioviaTracker.track('Lead', {
+                    content_name: 'SocioChat Masterclass Opt-In',
+                    currency: 'USD',
+                    value: 0
+                });
+            }
+
+            // Transition UI View to Training Video Page
+            switchToTrainingPage();
+        }
+
+        function switchToTrainingPage() {
+            // Update Personalization safely
+            const nameEl = document.getElementById('displayLeadName');
+            if (nameEl) nameEl.textContent = leadName || "Leader";
+
+            const phoneEl = document.getElementById('displayLeadPhone');
+            if (phoneEl) phoneEl.textContent = leadPhone || "";
+
+            // Hide Optin, Show Training Page
+            const optinView = document.getElementById('optinView');
+            if (optinView) optinView.classList.add('hidden');
+
+            const thankYouView = document.getElementById('thankYouView');
+            if (thankYouView) thankYouView.classList.add('hidden');
+
+            const trainingView = document.getElementById('trainingView');
+            if (trainingView) trainingView.classList.remove('hidden');
+
+            const statusBadge = document.getElementById('headerStatusBadge');
+            if (statusBadge) {
+                statusBadge.classList.remove('hidden');
+                statusBadge.classList.add('flex');
+            }
+
+            // Update Announcement Bar
+            const barText = document.getElementById('barText');
+            if (barText) barText.textContent = "🎬 SocioChat 20-Min Training Session In Progress";
+
+            // Track Video Page View & Registration Event
+            if (window.SocioviaTracker) {
+                SocioviaTracker.track('CompleteRegistration', { value: 0 });
+                window.SocioviaTracker.track('ViewContent', {
+                    content_name: 'SocioChat 20-Min Training Video'
+                });
+            }
+
+            // Scroll smoothly to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetToOptin() {
+            const trainingView = document.getElementById('trainingView');
+            if (trainingView) trainingView.classList.add('hidden');
+
+            const thankYouView = document.getElementById('thankYouView');
+            if (thankYouView) thankYouView.classList.add('hidden');
+
+            const optinView = document.getElementById('optinView');
+            if (optinView) optinView.classList.remove('hidden');
+
+            const statusBadge = document.getElementById('headerStatusBadge');
+            if (statusBadge) statusBadge.classList.add('hidden');
+
+            const barText = document.getElementById('barText');
+            if (barText) barText.textContent = "⚡ 98% Open Rate Blueprint: Convert Leads on WhatsApp in 20 Minutes";
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // --- Call Booking Handlers ---
+        function openBookCallModal() {
+            // Pre-fill name and email if collected earlier
+            const nameInput = document.getElementById('modalName');
+            if (nameInput && leadName) nameInput.value = leadName;
+
+            const emailInput = document.getElementById('modalEmail');
+            if (emailInput && leadEmail) emailInput.value = leadEmail;
+
+            // Set default date to tomorrow
+            const dateInput = document.getElementById('modalDate');
+            if (dateInput && !dateInput.value) {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                dateInput.value = tomorrow.toISOString().split('T')[0];
+            }
+
+            const modal = document.getElementById('bookCallModal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeBookCallModal() {
+            const modal = document.getElementById('bookCallModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function handleBookCallSubmit(event) {
+            event.preventDefault();
+
+            const name = document.getElementById('modalName')?.value.trim() || leadName || "Valued Lead";
+            const email = document.getElementById('modalEmail')?.value.trim() || leadEmail || "";
+            const social = document.getElementById('modalSocial')?.value.trim() || "N/A";
+            const website = document.getElementById('modalWebsite')?.value.trim() || "N/A";
+            const date = document.getElementById('modalDate')?.value || "";
+            const time = document.getElementById('modalTime')?.value || "";
+
+            // Push to Google Sheet (Sheet: Call_Bookings)
+            postToSheet('booking', {
+                full_name: name,
+                email: email,
+                social_link: social,
+                website: website,
+                preferred_date: date,
+                preferred_time: time,
+                phone_from_optin: leadPhone,
+                fbclid: getFbclid()
+            });
+
+            // Populate Thank You View Summary
+            const nameEl = document.getElementById('confirmName');
+            if (nameEl) nameEl.textContent = name;
+
+            const emailEl = document.getElementById('confirmEmail');
+            if (emailEl) emailEl.textContent = email;
+
+            const dateEl = document.getElementById('confirmDate');
+            if (dateEl) dateEl.textContent = date;
+
+            const timeEl = document.getElementById('confirmTime');
+            if (timeEl) timeEl.textContent = time;
+
+            const websiteEl = document.getElementById('confirmWebsite');
+            if (websiteEl) websiteEl.textContent = website;
+
+            const socialEl = document.getElementById('confirmSocial');
+            if (socialEl) socialEl.textContent = social;
+
+            // Track Schedule Call Booking Event
+            if (window.SocioviaTracker) {
+                window.SocioviaTracker.track('Schedule', {
+                    content_name: 'SocioChat Strategy Call Reserved',
+                    booking_date: date,
+                    booking_time: time
+                }, {
+                    fn: name,
+                    em: email
+                });
+            }
+
+            // Close Modal
+            closeBookCallModal();
+
+            // Hide Training View & Optin View, Show Thank You View
+            const trainingView = document.getElementById('trainingView');
+            if (trainingView) trainingView.classList.add('hidden');
+
+            const optinView = document.getElementById('optinView');
+            if (optinView) optinView.classList.add('hidden');
+
+            const thankYouView = document.getElementById('thankYouView');
+            if (thankYouView) thankYouView.classList.remove('hidden');
+
+            const barText = document.getElementById('barText');
+            if (barText) barText.textContent = "🎉 Appointment Reserved! Check your WhatsApp for confirmation";
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function returnToTraining() {
+            const thankYouView = document.getElementById('thankYouView');
+            if (thankYouView) thankYouView.classList.add('hidden');
+
+            const trainingView = document.getElementById('trainingView');
+            if (trainingView) trainingView.classList.remove('hidden');
+
+            const barText = document.getElementById('barText');
+            if (barText) barText.textContent = "🎬 SocioChat 20-Min Training Session In Progress";
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
